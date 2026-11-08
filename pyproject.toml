@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurum-research"
+version = "0.1.0"
+description = "Paper-only Micro Gold futures market research"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["tzdata==2026.6"]
+
+[project.optional-dependencies]
+dev = ["mypy==1.15.0", "pytest==8.3.5", "ruff==0.11.13"]
+
+[project.scripts]
+aurum = "aurum.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
