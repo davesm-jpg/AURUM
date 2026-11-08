@@ -5,7 +5,7 @@
 - Current phase — Phase 1, repository and data foundation.
 - Current milestone — D01 is verified on synthetic fixtures and complete. Phase 1 continues with D02 and D03. External historical-data verification D04 is blocked.
 - Current branch — `main`.
-- Last verified commit — the initial implementation commit containing this handoff. Later handoff-only changes may be ahead of this code checkpoint.
+- Last verified commit — `4aff6206a8cb5f51f8f988f93558d1c25fd2676b`. Later handoff-only changes may be ahead of this code checkpoint.
 
 ## Current Objective
 
