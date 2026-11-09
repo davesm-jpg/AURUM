@@ -27,7 +27,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
-The dashboard reads immutable dataset candles, paginated evidence, saved reports and monitor health from SQLite through the API. Price charts use UTC candle closes and map events at or after their availability. An optional bearer stays in the server-side proxy. The chart currently reads imported datasets while live monitoring supplies status separately.
+The dashboard reads immutable dataset candles, paginated evidence, saved reports and monitor health from SQLite through the API. Price charts use UTC candle closes and map events at or after their availability. The chart projector folds the selected run's causal prefix and ends each overlay at recorded retirement. Strategy-only plans appear as point references. The API supplies source and terminal event sequences. An optional bearer stays in the server-side proxy. The chart currently reads imported datasets while live monitoring supplies status separately.
 
 ## Flow and invariants
 

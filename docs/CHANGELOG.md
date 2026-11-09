@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Causal chart overlays
+
+- Bound historical overlays to persisted level, imbalance and paper-order lifecycles.
+- Added independent overlay controls and cross-timeframe alignment without backdating a marker.
+
 ## 2026-11-09 — Local research dashboard
 
 - Added loopback FastAPI endpoints and a Next.js workspace for provenance, candle charts, evidence, paper backtests and saved reports.
