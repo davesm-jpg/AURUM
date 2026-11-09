@@ -14,7 +14,7 @@ from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame, candle_from_dict
 from aurum.instruments import MgcContract
 from aurum.market_context import CONTEXT_VERSION
-from aurum.market_data import canonical_json
+from aurum.market_data import Candle, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
@@ -414,12 +414,32 @@ class MarketMonitor:
 
 def describe_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
     with store.connection() as db:
-        return read_monitor_status(db, monitor_id)
+        db.execute("BEGIN")
+        return _status(_run(db, monitor_id), _pending_count(db, monitor_id))
 
 
-def read_monitor_status(db: sqlite3.Connection, monitor_id: str) -> dict[str, object]:
-    """Read status and the pending count from a caller's current database snapshot."""
-    return _status(_run(db, monitor_id), _pending_count(db, monitor_id))
+def applied_minute_batches(
+    store: DatasetStore, monitor_id: str, span: TradingWindow
+) -> Iterator[list[tuple[Candle, FeedStatus]]]:
+    """Read immutable applied minutes up to a previously observed journal checkpoint."""
+    start = span.start.isoformat()
+    end = span.end.isoformat()
+    while True:
+        with store.connection() as db:
+            rows = db.execute(
+                """SELECT opened_at, candle, source_status FROM monitor_minutes
+                   WHERE run_id = ? AND applied = 1 AND opened_at >= ? AND opened_at < ?
+                   ORDER BY opened_at LIMIT 1000""",
+                (monitor_id, start, end),
+            ).fetchall()
+        if rows:
+            yield [
+                (candle_from_dict(json.loads(row["candle"])), FeedStatus(row["source_status"]))
+                for row in rows
+            ]
+        if len(rows) < 1000:
+            return
+        start = (datetime.fromisoformat(rows[-1]["opened_at"]) + MINUTE).isoformat()
 
 
 def monitor_events(store: DatasetStore, monitor_id: str) -> Iterator[dict[str, object]]:

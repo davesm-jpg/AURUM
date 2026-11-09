@@ -1,8 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
+from threading import Event
 
 import pytest
 
+from aurum.candles import AggregateCandle, CandleAggregator
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.feed_frames import FeedFrame
 from aurum.instruments import MgcContract
@@ -69,6 +72,7 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
 
 def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     api = pytest.importorskip("aurum.api")
     http = pytest.importorskip("fastapi.testclient")
@@ -124,3 +128,25 @@ def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(
             ]
             == []
         )
+
+        aggregating, release = Event(), Event()
+
+        class PausingAggregator(CandleAggregator):
+            def push(self, candle: Candle) -> tuple[AggregateCandle, ...]:
+                aggregating.set()
+                assert release.wait(timeout=8), "synthetic reader was not released"
+                return super().push(candle)
+
+        monkeypatch.setattr(api, "CandleAggregator", PausingAggregator)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            reading = pool.submit(client.get, route)
+            try:
+                assert aggregating.wait(timeout=3), "synthetic reader did not start"
+                for index in range(5, 8):
+                    send(index, index + 1)
+            finally:
+                release.set()
+            assert reading.result(timeout=3).json() == applied
+        current = client.get(route).json()
+        assert current["last_applied_close"] == span.end.isoformat()
+        assert len(current["candles"]) == 2

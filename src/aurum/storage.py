@@ -6,6 +6,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from typing import Protocol, TypedDict
 
 from aurum.backtesting import BACKTEST_VERSION, BacktestReplay
@@ -363,25 +364,40 @@ class DatasetStore:
     ) -> str:
         definition = canonical_json(manifest)
         run_id = sha256(definition.encode()).hexdigest()
-        with self.connection(write=True) as db:
-            if db.execute("SELECT 1 FROM structure_runs WHERE id = ?", (run_id,)).fetchone():
+        with self.connection() as db:
+            if (
+                db.execute("PRAGMA user_version").fetchone()[0] >= 2
+                and db.execute("SELECT 1 FROM structure_runs WHERE id = ?", (run_id,)).fetchone()
+            ):
                 return run_id
             dataset = self._dataset(db, dataset_id)
-            provenance = json.loads(dataset["provenance"])
-            calendar = SessionCalendar.from_dict(provenance["calendar"])
-            contract = MgcContract(provenance["contract"])
-            db.execute(
-                "INSERT INTO structure_runs VALUES (?, ?, ?, ?)",
-                (run_id, dataset_id, definition, datetime.now(UTC).isoformat()),
-            )
-            events = run(calendar, contract, self._replay(db, dataset))
-            db.executemany(
-                "INSERT INTO structure_events VALUES (?, ?, ?)",
-                (
-                    (run_id, sequence, canonical_json(event.as_dict()))
-                    for sequence, event in enumerate(events, start=1)
-                ),
-            )
+        provenance = json.loads(dataset["provenance"])
+        calendar = SessionCalendar.from_dict(provenance["calendar"])
+        contract = MgcContract(provenance["contract"])
+        span = TradingWindow(
+            datetime.fromisoformat(dataset["first_open"]),
+            datetime.fromisoformat(dataset["last_close"]),
+        )
+        minutes = (candle for batch in self.replay_batches(dataset_id, span) for candle in batch)
+        with SpooledTemporaryFile(
+            mode="w+t", encoding="utf-8", max_size=4 * 1024 * 1024
+        ) as journal:
+            for event in run(calendar, contract, minutes):
+                journal.write(canonical_json(event.as_dict()) + "\n")
+            journal.seek(0)
+            with self.connection(write=True) as db:
+                created = db.execute(
+                    "INSERT INTO structure_runs VALUES (?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+                    (run_id, dataset_id, definition, datetime.now(UTC).isoformat()),
+                )
+                if created.rowcount:
+                    db.executemany(
+                        "INSERT INTO structure_events VALUES (?, ?, ?)",
+                        (
+                            (run_id, sequence, line.removesuffix("\n"))
+                            for sequence, line in enumerate(journal, start=1)
+                        ),
+                    )
         return run_id
 
     def describe_structure_run(self, run_id: str) -> dict[str, object]:

@@ -2,7 +2,7 @@ import asyncio
 import json
 import sqlite3
 from collections import Counter, deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from secrets import compare_digest
@@ -16,11 +16,10 @@ from aurum.candles import CandleAggregator, Timeframe
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import ExecutionConfig
-from aurum.feed_frames import candle_from_dict
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG, BreakMode, PivotRule
-from aurum.monitoring import describe_monitor, read_monitor_status
+from aurum.monitoring import applied_minute_batches, describe_monitor
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
@@ -30,6 +29,7 @@ from aurum.timestamps import MINUTE, minute_timestamp
 RecordId = Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")]
 PageLimit = Annotated[int, Query(ge=1, le=500)]
 ChartTimeframe = Literal["1m", "5m", "15m", "1h", "4h", "1d"]
+_CHART_KINDS = frozenset(CHART_EVENT_KINDS)
 
 
 class CandleRecord(BaseModel):
@@ -193,20 +193,12 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
         if left >= right:
             raise ValueError("chart window must have positive duration")
         run = store.describe_structure_run(run_id)
-        with store.connection() as db:
-            placeholders = ", ".join("?" for _ in CHART_EVENT_KINDS)
-            records = db.execute(
-                f"""SELECT sequence, payload FROM structure_events
-                    WHERE run_id = ? AND json_extract(payload, '$.event') IN ({placeholders})
-                    ORDER BY sequence""",
-                (run_id, *CHART_EVENT_KINDS),
-            )
-            return chart_evidence(
-                ((row["sequence"], json.loads(row["payload"])) for row in records),
-                left,
-                right,
-                tracks_execution="backtest_version" in run,
-            )
+        return chart_evidence(
+            _chart_events(store, run_id),
+            left,
+            right,
+            tracks_execution="backtest_version" in run,
+        )
 
     @router.get("/backtests/{run_id}")
     def backtest(run_id: RecordId) -> dict[str, object]:
@@ -428,6 +420,24 @@ def _events(
         ]
 
 
+def _chart_events(store: DatasetStore, run_id: str) -> Iterator[tuple[int, dict[str, object]]]:
+    after = 0
+    while True:
+        with store.connection() as db:
+            batch = db.execute(
+                """SELECT sequence, payload FROM structure_events
+                   WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT 1000""",
+                (run_id, after),
+            ).fetchall()
+        for row in batch:
+            event = json.loads(row["payload"])
+            if event["event"] in _CHART_KINDS:
+                yield row["sequence"], event
+        if len(batch) < 1000:
+            return
+        after = batch[-1]["sequence"]
+
+
 def _candles(
     store: DatasetStore,
     dataset_id: str,
@@ -446,7 +456,8 @@ def _candles(
     start = _chart_start(calendar, end, minutes, limit)
     if start is None or start >= end:
         return []
-    bars = store.replay(dataset_id, span=TradingWindow(start, end))
+    batches = store.replay_batches(dataset_id, TradingWindow(start, end))
+    bars = (candle for batch in batches for candle in batch)
     if frame is None:
         return [
             {
@@ -490,25 +501,21 @@ def _monitor_chart(
     store: DatasetStore, monitor_id: str, timeframe: ChartTimeframe, limit: int, through: str | None
 ) -> MonitorChart:
     bound = minute_timestamp(through) if through is not None else None
-    with store.connection() as db:
-        db.execute("BEGIN")
-        status = read_monitor_status(db, monitor_id)
-        definition = status["definition"]
-        assert isinstance(definition, dict)
-        config = definition["monitor_config"]
-        calendar = SessionCalendar.from_dict(definition["calendar"])
-        contract = MgcContract(definition["contract"])
-        last_open = status["last_applied_open"]
-        last_close = (
-            datetime.fromisoformat(last_open) + MINUTE if isinstance(last_open, str) else None
-        )
-        bars: list[MonitorCandleRecord] = []
-        if last_close is not None:
-            end = min(last_close, bound) if bound is not None else last_close
-            frame = Timeframe(timeframe) if timeframe != "1m" else None
-            start = _chart_start(calendar, end, frame.minutes if frame else 1, limit)
-            if start is not None and start < end:
-                bars = _applied_bars(db, monitor_id, calendar, contract, frame, start, end, limit)
+    status = describe_monitor(store, monitor_id)
+    definition = status["definition"]
+    assert isinstance(definition, dict)
+    config = definition["monitor_config"]
+    calendar = SessionCalendar.from_dict(definition["calendar"])
+    contract = MgcContract(definition["contract"])
+    last_open = status["last_applied_open"]
+    last_close = datetime.fromisoformat(last_open) + MINUTE if isinstance(last_open, str) else None
+    bars: list[MonitorCandleRecord] = []
+    if last_close is not None:
+        end = min(last_close, bound) if bound is not None else last_close
+        frame = Timeframe(timeframe) if timeframe != "1m" else None
+        start = _chart_start(calendar, end, frame.minutes if frame else 1, limit)
+        if start is not None and start < end:
+            bars = _applied_bars(store, monitor_id, calendar, contract, frame, start, end, limit)
 
     now = datetime.now(UTC)
     market = "unavailable"
@@ -532,7 +539,7 @@ def _monitor_chart(
 
 
 def _applied_bars(
-    db: sqlite3.Connection,
+    store: DatasetStore,
     monitor_id: str,
     calendar: SessionCalendar,
     contract: MgcContract,
@@ -541,18 +548,12 @@ def _applied_bars(
     end: datetime,
     limit: int,
 ) -> list[MonitorCandleRecord]:
-    records = db.execute(
-        """SELECT candle, source_status FROM monitor_minutes
-           WHERE run_id = ? AND applied = 1 AND opened_at >= ? AND opened_at < ?
-           ORDER BY opened_at""",
-        (monitor_id, start.isoformat(), end.isoformat()),
-    )
+    batches = applied_minute_batches(store, monitor_id, TradingWindow(start, end))
+    records = (row for batch in batches for row in batch)
     bars: deque[MonitorCandleRecord] = deque(maxlen=limit)
     aggregator = CandleAggregator(calendar, contract, (frame,)) if frame else None
     source: deque[tuple[datetime, FeedStatus]] = deque()
-    for row in records:
-        candle = candle_from_dict(json.loads(row["candle"]))
-        classification = FeedStatus(row["source_status"])
+    for candle, classification in records:
         if aggregator is None:
             session = calendar.session_at(candle.opened_at)
             bars.append(

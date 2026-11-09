@@ -2,9 +2,11 @@ import json
 import sqlite3
 import subprocess
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from sys import executable
+from threading import Barrier, Event
 
 import pytest
 
@@ -380,6 +382,38 @@ def test_structure_run_rollback_on_missing_data_or_mid_event_failure(tmp_path: P
     with sqlite3.connect(store.path) as db:
         assert db.execute("SELECT count(*) FROM structure_runs").fetchone() == (0,)
         assert db.execute("SELECT count(*) FROM structure_events").fetchone() == (0,)
+
+
+def test_simultaneous_synthetic_replays_release_the_store_until_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, dataset_id = prepare_synthetic_replay(tmp_path)
+    config = StructureConfig(PivotRule(1, 1))
+    at_first_bar, release = Barrier(3), Event()
+    original = StructureEngine.push
+
+    def pause(engine: StructureEngine, bar: AggregateCandle) -> tuple[StructureEvent, ...]:
+        if bar.available_at == START + 5 * MINUTE:
+            at_first_bar.wait(timeout=8)
+            assert release.wait(timeout=8), "synthetic replay was not released"
+        return original(engine, bar)
+
+    monkeypatch.setattr(StructureEngine, "push", pause)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(store.build_structure_run, dataset_id, TIMEFRAME, config)
+        second = pool.submit(store.build_structure_run, dataset_id, TIMEFRAME, config)
+        try:
+            at_first_bar.wait(timeout=8)
+            with store.connection() as db:
+                assert db.execute("SELECT count(*) FROM structure_runs").fetchone()[0] == 0
+            assert store.save_analysis("synthetic test", {"test": True}, {"observations": 0})
+        finally:
+            release.set()
+        run_id = first.result(timeout=5)
+        assert second.result(timeout=5) == run_id
+    events = list(store.structure_events(run_id))
+    assert len(events) == store.describe_structure_run(run_id)["event_count"]
+    assert len({event["event_id"] for event in events}) == len(events) > 0
 
 
 def test_evidence_replay_links_only_an_earlier_sweep_to_mss(tmp_path: Path) -> None:
