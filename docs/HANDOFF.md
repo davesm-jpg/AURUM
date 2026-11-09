@@ -5,7 +5,7 @@
 - Current phase — Phase 3 paper setup qualification is implemented. Phase 4 backtest engine B01 is unblocked using synthetic fixtures. D04 and B02 real-data validation need an authorized source.
 - Current milestone — S03 context, exact sizing and versioned paper strategy replay.
 - Current branch — `main`.
-- Last verified commit — the S03 implementation commit containing this handoff.
+- Last verified commit — `7ccd77017e532d993398bcc4d73aa5bcb76b61bb`.
 
 ## Current Objective
 
