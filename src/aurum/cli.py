@@ -1,12 +1,14 @@
 import csv
+import os
 import signal
 import sqlite3
 import sys
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from time import sleep
 
 from aurum.account_reports import simulate_account_ledger
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, BreachMetric
@@ -47,6 +49,15 @@ from aurum.monte_carlo import (
     SamplingMode,
     TrailingLossScenario,
     WinRateScenario,
+)
+from aurum.notification_transport import HttpAlertChannel
+from aurum.notifications import (
+    Channel,
+    DeliveryPreferences,
+    DeliveryWorker,
+    Severity,
+    cancel_delivery,
+    delivery_status,
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, SourceFormat
@@ -216,6 +227,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         command = commands.add_parser(name)
         command.add_argument("monitor_id")
 
+    delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
+    delivery.add_argument("monitor_id")
+    delivery.add_argument("--channel", type=Channel, choices=Channel, required=True)
+    delivery.add_argument("--destination-env", required=True)
+    delivery.add_argument("--token-env")
+    delivery.add_argument("--timezone", default="Europe/Prague")
+    delivery.add_argument("--quiet", nargs=2, type=_clock_minute, metavar=("START", "END"))
+    delivery.add_argument("--min-score", type=int, default=0)
+    delivery.add_argument(
+        "--session", type=ResearchSession, choices=ResearchSession, action="append"
+    )
+    delivery.add_argument("--severity", type=Severity, choices=Severity, action="append")
+    delivery.add_argument("--attempts-per-hour", type=int, default=20)
+    delivery.add_argument("--max-attempts", type=int, default=4)
+    delivery.add_argument("--expiry-minutes", type=int, default=15)
+    delivery.add_argument("--watch", action="store_true")
+    delivery_audit = commands.add_parser("delivery-status", help="read notification attempt audit")
+    delivery_audit.add_argument("monitor_id")
+    cancel_alert = commands.add_parser(
+        "cancel-delivery", help="cancel queued delivery for an alert"
+    )
+    cancel_alert.add_argument("monitor_id")
+    cancel_alert.add_argument("alert_id")
+
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
     try:
@@ -245,6 +280,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "continuous-bars":
             for event in replay_series(store, args.report_id):
                 print(canonical_json(event))
+        elif args.command == "deliver":
+            print(canonical_json(_deliver(store, args)))
+        elif args.command == "delivery-status":
+            for delivery_item in delivery_status(store, args.monitor_id):
+                print(canonical_json(delivery_item))
+        elif args.command == "cancel-delivery":
+            cancel_delivery(store, args.monitor_id, args.alert_id, datetime.now(UTC))
+            print(canonical_json({"alert_id": args.alert_id, "queued_delivery_canceled": True}))
         elif args.command == "monitor":
             print(canonical_json(_monitor_live(store, args)))
         elif args.command == "monitor-replay":
@@ -632,3 +675,44 @@ def _monitor_replay(store: DatasetStore, args: Namespace) -> dict[str, object]:
         for candle in batch:
             instance.ingest(FeedFrame.from_replay(candle, mode, candle.available_at))
     return instance.set_connection(False, end)
+
+
+def _clock_minute(value: str) -> int:
+    parsed = datetime.strptime(value, "%H:%M")
+    return parsed.hour * 60 + parsed.minute
+
+
+def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    destination = os.environ.get(args.destination_env)
+    if not destination:
+        raise ValueError("configured notification destination variable is unset")
+    if args.channel is Channel.TELEGRAM:
+        token = os.environ.get(args.token_env) if args.token_env else None
+        if not token:
+            raise ValueError("configured Telegram token variable is unset")
+        transport = HttpAlertChannel.telegram(token, destination)
+    else:
+        transport = HttpAlertChannel.discord(destination)
+    start, end = args.quiet or (None, None)
+    prefs = DeliveryPreferences(
+        timezone=args.timezone,
+        quiet_start_minute=start,
+        quiet_end_minute=end,
+        min_score=args.min_score,
+        allowed_sessions=tuple(args.session or ()),
+        severities=tuple(args.severity or Severity),
+        attempts_per_hour=args.attempts_per_hour,
+        max_attempts=args.max_attempts,
+        expiry_minutes=args.expiry_minutes,
+    )
+    worker = DeliveryWorker(store, args.monitor_id, transport, prefs)
+    attempts = 0
+    try:
+        while True:
+            attempts += worker.run_once()
+            if not args.watch:
+                break
+            sleep(5)
+    except KeyboardInterrupt:
+        pass
+    return {"channel": args.channel, "monitor_id": args.monitor_id, "attempted": attempts}

@@ -104,4 +104,6 @@ Install `.[stream]` for `monitor WSS_URL --calendar SCHEDULE --contract MGC-YYYY
 
 The monitor retains pending and applied minutes and reconstructs its research state from durable data on restart. A gap can be filled by ordered arrivals or by an optional `--backfill-url` returning the normalized CSV schema for the requested `contract`, `start` and `end`. Recovered, delayed and simulated setups remain in the event journal. The in-app alert queue requires a fresh real-time close outside a known gap. A conflicting duplicate latches an integrity fault for the monitor run.
 
+An explicitly started `deliver MONITOR_ID --channel telegram --destination-env AURUM_TELEGRAM_CHAT_ID --token-env AURUM_TELEGRAM_TOKEN` worker consumes eligible alerts. For Discord use `--channel discord --destination-env AURUM_DISCORD_WEBHOOK`. Add `--watch` for polling and `--quiet 22:00 07:00 --timezone Europe/Prague` for local quiet hours. Filters include score, session and severity. `delivery-status` reads attempts, and `cancel-delivery MONITOR_ID ALERT_ID` cancels queued or retrying deliveries.
+
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.

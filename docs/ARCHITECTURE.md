@@ -23,6 +23,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |
 | `account_simulation.py`, `account_reports.py` | Independent versioned paper account ledger, loss trail, phase rules and persisted reports |
 | `feed_frames.py`, `monitoring.py`, `streaming.py` | Normalized WebSocket, reviewed continuity, restart recovery, HTTPS backfill and in-app alert journal |
+| `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
 ## Flow and invariants
@@ -41,10 +42,11 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 12. The account ledger consumes explicit paper observations, not trade orders. Session close updates the loss trail and funded sizing tier. Intraday checks compare the selected measurement against the current floor. Payout and phase actions are explicit and separately audited. The same loss trail powers an optional trade-close drawdown Monte Carlo model.
 13. Contract analysis filters reviewed listings by effective availability and compares activity over a common measurement period. Continuous series plans reference immutable datasets and explicit switches. Forward adjustment uses a shared close known by the switch and applies only to the successor segment. Streaming a series uses indexed time bounds and keeps dated source candles separate.
 14. The monitor journals normalized and raw frames. It applies only the contiguous prefix of reviewed open minutes, passing those minutes to the existing strategy engine. Recovered setup events retain their actual observed time and source status. A fresh, connected, real-time close can enqueue a paper alert. Missing data, clock staleness and latched integrity conflicts suspend delivery eligibility.
+15. An explicitly started worker filters the alert queue, claims one destination-specific delivery, sends outside the transaction and records the outcome. Health warnings remain eligible during a feed fault. Confirmed paper setups require a fresh monitor check. Ambiguous transport results or expired sending leases become uncertain.
 
 ## Current database
 
-SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and earlier input schemas remain readable. The first write applies pending migrations through v4 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
+SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and earlier input schemas remain readable. The first write applies pending migrations through v5 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
 
 - `source_blobs` keys raw CSV bytes by SHA-256 and deduplicates repeated source content.
 - `datasets` keys records by dataset ID and references the source blob. It stores versioned provenance with the normalized schedule, actual range, import time, count, quality issues and replay eligibility. The calendar format has its own independent version in provenance JSON.
@@ -52,11 +54,12 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together.
 - `analysis_reports` stores content-addressed report definitions and results. Validation and resampled reports reference immutable backtest IDs. Assumed scenarios are reproducible without a dataset.
 - `monitor_runs`, `monitor_minutes`, `monitor_events` and `monitor_alerts` keep source definition, durable cursor, pending frames, transition audit and deduplicated in-app alerts. Advance of the cursor, applied minute and resulting events commit together.
+- `notification_deliveries`, `notification_attempts` and `notification_cancellations` track claims, provider results, retries, expiry and queued cancellation. Destination keys are hashes. Tokens and webhook URLs remain in environment-managed configuration.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)
 
 ## Next boundaries
 
-Add optional external delivery and a read-only API for research and monitor state. Keep alert dispatch separate from the source connection. Verify the normalized connector against an authorized production provider when credentials and a reviewed calendar are available.
+Add a local API and dashboard for research and monitor state. Verify the normalized connector and delivery against authorized production configuration when available.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

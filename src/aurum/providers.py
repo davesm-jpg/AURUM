@@ -81,7 +81,7 @@ class HttpsHistorySource:
             headers["Authorization"] = f"Bearer {token}"
         try:
             request = Request(self.url, headers=headers)
-            with build_opener(_NoRedirect).open(request, timeout=self.timeout_seconds) as response:
+            with build_opener(NoRedirect).open(request, timeout=self.timeout_seconds) as response:
                 raw: bytes = response.read(self.max_bytes + 1)
         except HTTPError as exc:
             raise ValueError(
@@ -94,7 +94,7 @@ class HttpsHistorySource:
         return raw
 
 
-class _NoRedirect(HTTPRedirectHandler):
+class NoRedirect(HTTPRedirectHandler):
     def redirect_request(
         self, req: Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
     ) -> None:

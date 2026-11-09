@@ -3,14 +3,16 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 129 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. Monitor tests cover local synthetic WebSocket, provider status, expected gaps, persistent restart, conflicting duplicate, stale/closed/unknown coverage, rollback, HTTPS fixture backfill, strategy parity and in-app alert gating.
+- `.venv/bin/python -m pytest -q` passed 134 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
-- `.venv/bin/mypy .` passed across forty-seven source/test files.
+- `.venv/bin/mypy .` passed across fifty source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
 All fixtures are explicitly synthetic. No authorized market dataset or production-reviewed schedule was used. The code trusts the stated provider, price basis, contract mapping and schedule coverage. Validation of real exchange-export semantics is D04. See [README](../README.md) for the format.
+
+Telegram and Discord transports use the official documented payload shapes and require a provider confirmation before marking a delivery sent. All development calls used fake transport. [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage) · [Discord Webhook Resource](https://docs.discord.com/developers/resources/webhook#execute-webhook)
 
 The reference 10 troy ounces and USD 0.10 per ounce tick imply USD 1 per contract tick. [COMEX Rulebook Chapter 120](https://www.cmegroup.com/rulebook/COMEX/1a/120.pdf)
 

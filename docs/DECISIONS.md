@@ -129,3 +129,13 @@
 - Rationale. Durable chronology preserves the same evidence path through restart, duplicate and late delivery. A conflicting duplicate is recorded and latches the run for investigation.
 - Consequences. Calendar coverage and source status are explicit caller inputs. Startup expects the first covered minute. Restart rebuild cost grows with applied history. Existing SQLite readers are released between replay batches before monitor writes.
 - Files. `src/aurum/monitoring.py`, `src/aurum/streaming.py`, `src/aurum/feed_frames.py`, `src/aurum/storage.py`.
+
+## ADR-014 — Delivery leases and explicit uncertain state
+
+- Date 2026-11-09.
+- Context. Channel calls can fail after a provider may have accepted a message.
+- Alternatives. Retry all failures, send without durable claims, or distinguish explicit failure from uncertain delivery.
+- Decision. Persist a unique channel/destination/alert claim and its attempts. Retry explicit throttling and temporary HTTP failures. Mark ambiguous transport or expired claims uncertain and require separate investigation. Respect local quiet hours, limits and freshness. Permit health warnings independently of confirmed paper alerts.
+- Rationale. The worker is safe under concurrent claims and avoids automatic retransmission when receipt is unknown.
+- Consequences. Queued cancellation applies before sending. External provider responses, production limits and real channel behavior remain unverified. Tests use fake transport.
+- Files. `src/aurum/notifications.py`, `src/aurum/notification_transport.py`, `src/aurum/storage.py`.

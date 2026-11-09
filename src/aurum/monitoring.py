@@ -305,6 +305,13 @@ class MarketMonitor:
                     "pending_minutes": pending,
                 },
             )
+            if self.config.source_status is FeedStatus.REAL_TIME and state in (
+                MonitorState.RECOVERING,
+                MonitorState.STALE,
+                MonitorState.DISCONNECTED,
+                MonitorState.INVALID,
+            ):
+                self._health_alert(db, state, now)
         db.execute(
             "UPDATE monitor_runs SET state = ?, checked_at = ? WHERE id = ?",
             (state, now.isoformat(), self.monitor_id),
@@ -363,6 +370,7 @@ class MarketMonitor:
         payload = {
             "alert_id": alert_id,
             "event": "paper_research_alert",
+            "severity": "research",
             "execution_mode": "paper_research",
             "contract": self.contract.code,
             "source": self.config.source,
@@ -376,6 +384,28 @@ class MarketMonitor:
             ).isoformat(),
             "setup": event.as_dict(),
         }
+        self._queue_alert(db, alert_id, payload, now)
+
+    def _health_alert(self, db: sqlite3.Connection, state: MonitorState, now: datetime) -> None:
+        alert_id = f"{self.monitor_id}/health/{state}/{now.isoformat()}"
+        self._queue_alert(
+            db,
+            alert_id,
+            {
+                "alert_id": alert_id,
+                "event": "data_quality_warning",
+                "severity": "critical" if state is MonitorState.INVALID else "warning",
+                "contract": self.contract.code,
+                "source": self.config.source,
+                "state": state,
+                "execution_mode": "paper_research",
+            },
+            now,
+        )
+
+    def _queue_alert(
+        self, db: sqlite3.Connection, alert_id: str, payload: dict[str, object], now: datetime
+    ) -> None:
         db.execute(
             "INSERT INTO monitor_alerts VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
             (self.monitor_id, alert_id, canonical_json(payload), now.isoformat()),

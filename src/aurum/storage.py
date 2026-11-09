@@ -22,7 +22,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -112,6 +112,42 @@ SCHEMA_V4 = (
         payload TEXT NOT NULL,
         created_at TEXT NOT NULL,
         PRIMARY KEY (run_id, alert_id)
+    ) STRICT, WITHOUT ROWID""",
+)
+
+SCHEMA_V5 = (
+    """CREATE TABLE notification_deliveries (
+        id TEXT PRIMARY KEY NOT NULL,
+        monitor_id TEXT NOT NULL,
+        alert_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        destination_key TEXT NOT NULL,
+        state TEXT NOT NULL,
+        attempts INTEGER NOT NULL,
+        due_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        claimed_at TEXT,
+        last_error TEXT,
+        FOREIGN KEY (monitor_id, alert_id) REFERENCES monitor_alerts(run_id, alert_id),
+        UNIQUE (monitor_id, alert_id, channel, destination_key)
+    ) STRICT""",
+    """CREATE INDEX notification_due
+       ON notification_deliveries(monitor_id, channel, destination_key, state, due_at)""",
+    """CREATE TABLE notification_attempts (
+        delivery_id TEXT NOT NULL REFERENCES notification_deliveries(id),
+        attempt INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        outcome TEXT,
+        error TEXT,
+        PRIMARY KEY (delivery_id, attempt)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE TABLE notification_cancellations (
+        monitor_id TEXT NOT NULL,
+        alert_id TEXT NOT NULL,
+        canceled_at TEXT NOT NULL,
+        PRIMARY KEY (monitor_id, alert_id),
+        FOREIGN KEY (monitor_id, alert_id) REFERENCES monitor_alerts(run_id, alert_id)
     ) STRICT, WITHOUT ROWID""",
 )
 
@@ -532,4 +568,7 @@ class DatasetStore:
         if write and version < 4:
             for statement in SCHEMA_V4:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 4")
+        if write and version < 5:
+            for statement in SCHEMA_V5:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 5")

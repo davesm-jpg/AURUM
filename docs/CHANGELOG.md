@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Optional paper-alert delivery
+
+- Added health warnings, optional Telegram/Discord workers, filters and quiet hours.
+- Added durable claims, retry/expiry, queued cancellation and explicit uncertain outcomes.
+- Verified delivery with synthetic provider responses and concurrent worker tests.
+
 ## 2026-11-09 — Persistent paper monitoring
 
 - Added normalized WebSocket ingestion, durable minute continuity and restart recovery.
