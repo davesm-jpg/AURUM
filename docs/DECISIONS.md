@@ -166,3 +166,12 @@
 - Decision — Persist the strategy step's evidence and context atomically with its applied minute. Keep existing monitor IDs and setup journal sequences.
 - Consequences — Charts can separate source confirmation from observation during gap recovery. Schema v6 leaves legacy applied observation times unset.
 - Files — `src/aurum/storage.py`, `src/aurum/strategy.py`, `src/aurum/monitoring.py`, `src/aurum/api.py`.
+
+## ADR-018 — Forward execution uses the observation clock
+
+- Date — 2026-11-09.
+- Context — Closed-minute market evidence can arrive after the next minute has already opened.
+- Alternatives — Reuse source close as the entry clock or require an open at or after actual observation.
+- Decision — Register against the current applied cursor, ceil actual observation to a minute open, then add latency. Use the shared paper fill engine and persist the decision and observation clocks.
+- Consequences — A timely direct observation can qualify. Recovered, stale or otherwise unverified data cancels pending paper entries and leaves open paper outcomes unresolved. Synthetic verification is a separate source class.
+- Files — `forward.py`, `execution.py`, `monitoring.py`, `storage.py`.

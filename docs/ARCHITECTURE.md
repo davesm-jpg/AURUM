@@ -23,6 +23,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |
 | `account_simulation.py`, `account_reports.py` | Independent versioned paper account ledger, loss trail, phase rules and persisted reports |
 | `feed_frames.py`, `monitoring.py`, `streaming.py` | Normalized WebSocket, reviewed continuity, restart recovery, HTTPS backfill and in-app alert journal |
+| `forward.py` | Registration-bound paper execution over observed monitor minutes, durable cursor and independent ledger |
 | `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
@@ -57,6 +58,7 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together. Replay and canonical serialization happen in a bounded private spool outside the write transaction.
 - `analysis_reports` stores content-addressed report definitions and results. Validation and resampled reports reference immutable backtest IDs. Assumed scenarios are reproducible without a dataset.
 - `monitor_runs`, `monitor_minutes`, `monitor_events` and `monitor_alerts` keep source definition, durable cursor, pending frames, transition audit and deduplicated in-app alerts. Advance of the cursor, applied minute and resulting events commit together. Schema v6 adds `monitor_market_events` and nullable observed timestamps on applied minutes. Previous rows keep unknown observation times.
+- `forward_runs` and `forward_events` persist the registration boundary, execution settings, cursor and paper audit. Schema v7 stores whether a monitor minute was directly and promptly applied. Forward runs leave interrupted positions unresolved.
 - `notification_deliveries`, `notification_attempts` and `notification_cancellations` track claims, provider results, retries, expiry and queued cancellation. Destination keys are hashes. Tokens and webhook URLs remain in environment-managed configuration.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)

@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Forward paper ledger
+
+- Added registration, atomic replay of observed monitor minutes and separate forward audit with conservative interruption handling.
+
 ## 2026-11-09 — Report creation
 
 - Added local creation forms and API endpoints for chronological validation, Monte Carlo and paper account ledgers.

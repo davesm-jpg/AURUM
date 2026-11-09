@@ -123,3 +123,15 @@ npm --prefix frontend run dev
 ```
 
 Open [the local workspace](http://127.0.0.1:3000) or [the API schema](http://127.0.0.1:8765/docs). Import a dataset into the same database to populate the historical chart. Choose **Monitor journal** on the Market tab to view applied candles and their source classes from a configured monitor. Set the server-side `AURUM_API_BASE` if the API uses a different loopback port. For bearer authentication, pass `--token-env AURUM_API_TOKEN` to the API and set the same environment variable for both processes.
+
+## Forward paper journal
+
+Register a run against a configured monitor, then advance its applied journal. The registration captures the monitor cursor. Forward outcomes start with observations received after that checkpoint.
+
+```sh
+.venv/bin/aurum --db data/aurum.sqlite forward-start MONITOR_ID
+.venv/bin/aurum --db data/aurum.sqlite forward-sync FORWARD_ID
+.venv/bin/aurum --db data/aurum.sqlite forward-events FORWARD_ID
+```
+
+Use `forward-sync --watch` for a foreground paper consumer. A simulated monitor requires `forward-start --synthetic` and produces a labeled synthetic verification ledger.
