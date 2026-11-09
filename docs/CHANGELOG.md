@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Versioned experiment profiles
+
+- Added server-provided defaults, structured settings, full profile editing and reload of immutable run configurations.
+
 ## 2026-11-09 — Research analytics and reports
 
 - Added net backtest curves, rolling diagnostics, grouped outcomes, score bands, setup frequency and fixed-fill cost sensitivity.
