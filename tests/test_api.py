@@ -48,13 +48,24 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
     client = http.TestClient(api.create_app(store, "synthetic-access"))
     assert client.get("/api/health").status_code == 401
     client.headers["Authorization"] = "Bearer synthetic-access"
+    cross_origin = client.post(
+        "/api/backtests",
+        json={"dataset_id": dataset, "variant": "mss"},
+        headers={"Origin": "https://cross-site.invalid"},
+    )
+    assert cross_origin.status_code == 403
+    assert client.get("/api/runs").json() == []
     assert client.get("/api/datasets").json()[0]["data_kind"] == "synthetic"
     response = client.get(f"/api/datasets/{dataset}/candles?timeframe=5m&limit=1")
     assert response.status_code == 200
     assert response.json()[0]["available_at"] == span.end.isoformat()
     assert client.get(f"/api/datasets/{dataset}/candles?limit=0").status_code == 422
     assert client.get("/api/datasets/" + "a" * 64).status_code == 404
-    created = client.post("/api/backtests", json={"dataset_id": dataset, "variant": "mss"})
+    created = client.post(
+        "/api/backtests",
+        json={"dataset_id": dataset, "variant": "mss"},
+        headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
+    )
     assert created.status_code == 201
     run = created.json()
     assert run["summary"]["performance"]["trades"] == 0

@@ -110,7 +110,17 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
         description="Provenance, market evidence, simulated research and feed health.",
     )
 
-    def authorize(authorization: Annotated[str | None, Header()] = None) -> None:
+    def authorize(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            site = request.headers.get("sec-fetch-site")
+            expected = f"{request.url.scheme}://{request.url.netloc}"
+            if (origin is not None and origin != expected) or site not in (
+                None,
+                "same-origin",
+                "none",
+            ):
+                raise HTTPException(status_code=403, detail="local API origin required")
         if access_token is not None and (
             authorization is None
             or not compare_digest(authorization.encode(), f"Bearer {access_token}".encode())

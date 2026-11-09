@@ -1,7 +1,13 @@
 export type RecordData = Record<string, unknown>;
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch("/api/" + path, { ...init, cache: "no-store" });
+  const headers = new Headers(init?.headers);
+  if (init?.method === "POST") headers.set("Content-Type", "application/json");
+  const response = await fetch("/api/" + path, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
   const data = await response.json();
   if (!response.ok) {
     const detail = data?.detail;

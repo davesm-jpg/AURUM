@@ -314,7 +314,7 @@ export function RuntimeSettings({
               title="Destination variable"
               sample={
                 channel === "telegram"
-                ? "AURUM_TELEGRAM_CHAT_ID"
+                  ? "AURUM_TELEGRAM_CHAT_ID"
                   : "AURUM_DISCORD_WEBHOOK"
               }
               required
