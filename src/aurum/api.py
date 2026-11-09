@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from aurum.candles import CandleAggregator, Timeframe
+from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import ExecutionConfig
 from aurum.instruments import MGC, MgcContract
@@ -154,6 +155,31 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
         latest: bool = False,
     ) -> list[dict[str, object]]:
         return _events(store, run_id, after, limit, latest=latest)
+
+    @router.get("/runs/{run_id}/chart-evidence")
+    def chart(
+        run_id: RecordId,
+        start: Annotated[str, Query(description="Inclusive UTC chart window start")],
+        through: Annotated[str, Query(description="Inclusive UTC chart window end")],
+    ) -> ChartEvidence:
+        left, right = minute_timestamp(start), minute_timestamp(through)
+        if left >= right:
+            raise ValueError("chart window must have positive duration")
+        run = store.describe_structure_run(run_id)
+        with store.connection() as db:
+            placeholders = ", ".join("?" for _ in CHART_EVENT_KINDS)
+            records = db.execute(
+                f"""SELECT sequence, payload FROM structure_events
+                    WHERE run_id = ? AND json_extract(payload, '$.event') IN ({placeholders})
+                    ORDER BY sequence""",
+                (run_id, *CHART_EVENT_KINDS),
+            )
+            return chart_evidence(
+                ((row["sequence"], json.loads(row["payload"])) for row in records),
+                left,
+                right,
+                tracks_execution="backtest_version" in run,
+            )
 
     @router.get("/backtests/{run_id}")
     def backtest(run_id: RecordId) -> dict[str, object]:

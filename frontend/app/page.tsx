@@ -1,22 +1,21 @@
 "use client";
 
 import {
-  CandlestickSeries,
-  ColorType,
-  LineSeries,
-  createChart,
-  createSeriesMarkers,
-  type SeriesMarker,
-  type UTCTimestamp,
-} from "lightweight-charts";
-import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
 } from "react";
+import {
+  EMPTY_EVIDENCE,
+  OVERLAYS,
+  overlayKeys,
+  type Candle,
+  type ChartEvidence,
+  type Overlay,
+} from "./chart-evidence";
+import { PriceChart } from "./price-chart";
 
 type RecordData = Record<string, unknown>;
 type Dataset = {
@@ -46,28 +45,9 @@ type Monitor = {
   source_status: string;
   checked_at: string | null;
 };
-type Candle = {
-  available_at: string;
-  opened_at: string;
-  trade_date: string | null;
-  open_ticks: number;
-  high_ticks: number;
-  low_ticks: number;
-  close_ticks: number;
-  volume: number;
-  shortened: boolean;
-};
 type Tab = "Market" | "Research" | "Reports";
-type Overlay = "Swings" | "Structure" | "Liquidity" | "Gaps" | "Paper plans";
 
 const FRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
-const OVERLAYS: Overlay[] = [
-  "Swings",
-  "Structure",
-  "Liquidity",
-  "Gaps",
-  "Paper plans",
-];
 const VARIANTS = [
   "mss",
   "sweep_mss",
@@ -103,7 +83,6 @@ const stamp = (value: unknown, zone = "UTC") =>
         hourCycle: "h23",
       }).format(new Date(value))
     : "Unavailable";
-const timestamp = (value: string) => (Date.parse(value) / 1000) as UTCTimestamp;
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch("/api/" + path, { ...init, cache: "no-store" });
@@ -117,7 +96,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-function eventGroup(event: RecordData): Overlay | null {
+function eventGroup(event: RecordData): string | null {
   const kind = String(event.event);
   if (kind === "swing_confirmed") return "Swings";
   if (
@@ -141,133 +120,6 @@ function eventTitle(event: RecordData): string {
   if (event.event === "swing_confirmed")
     return label(event.relation) + " " + label(event.side);
   return label(event.event);
-}
-
-function PriceChart({
-  bars,
-  events,
-  overlays,
-}: {
-  bars: Candle[];
-  events: RecordData[];
-  overlays: Set<Overlay>;
-}) {
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!host.current || !bars.length) return;
-    const chart = createChart(host.current, {
-      autoSize: true,
-      layout: {
-        background: { type: ColorType.Solid, color: "#10171e" },
-        textColor: "#92a0ad",
-      },
-      grid: {
-        vertLines: { color: "#1b2731" },
-        horzLines: { color: "#1b2731" },
-      },
-      rightPriceScale: { borderColor: "#293642" },
-      timeScale: {
-        borderColor: "#293642",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
-    const candles = chart.addSeries(CandlestickSeries, {
-      upColor: "#55c7aa",
-      downColor: "#e78184",
-      borderVisible: false,
-      wickUpColor: "#55c7aa",
-      wickDownColor: "#e78184",
-      priceFormat: { type: "price", precision: 1, minMove: 0.1 },
-    });
-    candles.setData(
-      bars.map((bar) => ({
-        time: timestamp(bar.available_at),
-        open: bar.open_ticks * TICK,
-        high: bar.high_ticks * TICK,
-        low: bar.low_ticks * TICK,
-        close: bar.close_ticks * TICK,
-      })),
-    );
-    const byTime = new Set(bars.map((bar) => timestamp(bar.available_at)));
-    const markers: SeriesMarker<UTCTimestamp>[] = [];
-    const lastTime = timestamp(bars[bars.length - 1].available_at);
-    const addLevel = (from: UTCTimestamp, ticks: unknown, color: string) => {
-      if (typeof ticks !== "number" || from >= lastTime) return;
-      const line = chart.addSeries(LineSeries, {
-        color,
-        lineWidth: 1,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      });
-      line.setData([
-        { time: from, value: ticks * TICK },
-        { time: lastTime, value: ticks * TICK },
-      ]);
-    };
-    const mapped = events
-      .filter((event) => {
-        const group = eventGroup(event);
-        return (
-          group !== null &&
-          overlays.has(group) &&
-          typeof event.confirmed_at === "string"
-        );
-      })
-      .slice(-45);
-    for (const event of mapped) {
-      const time = timestamp(String(event.confirmed_at));
-      if (!byTime.has(time)) continue;
-      const group = eventGroup(event);
-      const color =
-        group === "Gaps"
-          ? "#a99bea"
-          : group === "Liquidity"
-            ? "#73b8ee"
-            : "#d1ae6b";
-      markers.push({
-        time,
-        position: event.side === "low" ? "belowBar" : "aboveBar",
-        shape: group === "Paper plans" ? "arrowUp" : "circle",
-        color,
-        text: eventTitle(event).slice(0, 24),
-        size: 0.55,
-      });
-      if (group === "Gaps") {
-        const zone = record(event.zone);
-        addLevel(time, zone.lower_ticks, "#776ca8");
-        addLevel(time, zone.upper_ticks, "#776ca8");
-      } else if (
-        group === "Liquidity" &&
-        event.event === "liquidity_level_mapped"
-      ) {
-        addLevel(time, record(event.level).price_ticks, "#496e8b");
-      } else if (group === "Paper plans") {
-        const plan = record(event.plan);
-        addLevel(time, plan.entry_ticks, "#d1ae6b");
-        addLevel(time, plan.stop_ticks, "#c87074");
-        addLevel(time, plan.target_ticks, "#55c7aa");
-      }
-    }
-    createSeriesMarkers(
-      candles,
-      markers.sort((left, right) => left.time - right.time),
-    );
-    chart.timeScale().fitContent();
-    return () => chart.remove();
-  }, [bars, events, overlays]);
-  return (
-    <div
-      className="chart-surface"
-      ref={host}
-      aria-label="Micro Gold candle chart in UTC"
-    >
-      {!bars.length && (
-        <div className="chart-empty">No completed candles in this view.</div>
-      )}
-    </div>
-  );
 }
 
 function EquityPlot({ points }: { points: RecordData[] }) {
@@ -326,13 +178,28 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [chartError, setChartError] = useState("");
-  const [overlays, setOverlays] = useState<Set<Overlay>>(new Set(OVERLAYS));
+  const [chartEvidence, setChartEvidence] = useState<{
+    key: string;
+    data: ChartEvidence;
+  }>();
+  const [overlayError, setOverlayError] = useState("");
+  const [overlays, setOverlays] = useState<Set<Overlay>>(new Set(overlayKeys));
   const dataset = datasets.find((item) => item.dataset_id === datasetId);
   const availableRuns = useMemo(
     () => runs.filter((run) => run.dataset_id === datasetId),
     [runs, datasetId],
   );
   const activeRun = availableRuns.find((run) => run.run_id === runId);
+  const bounds = bars.length
+    ? new URLSearchParams({
+        start: bars[0].opened_at,
+        through: bars[bars.length - 1].available_at,
+      })
+    : null;
+  const evidenceQuery =
+    activeRun && bounds
+      ? "runs/" + activeRun.run_id + "/chart-evidence?" + bounds
+      : "";
   const monitor = dataset
     ? monitors.find((item) => item.contract === dataset.contract)
     : monitors[0];
@@ -391,6 +258,22 @@ export default function Dashboard() {
       ignore = true;
     };
   }, [datasetId, frame]);
+
+  useEffect(() => {
+    if (!evidenceQuery) return;
+    let ignore = false;
+    setOverlayError("");
+    api<ChartEvidence>(evidenceQuery)
+      .then((data) => {
+        if (!ignore) setChartEvidence({ key: evidenceQuery, data });
+      })
+      .catch((failure) => {
+        if (!ignore) setOverlayError(failure.message);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [evidenceQuery]);
 
   useEffect(() => {
     let ignore = false;
@@ -650,25 +533,36 @@ export default function Dashboard() {
                 </div>
               </div>
               {chartError && <p className="notice">{chartError}</p>}
+              {evidenceQuery && overlayError && (
+                <p className="notice">{overlayError}</p>
+              )}
               <PriceChart
+                key={datasetId + "/" + frame}
                 bars={bars}
-                events={activeRun?.timeframe === frame ? events : []}
+                evidence={
+                  chartEvidence?.key === evidenceQuery
+                    ? chartEvidence.data
+                    : EMPTY_EVIDENCE
+                }
                 overlays={overlays}
               />
               <div className="chart-footer">
                 <div className="overlays">
-                  {OVERLAYS.map((item) => (
+                  {overlayKeys.map((item) => (
                     <button
                       key={item}
                       className={overlays.has(item) ? "on" : ""}
                       aria-pressed={overlays.has(item)}
                       onClick={() => flipOverlay(item)}
                     >
-                      {item}
+                      {OVERLAYS[item]}
                     </button>
                   ))}
                 </div>
-                <span>UTC candle close</span>
+                <span>
+                  UTC candle close
+                  {activeRun ? " · " + activeRun.timeframe + " evidence" : ""}
+                </span>
               </div>
             </section>
 

@@ -53,3 +53,10 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
         client.get(f"/api/runs/{run['run_id']}/events").json()[0]["event"]
         == "paper_backtest_summary"
     )
+    path_to_chart = f"/api/runs/{run['run_id']}/chart-evidence"
+    bounds = {"start": start.isoformat(), "through": span.end.isoformat()}
+    response = client.get(path_to_chart, params=bounds)
+    assert response.status_code == 200
+    assert response.json() == {"markers": [], "spans": []}
+    inverted = {"start": bounds["through"], "through": bounds["start"]}
+    assert client.get(path_to_chart, params=inverted).status_code == 422
