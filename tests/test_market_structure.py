@@ -3,7 +3,8 @@ import sqlite3
 import subprocess
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 from sys import executable
 from threading import Barrier, Event
@@ -12,6 +13,8 @@ import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
+from aurum.feed_frames import FeedFrame
+from aurum.forward import ForwardPaper, forward_events, register_forward
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.market_structure import (
@@ -30,9 +33,11 @@ from aurum.market_structure import (
     Trend,
     TrendChange,
 )
+from aurum.monitoring import MarketMonitor, MonitorConfig
+from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics
 from aurum.storage import SCHEMA_VERSION, DatasetStore
-from aurum.strategy import SetupState, StrategyReplay
+from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay
 from aurum.timestamps import MINUTE, minute_timestamp
 
 CONTRACT = MgcContract("MGC-2025-04")
@@ -350,6 +355,8 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         db.execute("DROP TABLE notification_attempts")
         db.execute("DROP TABLE notification_deliveries")
         db.execute("DROP TABLE notification_cancellations")
+        db.execute("DROP TABLE forward_events")
+        db.execute("DROP TABLE forward_runs")
         db.execute("DROP TABLE monitor_events")
         db.execute("DROP TABLE monitor_alerts")
         db.execute("DROP TABLE monitor_market_events")
@@ -666,3 +673,97 @@ def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(
     last = minutes[-1]
     instance.ingest(FeedFrame.from_replay(last, FeedStatus.REAL_TIME, last.available_at))
     assert len(list(monitor_alerts(store, instance.monitor_id))) == 1
+
+
+@pytest.mark.parametrize("recover", [False, True])
+def test_forward_paper_restores_after_observed_signal_and_handles_recovery(
+    tmp_path: Path, recover: bool
+) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 102, 122, 111, 110),
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    calendar = SessionCalendar.from_dict(store.describe(dataset)["provenance"]["calendar"])
+    monitor = MarketMonitor(
+        store,
+        calendar,
+        CONTRACT,
+        MonitorConfig("synthetic forward verification", FeedStatus.SIMULATED),
+        StructureConfig(PivotRule(1, 1)),
+        DEFAULT_STRATEGY_CONFIG,
+    )
+    with pytest.raises(ValueError, match="configured as real_time"):
+        register_forward(store, monitor.monitor_id, START)
+    run = register_forward(store, monitor.monitor_id, START, synthetic=True)
+    monitor.set_connection(True, START)
+    minutes = list(store.replay(dataset))
+    receipt_offset = timedelta(seconds=2)
+    for candle in minutes[:65]:
+        monitor.ingest(
+            FeedFrame.from_replay(
+                candle, FeedStatus.SIMULATED, candle.available_at + receipt_offset
+            )
+        )
+    paper = ForwardPaper(store, run)
+    queued = paper.sync()
+    assert queued["caught_up"] is True and queued["pending_setup_id"]
+    signal, order = forward_events(store, run)
+    assert signal["data_kind"] == "synthetic_forward_verification"
+    assert signal["event"] == "paper_forward_signal"
+    assert order["recorded_at"] == (minutes[64].available_at + receipt_offset).isoformat()
+    for candle in minutes[65:67]:
+        monitor.ingest(
+            FeedFrame.from_replay(
+                candle, FeedStatus.SIMULATED, candle.available_at + receipt_offset
+            )
+        )
+    restarted = ForwardPaper(store, run)
+    filled = restarted.sync()
+    assert filled["open_setup_id"] == queued["pending_setup_id"]
+    fill = forward_events(store, run)[-1]
+    assert fill["entry_at"] == minutes[66].opened_at.isoformat()
+    assert fill["recorded_at"] == (minutes[66].available_at + receipt_offset).isoformat()
+
+    if recover:
+        receipt = minutes[68].available_at + receipt_offset
+        monitor.ingest(FeedFrame.from_replay(minutes[68], FeedStatus.SIMULATED, receipt))
+        assert restarted.sync()["open_setup_id"] == filled["open_setup_id"]
+        monitor.ingest(FeedFrame.from_replay(minutes[67], FeedStatus.SIMULATED, receipt))
+    else:
+        target = replace(minutes[67], high_ticks=190)
+        receipt = target.available_at + receipt_offset
+        monitor.ingest(FeedFrame.from_replay(target, FeedStatus.SIMULATED, receipt))
+
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            """CREATE TRIGGER fail_forward BEFORE INSERT ON forward_events
+               BEGIN SELECT RAISE(ABORT, 'synthetic forward persistence failure'); END"""
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic forward persistence failure"):
+        restarted.sync()
+    assert forward_events(store, run)[-1] == fill
+    with sqlite3.connect(store.path) as db:
+        db.execute("DROP TRIGGER fail_forward")
+    assert restarted.sync()["open_setup_id"] is None
+    outcome = forward_events(store, run)[-1]
+    assert outcome["recorded_at"] == receipt.isoformat()
+    if recover:
+        assert outcome["event"] == "paper_trade_unresolved"
+        assert "net_cents" not in outcome
+    else:
+        assert outcome["event"] == "paper_trade_completed"
+        assert outcome["reason"] == "target"
+    assert ForwardPaper(store, run).sync()["processed_minutes"] == 0
+    cli = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    audited = subprocess.run(
+        [*cli, "forward-events", run], check=True, capture_output=True, text=True
+    )
+    assert [json.loads(line) for line in audited.stdout.splitlines()] == forward_events(store, run)
+    late = register_forward(store, monitor.monitor_id, receipt, synthetic=True)
+    assert ForwardPaper(store, late).sync()["processed_minutes"] == 0
+    assert forward_events(store, late) == []

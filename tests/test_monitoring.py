@@ -140,7 +140,11 @@ def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observatio
         original.ingest(frame(index, mode=FeedStatus.SIMULATED))
     with sqlite3.connect(store.path) as db:
         db.execute("DROP TABLE monitor_market_events")
+        db.execute("DROP TABLE forward_events")
+        db.execute("DROP TABLE forward_runs")
+        db.execute("DROP INDEX monitor_signal_close")
         db.execute("DROP INDEX monitor_observed_start")
+        db.execute("ALTER TABLE monitor_minutes DROP COLUMN execution_eligible")
         db.execute("ALTER TABLE monitor_minutes DROP COLUMN applied_at")
         db.execute("PRAGMA user_version = 5")
     assert market_events_page(store, original.monitor_id) == []

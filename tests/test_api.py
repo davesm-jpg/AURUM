@@ -293,3 +293,13 @@ def test_recovered_synthetic_monitor_evidence_uses_observed_time_on_chart(tmp_pa
         assert zone["source_sequence"] == gap["sequence"]
         assert minute_timestamp(zone["available_at"]) == minute_timestamp(observed)
         assert later["context_event"]["observed_at"] == observed
+        forward = client.post(
+            "/api/forward-runs", json={"monitor_id": monitor.monitor_id, "synthetic": True}
+        )
+        assert forward.status_code == 201
+        run = forward.json()
+        assert run["data_kind"] == "synthetic_forward_verification"
+        assert run["caught_up"]
+        route = f"/api/forward-runs/{run['forward_id']}"
+        assert client.post(route + "/sync").json()["processed_minutes"] == 0
+        assert client.get(route + "/events").json() == []

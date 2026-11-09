@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -12,6 +12,7 @@ from aurum.execution import (
     OrderKind,
     PaperExecution,
     PaperTrade,
+    UnresolvedTrade,
 )
 from aurum.instruments import MgcContract
 from aurum.market_context import ContextSnapshot, Regime, ResearchSession
@@ -122,6 +123,43 @@ def test_latency_and_entry_recheck_do_not_use_the_late_bar_range_for_entry() -> 
     assert isinstance(event, OrderEvent)
     assert event.kind is OrderKind.CANCELED
     assert event.reason == "entry_risk_exceeded"
+
+
+def test_observed_paper_entry_skips_an_open_before_actual_signal_availability() -> None:
+    engine = PaperExecution(synthetic_calendar((0, 6)), CONTRACT, DEFAULT_RISK_CONFIG)
+    first = synthetic_minute(0)
+    observed = first.available_at + timedelta(seconds=1)
+    engine.advance(first, observed_at=observed)
+    order = engine.submit(synthetic_signal(first), observed_at=observed)
+    assert order.recorded_at == observed
+    assert engine.advance(synthetic_minute(1, 150, 300, 50, 160)) == ()
+    actual = synthetic_minute(2, 150, 260, 140, 180)
+    available = actual.available_at + timedelta(seconds=2)
+    entry, exit_event = engine.advance(actual, observed_at=available)
+    assert isinstance(entry, OrderEvent) and entry.entry_at == actual.opened_at
+    assert entry.recorded_at == available
+    assert isinstance(exit_event, PaperTrade) and exit_event.recorded_at == available
+    assert exit_event.reason is ExitReason.TARGET
+    assert exit_event.net_cents == 9_740
+
+
+def test_untrusted_data_releases_forward_paper_state_without_marking_a_trade() -> None:
+    engine = PaperExecution(synthetic_calendar((0, 6)), CONTRACT, DEFAULT_RISK_CONFIG)
+    first = synthetic_minute(0)
+    engine.advance(first)
+    engine.submit(synthetic_signal(first))
+    assert engine.pending_setup_id == "synthetic-setup"
+    (fill,) = engine.advance(synthetic_minute(1))
+    assert isinstance(fill, OrderEvent)
+    assert engine.open_setup_id == fill.setup_id
+    interrupted = START + 4 * MINUTE
+    (unresolved,) = engine.interrupt(interrupted, "data_continuity_lost")
+    assert isinstance(unresolved, UnresolvedTrade)
+    assert unresolved.recorded_at == interrupted and unresolved.entry_at == first.available_at
+    assert "net_cents" not in unresolved.as_dict()
+    assert engine.open_setup_id is None and engine.pending_setup_id is None
+    with pytest.raises(ValueError, match="observation clock"):
+        engine.advance(synthetic_minute(2))
 
 
 def test_optional_net_cap_rechecks_spread_and_never_moves_the_stop() -> None:

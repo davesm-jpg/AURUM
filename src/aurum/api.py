@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Path, Qu
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from aurum.api_config import BacktestRequest, backtest_configuration
+from aurum.api_config import BacktestRequest, ForwardStartRequest, backtest_configuration
 from aurum.api_reports import (
     MonteCarloReportRequest,
     PaperAccountReportRequest,
@@ -21,6 +21,13 @@ from aurum.api_reports import (
 from aurum.candles import CandleAggregator, Timeframe
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
+from aurum.forward import (
+    ForwardPaper,
+    describe_forward,
+    forward_events,
+    list_forward_runs,
+    register_forward,
+)
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.monitoring import (
@@ -348,6 +355,41 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @router.get("/forward-runs")
+    def forward_runs(limit: PageLimit = 100) -> list[dict[str, object]]:
+        return list_forward_runs(store, limit)
+
+    @router.post("/forward-runs", status_code=201)
+    def start_forward(request: ForwardStartRequest) -> dict[str, object]:
+        reference = register_forward(
+            store,
+            request.monitor_id,
+            datetime.now(UTC),
+            request.execution_config,
+            synthetic=request.synthetic,
+        )
+        return describe_forward(store, reference)
+
+    @router.get("/forward-runs/{forward_id}")
+    def forward_state(forward_id: RecordId) -> dict[str, object]:
+        return describe_forward(store, forward_id)
+
+    @router.get("/forward-runs/{forward_id}/events")
+    def forward_journal(
+        forward_id: RecordId,
+        after: Annotated[int, Query(ge=0)] = 0,
+        limit: PageLimit = 200,
+        latest: bool = False,
+    ) -> list[dict[str, object]]:
+        return forward_events(store, forward_id, after=after, limit=limit, latest=latest)
+
+    @router.post("/forward-runs/{forward_id}/sync")
+    def forward_sync(
+        forward_id: RecordId,
+        limit: PageLimit = 500,
+    ) -> dict[str, object]:
+        return ForwardPaper(store, forward_id).sync(limit)
 
     app.include_router(router)
     return app

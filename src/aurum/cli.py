@@ -21,6 +21,13 @@ from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
 from aurum.feed_frames import FeedFrame
+from aurum.forward import (
+    ForwardPaper,
+    describe_forward,
+    forward_events,
+    list_forward_runs,
+    register_forward,
+)
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import (
@@ -122,21 +129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _strategy_options(strategy)
     backtest = commands.add_parser("backtest", help="run a minute-level paper simulation")
     _strategy_options(backtest)
-    backtest.add_argument(
-        "--latency-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.latency_minutes
-    )
-    backtest.add_argument(
-        "--entry-timeout-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.entry_timeout_minutes
-    )
-    backtest.add_argument(
-        "--round-trip-spread-ticks",
-        type=int,
-        default=DEFAULT_EXECUTION_CONFIG.round_trip_spread_ticks,
-    )
-    backtest.add_argument("--carry-across-closures", action="store_true")
-    backtest.add_argument(
-        "--initial-equity-cents", type=int, default=DEFAULT_EXECUTION_CONFIG.initial_equity_cents
-    )
+    _execution_options(backtest)
     structure_events = commands.add_parser(
         "structure-events", help="read persisted events as JSONL"
     )
@@ -228,6 +221,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         command = commands.add_parser(name)
         command.add_argument("monitor_id")
 
+    forward_start = commands.add_parser("forward-start", help="register a forward paper run")
+    forward_start.add_argument("monitor_id")
+    forward_start.add_argument("--synthetic", action="store_true")
+    _execution_options(forward_start)
+    forward_sync = commands.add_parser("forward-sync", help="consume the applied monitor journal")
+    forward_sync.add_argument("forward_id")
+    forward_sync.add_argument("--watch", action="store_true")
+    forward_sync.add_argument("--poll-seconds", type=float, default=2.0)
+    commands.add_parser("forward-runs", help="list forward paper runs")
+    for name in ("forward-status", "forward-events"):
+        command = commands.add_parser(name)
+        command.add_argument("forward_id")
+
     delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
     delivery.add_argument("monitor_id")
     delivery.add_argument("--channel", type=Channel, choices=Channel, required=True)
@@ -295,6 +301,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "cancel-delivery":
             cancel_delivery(store, args.monitor_id, args.alert_id, datetime.now(UTC))
             print(canonical_json({"alert_id": args.alert_id, "queued_delivery_canceled": True}))
+        elif args.command == "forward-start":
+            reference = register_forward(
+                store,
+                args.monitor_id,
+                datetime.now(UTC),
+                _execution_config(args),
+                synthetic=args.synthetic,
+            )
+            print(canonical_json(describe_forward(store, reference)))
+        elif args.command == "forward-sync":
+            print(canonical_json(_sync_forward(store, args)))
+        elif args.command == "forward-runs":
+            print(canonical_json(list_forward_runs(store)))
+        elif args.command == "forward-status":
+            print(canonical_json(describe_forward(store, args.forward_id)))
+        elif args.command == "forward-events":
+            after = 0
+            remaining = int(str(describe_forward(store, args.forward_id)["event_count"]))
+            while remaining:
+                events = forward_events(
+                    store, args.forward_id, after=after, limit=min(remaining, 500)
+                )
+                if not events:
+                    break
+                for event in events:
+                    print(canonical_json(event))
+                after = int(str(events[-1]["sequence"]))
+                remaining -= len(events)
         elif args.command == "monitor":
             print(canonical_json(_monitor_live(store, args)))
         elif args.command == "monitor-replay":
@@ -320,13 +354,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "strategy":
             print(canonical_json(store.describe_structure_run(_strategy_run(store, args))))
         elif args.command == "backtest":
-            execution = ExecutionConfig(
-                latency_minutes=args.latency_minutes,
-                entry_timeout_minutes=args.entry_timeout_minutes,
-                round_trip_spread_ticks=args.round_trip_spread_ticks,
-                carry_across_closures=args.carry_across_closures,
-                initial_equity_cents=args.initial_equity_cents,
-            )
+            execution = _execution_config(args)
             print(canonical_json(store.describe_backtest(_strategy_run(store, args, execution))))
         elif args.command == "backtest-summary":
             print(canonical_json(store.describe_backtest(args.run_id)))
@@ -585,6 +613,52 @@ def _monte_carlo(store: DatasetStore, args: Namespace) -> str:
         else None
     )
     return simulate_report(store, config, args.mode, scenarios, args.backtest, trailing=trailing)
+
+
+def _execution_options(parser: ArgumentParser) -> None:
+    parser.add_argument(
+        "--latency-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.latency_minutes
+    )
+    parser.add_argument(
+        "--entry-timeout-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.entry_timeout_minutes
+    )
+    parser.add_argument(
+        "--round-trip-spread-ticks",
+        type=int,
+        default=DEFAULT_EXECUTION_CONFIG.round_trip_spread_ticks,
+    )
+    parser.add_argument("--carry-across-closures", action="store_true")
+    parser.add_argument(
+        "--initial-equity-cents", type=int, default=DEFAULT_EXECUTION_CONFIG.initial_equity_cents
+    )
+
+
+def _execution_config(args: Namespace) -> ExecutionConfig:
+    return ExecutionConfig(
+        latency_minutes=args.latency_minutes,
+        entry_timeout_minutes=args.entry_timeout_minutes,
+        round_trip_spread_ticks=args.round_trip_spread_ticks,
+        carry_across_closures=args.carry_across_closures,
+        initial_equity_cents=args.initial_equity_cents,
+    )
+
+
+def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    if not 0.25 <= args.poll_seconds <= 60:
+        raise ValueError("forward poll interval must be between 0.25 and 60 seconds")
+    runner = ForwardPaper(store, args.forward_id)
+    previous = signal.signal(signal.SIGTERM, _stop_monitor)
+    try:
+        while True:
+            status = runner.sync()
+            if status["caught_up"]:
+                if not args.watch:
+                    return status
+                sleep(args.poll_seconds)
+    except KeyboardInterrupt:
+        return describe_forward(store, args.forward_id)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def _import_options(parser: ArgumentParser) -> None:

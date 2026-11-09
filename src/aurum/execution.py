@@ -1,13 +1,14 @@
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MgcContract
+from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import Candle
 from aurum.market_structure import Direction
 from aurum.paper_risk import MGC_TICK_CENTS, RiskConfig, RiskPlan
-from aurum.strategy import SetupEvent, SetupState
+from aurum.strategy import SetupEvent, SetupState, Variant
 from aurum.timestamps import MINUTE
 
 EXECUTION_VERSION = 1
@@ -45,6 +46,26 @@ class ExitReason(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class JournalContext:
+    session: ResearchSession
+    regime: Regime
+
+
+@dataclass(frozen=True, slots=True)
+class JournalSignal:
+    setup_id: str
+    variant: Variant
+    direction: Direction
+    confirmed_at: datetime
+    plan: RiskPlan
+    context: JournalContext
+    state: SetupState = SetupState.PAPER_SIGNAL
+
+
+type TradeSignal = SetupEvent | JournalSignal
+
+
+@dataclass(frozen=True, slots=True)
 class OrderEvent:
     kind: OrderKind
     setup_id: str
@@ -70,7 +91,7 @@ class OrderEvent:
 
 @dataclass(frozen=True, slots=True)
 class PaperTrade:
-    signal: SetupEvent
+    signal: TradeSignal
     trade_date: date
     entry_at: datetime
     exit_at: datetime
@@ -136,18 +157,43 @@ class PaperTrade:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class UnresolvedTrade:
+    setup_id: str
+    entry_at: datetime
+    entry_ticks: int
+    quantity: int
+    recorded_at: datetime
+    reason: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "event": "paper_trade_unresolved",
+            "setup_id": self.setup_id,
+            "entry_at": self.entry_at.isoformat(),
+            "entry_ticks": self.entry_ticks,
+            "quantity": self.quantity,
+            "recorded_at": self.recorded_at.isoformat(),
+            "reason": self.reason,
+            "execution_mode": "paper_research",
+        }
+
+
 type ExecutionEvent = OrderEvent | PaperTrade
+type InterruptionEvent = OrderEvent | UnresolvedTrade
 
 
 @dataclass(frozen=True, slots=True)
 class _PendingOrder:
-    signal: SetupEvent
+    signal: TradeSignal
     window_end: datetime
+    first_open: datetime
+    last_open: datetime
 
 
 @dataclass(slots=True)
 class _Position:
-    signal: SetupEvent
+    signal: TradeSignal
     plan: RiskPlan
     trade_date: date
     entry_at: datetime
@@ -191,11 +237,20 @@ class PaperExecution:
         self._pending: _PendingOrder | None = None
         self._position: _Position | None = None
         self._last: Candle | None = None
+        self._recorded_at: datetime | None = None
         self._window: TradingWindow | None = None
         self._closed = False
         self._seen_at_close: set[str] = set()
 
-    def submit(self, signal: SetupEvent) -> OrderEvent:
+    @property
+    def pending_setup_id(self) -> str | None:
+        return self._pending.signal.setup_id if self._pending is not None else None
+
+    @property
+    def open_setup_id(self) -> str | None:
+        return self._position.signal.setup_id if self._position is not None else None
+
+    def submit(self, signal: TradeSignal, *, observed_at: datetime | None = None) -> OrderEvent:
         if (
             self._closed
             or self._last is None
@@ -203,6 +258,7 @@ class PaperExecution:
             or signal.confirmed_at != self._last.available_at
         ):
             raise ValueError("paper setups must be submitted at the current minute close")
+        observed = signal.confirmed_at if observed_at is None else observed_at
         plan = signal.plan
         if (
             signal.state is not SetupState.PAPER_SIGNAL
@@ -213,17 +269,29 @@ class PaperExecution:
             or plan.direction is not signal.direction
         ):
             raise ValueError("paper execution requires a qualified setup with a valid bracket")
+        self._advance_clock(observed, signal.confirmed_at)
         if signal.setup_id in self._seen_at_close:
-            return self._cancel(signal, signal.confirmed_at, "duplicate_setup")
+            return self._cancel(signal, observed, "duplicate_setup")
         self._seen_at_close.add(signal.setup_id)
         if self._pending is not None or self._position is not None:
-            return self._cancel(signal, signal.confirmed_at, "position_or_order_open")
-        if signal.confirmed_at + self._config.latency_minutes * MINUTE >= self._window.end:
-            return self._cancel(signal, signal.confirmed_at, "entry_window_closed")
-        self._pending = _PendingOrder(signal, self._window.end)
-        return OrderEvent(OrderKind.QUEUED, signal.setup_id, signal.confirmed_at)
+            return self._cancel(signal, observed, "position_or_order_open")
+        base_open = observed.replace(second=0, microsecond=0)
+        if base_open < observed:
+            base_open += MINUTE
+        first_open = base_open + self._config.latency_minutes * MINUTE
+        if first_open >= self._window.end:
+            return self._cancel(signal, observed, "entry_window_closed")
+        self._pending = _PendingOrder(
+            signal,
+            self._window.end,
+            first_open,
+            base_open + self._config.entry_timeout_minutes * MINUTE,
+        )
+        return OrderEvent(OrderKind.QUEUED, signal.setup_id, observed)
 
-    def advance(self, candle: Candle) -> tuple[ExecutionEvent, ...]:
+    def advance(
+        self, candle: Candle, *, observed_at: datetime | None = None
+    ) -> tuple[ExecutionEvent, ...]:
         if self._closed or candle.contract != self._contract:
             raise ValueError("paper execution requires an open simulator and one contract")
         if self._last is not None and candle.opened_at < self._last.available_at:
@@ -231,6 +299,8 @@ class PaperExecution:
         session = self._calendar.session_at(candle.opened_at)
         if session is None:
             raise ValueError("paper execution candle falls outside covered exchange windows")
+        recorded = candle.available_at if observed_at is None else observed_at
+        self._advance_clock(recorded, candle.available_at)
         self._window = next(
             window for window in session.windows if window.start <= candle.opened_at < window.end
         )
@@ -239,7 +309,8 @@ class PaperExecution:
         events: list[ExecutionEvent] = []
         if (
             self._pending is not None
-            and (entry := self._entry(candle, self._pending, session.trade_date)) is not None
+            and (entry := self._entry(candle, self._pending, session.trade_date, recorded))
+            is not None
         ):
             events.append(entry)
             self._pending = None
@@ -258,18 +329,40 @@ class PaperExecution:
                 ):
                     result = _Exit(candle.close_ticks, ExitReason.WINDOW_CLOSE)
             if result is not None:
-                events.append(self._complete(position, candle, result))
+                events.append(self._complete(position, candle, result, recorded))
         return tuple(events)
+
+    def interrupt(self, observed_at: datetime, reason: str) -> tuple[InterruptionEvent, ...]:
+        if self._closed:
+            raise ValueError("paper execution requires an open simulator")
+        self._advance_clock(observed_at, observed_at)
+        if self._pending is not None:
+            event = self._cancel(self._pending.signal, observed_at, reason)
+            self._pending = None
+            return (event,)
+        if self._position is not None:
+            position = self._position
+            self._position = None
+            return (
+                UnresolvedTrade(
+                    position.signal.setup_id,
+                    position.entry_at,
+                    position.entry_ticks,
+                    position.quantity,
+                    observed_at,
+                    reason,
+                ),
+            )
+        return ()
 
     def finish(self) -> tuple[ExecutionEvent, ...]:
         if self._closed or self._last is None:
             self._closed = True
             return ()
         events: list[ExecutionEvent] = []
+        assert self._recorded_at is not None
         if self._pending is not None:
-            events.append(
-                self._cancel(self._pending.signal, self._last.available_at, "end_of_data")
-            )
+            events.append(self._cancel(self._pending.signal, self._recorded_at, "end_of_data"))
             self._pending = None
         if self._position is not None:
             events.append(
@@ -277,19 +370,30 @@ class PaperExecution:
                     self._position,
                     self._last,
                     _Exit(self._last.close_ticks, ExitReason.END_OF_DATA),
+                    self._recorded_at,
                 )
             )
         self._closed = True
         return tuple(events)
 
-    def _entry(self, candle: Candle, order: _PendingOrder, trade_date: date) -> OrderEvent | None:
+    def _advance_clock(self, observed: datetime, earliest: datetime) -> None:
+        if (
+            observed.tzinfo is not UTC
+            or observed < earliest
+            or (self._recorded_at is not None and observed < self._recorded_at)
+        ):
+            raise ValueError("paper execution requires a chronological UTC observation clock")
+        self._recorded_at = observed
+
+    def _entry(
+        self, candle: Candle, order: _PendingOrder, trade_date: date, recorded: datetime
+    ) -> OrderEvent | None:
         signal = order.signal
         if candle.opened_at >= order.window_end:
-            return self._cancel(signal, candle.available_at, "entry_window_closed")
-        age = (candle.opened_at - signal.confirmed_at) // MINUTE
-        if age > self._config.entry_timeout_minutes:
-            return self._cancel(signal, candle.available_at, "entry_timed_out")
-        if age < self._config.latency_minutes:
+            return self._cancel(signal, recorded, "entry_window_closed")
+        if candle.opened_at > order.last_open:
+            return self._cancel(signal, recorded, "entry_timed_out")
+        if candle.opened_at < order.first_open:
             return None
 
         plan = signal.plan
@@ -298,7 +402,7 @@ class PaperExecution:
         entry = candle.open_ticks
         distance = (entry - plan.stop_ticks) * sign
         if distance < 1 or (plan.target_ticks - entry) * sign < 1:
-            return self._cancel(signal, candle.available_at, "entry_outside_bracket")
+            return self._cancel(signal, recorded, "entry_outside_bracket")
         gross_risk = distance * MGC_TICK_CENTS
         quantity = min(plan.quantity, self._risk.gross_allowance_cents // gross_risk)
         if self._risk.net_allowance_cents is not None:
@@ -309,18 +413,20 @@ class PaperExecution:
             )
             quantity = min(quantity, self._risk.net_allowance_cents // (gross_risk + costs))
         if quantity < 1:
-            return self._cancel(signal, candle.available_at, "entry_risk_exceeded")
+            return self._cancel(signal, recorded, "entry_risk_exceeded")
         self._position = _Position(signal, plan, trade_date, candle.opened_at, entry, quantity)
         return OrderEvent(
             OrderKind.FILLED,
             signal.setup_id,
-            candle.available_at,
+            recorded,
             entry_at=candle.opened_at,
             entry_ticks=entry,
             quantity=quantity,
         )
 
-    def _complete(self, position: _Position, candle: Candle, result: _Exit) -> PaperTrade:
+    def _complete(
+        self, position: _Position, candle: Candle, result: _Exit, recorded: datetime
+    ) -> PaperTrade:
         position.observe(result.price)
         quantity = position.quantity
         self._position = None
@@ -329,7 +435,7 @@ class PaperExecution:
             position.trade_date,
             position.entry_at,
             candle.opened_at if result.at_open else candle.available_at,
-            candle.available_at,
+            recorded,
             position.entry_ticks,
             result.price,
             quantity,
@@ -344,7 +450,7 @@ class PaperExecution:
         )
 
     @staticmethod
-    def _cancel(signal: SetupEvent, now: datetime, reason: str) -> OrderEvent:
+    def _cancel(signal: TradeSignal, now: datetime, reason: str) -> OrderEvent:
         return OrderEvent(OrderKind.CANCELED, signal.setup_id, now, reason)
 
 

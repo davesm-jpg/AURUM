@@ -123,6 +123,14 @@ class BacktestRequest(BaseModel):
         )
 
 
+class ForwardStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monitor_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    synthetic: bool = False
+    execution_config: ExecutionConfig = DEFAULT_EXECUTION_CONFIG
+
+
 def backtest_configuration() -> dict[str, object]:
     return {
         "execution_mode": "paper_research",

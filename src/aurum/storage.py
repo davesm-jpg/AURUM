@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -168,6 +168,33 @@ SCHEMA_V6 = (
     ) STRICT, WITHOUT ROWID""",
     """CREATE INDEX monitor_market_event_kind
        ON monitor_market_events(run_id, kind, sequence)""",
+)
+
+SCHEMA_V7 = (
+    """ALTER TABLE monitor_minutes ADD COLUMN execution_eligible INTEGER
+       CHECK (execution_eligible IS NULL OR (applied = 1 AND execution_eligible IN (0, 1)))""",
+    """CREATE INDEX monitor_signal_close
+       ON monitor_events(run_id, json_extract(payload, '$.confirmed_at'))
+       WHERE json_extract(payload, '$.event') = 'paper_setup_transition'
+         AND json_extract(payload, '$.state') = 'paper_signal'""",
+    """CREATE TABLE forward_runs (
+        id TEXT PRIMARY KEY NOT NULL,
+        monitor_id TEXT NOT NULL REFERENCES monitor_runs(id),
+        definition TEXT NOT NULL,
+        cursor TEXT,
+        pending_setup_id TEXT,
+        open_setup_id TEXT
+    ) STRICT""",
+    """CREATE TABLE forward_events (
+        run_id TEXT NOT NULL REFERENCES forward_runs(id),
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        minute_open TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (run_id, sequence)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE INDEX forward_event_time ON forward_events(run_id, recorded_at, sequence)""",
 )
 
 
@@ -624,4 +651,7 @@ class DatasetStore:
         if write and version < 6:
             for statement in SCHEMA_V6:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 6")
+        if write and version < 7:
+            for statement in SCHEMA_V7:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 7")

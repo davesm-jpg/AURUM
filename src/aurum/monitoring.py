@@ -220,13 +220,18 @@ class MarketMonitor:
         expected = row["next_open"]
         last_applied = row["last_applied"]
         observed = max(now.isoformat(), row["last_received"] or "")
-        fresh_frame = (
+        direct = (
             pending == 0
             and expected == opened
             and row["connected"]
             and (row["checked_at"] is None or now >= datetime.fromisoformat(row["checked_at"]))
-            and frame.source_status is FeedStatus.REAL_TIME
+            and frame.source_status is self.config.source_status
+            and frame.source_status in (FeedStatus.REAL_TIME, FeedStatus.SIMULATED)
             and (now - frame.candle.available_at).total_seconds() <= self.config.stale_seconds
+        )
+        fresh_frame = (
+            direct
+            and frame.source_status is FeedStatus.REAL_TIME
             and self.calendar.permits(now.replace(second=0, microsecond=0))
         )
         while expected is not None:
@@ -240,9 +245,9 @@ class MarketMonitor:
             minute = candle_from_dict(json.loads(available["candle"]))
             step = self._engine.step(minute)
             db.execute(
-                """UPDATE monitor_minutes SET applied = 1, applied_at = ?
+                """UPDATE monitor_minutes SET applied = 1, applied_at = ?, execution_eligible = ?
                    WHERE run_id = ? AND opened_at = ?""",
-                (observed, self.monitor_id, expected),
+                (observed, int(direct and expected == opened), self.monitor_id, expected),
             )
             if step is not None:
                 self._record_market(db, minute, step)
