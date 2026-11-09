@@ -23,7 +23,16 @@ def simulate_account_ledger(
     phase: AccountPhase,
     rules: AccountRules,
 ) -> str:
-    raw = ledger_path.read_bytes()
+    return simulate_account_document(store, ledger_path.read_bytes(), calendar, phase, rules)
+
+
+def simulate_account_document(
+    store: DatasetStore,
+    raw: bytes,
+    calendar: SessionCalendar,
+    phase: AccountPhase,
+    rules: AccountRules,
+) -> str:
     document = json.loads(raw)
     if (
         not isinstance(document, dict)

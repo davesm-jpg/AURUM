@@ -90,6 +90,71 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
     assert client.post("/api/backtests", json={**request, "pivot_left": 4}).status_code == 422
     profile["execution_config"]["latency_minutes"] = 6
     assert client.post("/api/backtests", json=request).status_code == 422
+    validation = client.post(
+        "/api/reports/validation",
+        json={
+            "run_ids": [run["run_id"]],
+            "validation_start": (start + 3 * MINUTE).isoformat(),
+            "holdout_start": (start + 7 * MINUTE).isoformat(),
+            "bootstrap_draws": 10,
+        },
+    )
+    assert validation.status_code == 201
+    assert validation.json()["kind"] == "chronological_validation"
+    assert validation.json()["result"]["holdout"] is None
+
+
+def test_api_saves_assumed_and_explicit_synthetic_paper_reports(tmp_path: Path) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    store = DatasetStore(tmp_path / "synthetic-reports.sqlite")
+    start = minute_timestamp("2025-03-10T13:00Z")
+    span = TradingWindow(start, start + 10 * MINUTE)
+    calendar = SessionCalendar(
+        "synthetic account calendar",
+        "synthetic-v1",
+        span,
+        sessions=(TradingSession(date(2025, 3, 10), (span,)),),
+    )
+    with http.TestClient(api.create_app(store, "synthetic-access")) as client:
+        scenario_route = "/api/reports/monte-carlo"
+        scenario = {
+            "config": {"paths": 10, "trades": 20, "seed": 19},
+            "scenarios": [{"win_rate_bps": 4500}],
+        }
+        assert client.post(scenario_route, json=scenario).status_code == 401
+        client.headers["Authorization"] = "Bearer synthetic-access"
+        assert client.get("/api/configuration/reports").json()["account_rules"]["breach_metric"]
+        saved = client.post(scenario_route, json=scenario)
+        assert saved.status_code == 201
+        result = saved.json()
+        assert result["result"]["source"] == {"data_kind": "assumed", "observations": 0}
+        assert result["result"]["simulations"][0]["config"]["seed"] == 19
+        assert client.post(scenario_route, json=scenario).json() == result
+        oversized = {**scenario, "config": {"paths": 1_000_000, "trades": 20}}
+        assert client.post(scenario_route, json=oversized).status_code == 422
+        account = {
+            "calendar": calendar.as_dict(),
+            "ledger": {
+                "data_kind": "synthetic",
+                "source": "synthetic account API fixture",
+                "started_at": start.isoformat(),
+                "actions": [
+                    {
+                        "kind": "mark",
+                        "at": (start + MINUTE).isoformat(),
+                        "trade_date": "2025-03-10",
+                        "closed_trade_nets_cents": [500],
+                    }
+                ],
+            },
+        }
+        saved_account = client.post("/api/reports/paper-account", json=account)
+        assert saved_account.status_code == 201
+        account_report = saved_account.json()
+        assert account_report["result"]["data_kind"] == "synthetic"
+        assert account_report["result"]["final_state"]["balance_cents"] == 2_500_500
+        assert client.get("/api/reports/" + account_report["report_id"]).json() == account_report
 
 
 def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(

@@ -12,6 +12,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from aurum.api_config import BacktestRequest, backtest_configuration
+from aurum.api_reports import (
+    MonteCarloReportRequest,
+    PaperAccountReportRequest,
+    ValidationReportRequest,
+    report_configuration,
+)
 from aurum.candles import CandleAggregator, Timeframe
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
@@ -238,6 +244,22 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @router.get("/reports/{report_id}")
     def report(report_id: RecordId) -> dict[str, object]:
         return store.describe_analysis(report_id)
+
+    @router.get("/configuration/reports")
+    def default_report_configuration() -> dict[str, object]:
+        return report_configuration()
+
+    @router.post("/reports/validation", status_code=201)
+    def create_validation(request: ValidationReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/monte-carlo", status_code=201)
+    def create_monte_carlo(request: MonteCarloReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/paper-account", status_code=201)
+    def create_account(request: PaperAccountReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
 
     @router.get("/monitors")
     def monitors(limit: PageLimit = 100) -> list[dict[str, object]]:

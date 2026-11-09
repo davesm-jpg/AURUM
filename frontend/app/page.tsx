@@ -17,6 +17,7 @@ import { Metric } from "./metric";
 import { BacktestAnalytics } from "./backtest-analytics";
 import { BacktestForm } from "./backtest-form";
 import { ReportSummary } from "./report-summary";
+import { ReportBuilder } from "./report-builder";
 type Dataset = {
   dataset_id: string;
   contract: string;
@@ -304,6 +305,11 @@ export default function Dashboard() {
   async function selectCompletedBacktest(id: string) {
     await refresh();
     setRunId(id);
+  }
+
+  async function selectCompletedReport(id: string) {
+    await refresh();
+    setReportId(id);
   }
 
   return (
@@ -748,45 +754,53 @@ export default function Dashboard() {
       )}
 
       {tab === "Reports" && (
-        <section className="panel lower">
-          <div className="panel-top">
-            <div>
-              <p className="eyebrow">Validation & scenarios</p>
-              <h2>Saved research reports</h2>
+        <>
+          <section className="panel lower">
+            <div className="panel-top">
+              <div>
+                <p className="eyebrow">Validation & scenarios</p>
+                <h2>Saved research reports</h2>
+              </div>
+              <label>
+                Report
+                <select
+                  value={reportId}
+                  onChange={(event) => setReportId(event.target.value)}
+                >
+                  {!reports.length && (
+                    <option value="">No saved reports</option>
+                  )}
+                  {reports.map((item) => (
+                    <option key={item.report_id} value={item.report_id}>
+                      {label(item.kind)} · {item.report_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <label>
-              Report
-              <select
-                value={reportId}
-                onChange={(event) => setReportId(event.target.value)}
-              >
-                {!reports.length && <option value="">No saved reports</option>}
-                {reports.map((item) => (
-                  <option key={item.report_id} value={item.report_id}>
-                    {label(item.kind)} · {item.report_id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {!reportId ? (
-            <div className="empty">
-              Save a validation, Monte Carlo or account report through the
-              research CLI.
-            </div>
-          ) : !report ? (
-            <div className="empty">Loading saved report…</div>
-          ) : (
-            <div className="report">
-              <span className="chip">{label(report.kind)}</span>
-              <ReportSummary report={report} />
-              <details className="audit">
-                <summary>Report assumptions and evidence</summary>
-                <pre>{JSON.stringify(report, null, 2)}</pre>
-              </details>
-            </div>
-          )}
-        </section>
+            {!reportId ? (
+              <div className="empty">
+                Create a validation, Monte Carlo or paper account report below.
+              </div>
+            ) : !report ? (
+              <div className="empty">Loading saved report…</div>
+            ) : (
+              <div className="report">
+                <span className="chip">{label(report.kind)}</span>
+                <ReportSummary report={report} />
+                <details className="audit">
+                  <summary>Report assumptions and evidence</summary>
+                  <pre>{JSON.stringify(report, null, 2)}</pre>
+                </details>
+              </div>
+            )}
+          </section>
+          <ReportBuilder
+            datasetId={datasetId}
+            runs={runs.filter((item) => item.kind === "backtest")}
+            onComplete={selectCompletedReport}
+          />
+        </>
       )}
 
       <footer className="footer">
