@@ -1,4 +1,4 @@
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -204,13 +204,17 @@ def outcome_summary(items: Sequence[Observation]) -> dict[str, object]:
         "by_session": _breakdown((item.session, item.net_cents) for item in items),
         "by_regime": _breakdown((item.regime, item.net_cents) for item in items),
         "by_direction": _breakdown((item.direction, item.net_cents) for item in items),
-        "by_score_decile": _breakdown(
-            (str(min(item.score // 10, 9) * 10), item.net_cents)
-            for item in items
-            if item.score is not None
-        ),
+        "by_score_decile": outcomes_by_score(items),
         "clustering": _clustering(items, values),
     }
+
+
+def outcomes_by_score(items: Sequence[Observation]) -> dict[str, object]:
+    return _breakdown(
+        (str(min(item.score // 10, 9) * 10), item.net_cents)
+        for item in items
+        if item.score is not None
+    )
 
 
 def cost_sensitivity(
@@ -223,6 +227,33 @@ def cost_sensitivity(
         }
         for cost in increments
     ]
+
+
+def rolling_outcomes(items: Sequence[Observation], window: int) -> list[dict[str, object]]:
+    if window < 2:
+        raise ValueError("rolling window requires at least two trades")
+    recent: deque[int] = deque()
+    net = wins = 0
+    points: list[dict[str, object]] = []
+    for closed, item in enumerate(sorted(items, key=lambda trade: trade.observed_at), start=1):
+        recent.append(item.net_cents)
+        net += item.net_cents
+        wins += item.net_cents > 0
+        if len(recent) > window:
+            oldest = recent.popleft()
+            net -= oldest
+            wins -= oldest > 0
+        if len(recent) == window:
+            points.append(
+                {
+                    "recorded_at": item.observed_at.isoformat(),
+                    "through_trade": closed,
+                    "trades": window,
+                    "win_rate": wins / window,
+                    "expectancy_cents": net / window,
+                }
+            )
+    return points
 
 
 def _outcomes(values: Sequence[int]) -> dict[str, object]:

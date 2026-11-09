@@ -27,6 +27,7 @@ from aurum.monitoring import (
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus
+from aurum.research_reports import backtest_analytics
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -212,6 +213,12 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @router.get("/backtests/{run_id}")
     def backtest(run_id: RecordId) -> dict[str, object]:
         return store.describe_backtest(run_id)
+
+    @router.get("/backtests/{run_id}/analytics")
+    def analytics(
+        run_id: RecordId, window: Annotated[int, Query(ge=2, le=500)] = 20
+    ) -> dict[str, object]:
+        return backtest_analytics(store, run_id, window)
 
     @router.post("/backtests", status_code=201)
     def build_backtest(request: BacktestRequest) -> dict[str, object]:
@@ -440,21 +447,10 @@ def _events(
 
 
 def _chart_events(store: DatasetStore, run_id: str) -> Iterator[tuple[int, dict[str, object]]]:
-    after = 0
-    while True:
-        with store.connection() as db:
-            batch = db.execute(
-                """SELECT sequence, payload FROM structure_events
-                   WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT 1000""",
-                (run_id, after),
-            ).fetchall()
-        for row in batch:
-            event = json.loads(row["payload"])
+    for batch in store.structure_payload_batches(run_id):
+        for sequence, event in batch:
             if event["event"] in _CHART_KINDS:
-                yield row["sequence"], event
-        if len(batch) < 1000:
-            return
-        after = batch[-1]["sequence"]
+                yield sequence, event
 
 
 def _candles(

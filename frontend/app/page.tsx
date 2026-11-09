@@ -19,6 +19,10 @@ import {
 import { api, type RecordData } from "./client";
 import { useMonitorChart } from "./monitor-chart";
 import { PriceChart } from "./price-chart";
+import { label, price, record, rows, stamp } from "./format";
+import { Metric } from "./metric";
+import { BacktestAnalytics } from "./backtest-analytics";
+import { ReportSummary } from "./report-summary";
 type Dataset = {
   dataset_id: string;
   contract: string;
@@ -59,33 +63,6 @@ const VARIANTS = [
   "sweep_mss_ifvg",
   "sweep_mss_ifvg_htf",
 ];
-const TICK = 0.1;
-const dollars = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
-const price = (ticks: number) => dollars.format(ticks * TICK);
-const label = (value: unknown) =>
-  typeof value === "string" ? value.replaceAll("_", " ") : "Unavailable";
-const number = (value: unknown) => (typeof value === "number" ? value : null);
-const record = (value: unknown): RecordData =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as RecordData)
-    : {};
-const rows = (value: unknown): RecordData[] =>
-  Array.isArray(value) ? value.map(record) : [];
-const stamp = (value: unknown, zone = "UTC") =>
-  typeof value === "string"
-    ? new Intl.DateTimeFormat("en-GB", {
-        timeZone: zone,
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).format(new Date(value))
-    : "Unavailable";
-
 function eventGroup(event: RecordData): string | null {
   const kind = String(event.event);
   if (kind === "swing_confirmed") return "Swings";
@@ -112,43 +89,6 @@ function eventTitle(event: RecordData): string {
   return label(event.event);
 }
 
-function EquityPlot({ points }: { points: RecordData[] }) {
-  const data = points
-    .map((point) => number(point.equity_cents))
-    .filter((value): value is number => value !== null);
-  if (data.length < 2)
-    return (
-      <div className="empty small">
-        An equity curve needs at least two closed paper trades.
-      </div>
-    );
-  const min = Math.min(...data);
-  const range = Math.max(1, Math.max(...data) - min);
-  const line = data
-    .map(
-      (value, index) =>
-        (index * 600) / (data.length - 1) +
-        "," +
-        (120 - (104 * (value - min)) / range),
-    )
-    .join(" ");
-  return (
-    <svg
-      viewBox="0 0 600 136"
-      role="img"
-      aria-label="Closed-trade equity curve"
-    >
-      <polyline
-        points={line}
-        fill="none"
-        stroke="#55c7aa"
-        strokeWidth="2"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("Market");
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -164,8 +104,14 @@ export default function Dashboard() {
   const [frame, setFrame] = useState("5m");
   const [history, setHistory] = useState<{ key: string; bars: Candle[] }>();
   const [events, setEvents] = useState<RecordData[]>([]);
-  const [summary, setSummary] = useState<RecordData>({});
-  const [report, setReport] = useState<RecordData>({});
+  const [runDetail, setRunDetail] = useState<{
+    key: string;
+    data: RecordData;
+  }>();
+  const [reportDetail, setReportDetail] = useState<{
+    key: string;
+    data: RecordData;
+  }>();
   const [variant, setVariant] = useState("sweep_mss_ifvg");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -302,7 +248,6 @@ export default function Dashboard() {
   useEffect(() => {
     let ignore = false;
     setEvents([]);
-    setSummary({});
     if (runId) {
       api<RecordData[]>("runs/" + runId + "/events?latest=true&limit=500")
         .then((result) => {
@@ -314,7 +259,7 @@ export default function Dashboard() {
       const endpoint = activeRun?.kind === "backtest" ? "backtests/" : "runs/";
       api<RecordData>(endpoint + runId)
         .then((result) => {
-          if (!ignore) setSummary(result);
+          if (!ignore) setRunDetail({ key: runId, data: result });
         })
         .catch((failure) => {
           if (!ignore) setError(failure.message);
@@ -327,11 +272,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     let ignore = false;
-    setReport({});
     if (reportId)
       api<RecordData>("reports/" + reportId)
         .then((result) => {
-          if (!ignore) setReport(result);
+          if (!ignore) setReportDetail({ key: reportId, data: result });
         })
         .catch((failure) => {
           if (!ignore) setError(failure.message);
@@ -351,7 +295,8 @@ export default function Dashboard() {
       Math.max(feed.stale_after_seconds * 2, 30) * 1000
     : false;
   const contract = showMonitor ? monitor?.contract : dataset?.contract;
-  const performance = record(record(summary.summary).performance);
+  const summary = runDetail?.key === runId ? runDetail.data : undefined;
+  const report = reportDetail?.key === reportId ? reportDetail.data : undefined;
   const setups = useMemo(() => {
     const unique = new Map<string, RecordData>();
     for (const event of displayedEvents)
@@ -817,41 +762,17 @@ export default function Dashboard() {
               </div>
               {dataset && <span className="chip">{dataset.data_kind}</span>}
             </div>
-            {activeRun?.kind === "backtest" ? (
-              <>
-                <div className="metrics contained">
-                  <Metric
-                    title="Net P&L"
-                    value={money(performance.net_profit_cents)}
-                    detail="After modeled costs"
-                  />
-                  <Metric
-                    title="Trades"
-                    value={String(performance.trades ?? 0)}
-                    detail="Qualifying observations"
-                  />
-                  <Metric
-                    title="Expectancy"
-                    value={money(performance.expectancy_cents)}
-                    detail="Net per trade"
-                  />
-                  <Metric
-                    title="Drawdown"
-                    value={money(performance.max_drawdown_cents)}
-                    detail="Closed-trade equity"
-                  />
-                </div>
-                <div className="equity">
-                  <EquityPlot points={rows(performance.equity_curve)} />
-                </div>
-                <details className="audit">
-                  <summary>Versioned assumptions and statistics</summary>
-                  <pre>{JSON.stringify(summary, null, 2)}</pre>
-                </details>
-              </>
+            {activeRun?.kind === "backtest" && summary ? (
+              <BacktestAnalytics
+                key={activeRun.run_id}
+                runId={activeRun.run_id}
+                summary={summary}
+              />
             ) : (
               <div className="empty">
-                Select a saved backtest or start a paper run.
+                {activeRun?.kind === "backtest"
+                  ? "Loading backtest evidence…"
+                  : "Select a saved backtest or start a paper run."}
               </div>
             )}
           </section>
@@ -986,6 +907,8 @@ export default function Dashboard() {
               Save a validation, Monte Carlo or account report through the
               research CLI.
             </div>
+          ) : !report ? (
+            <div className="empty">Loading saved report…</div>
           ) : (
             <div className="report">
               <span className="chip">{label(report.kind)}</span>
@@ -1004,24 +927,6 @@ export default function Dashboard() {
         <span>Paper analysis only · Source labels preserved</span>
       </footer>
     </main>
-  );
-}
-
-function Metric({
-  title,
-  value,
-  detail,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="metric">
-      <p>{title}</p>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
   );
 }
 
@@ -1098,89 +1003,5 @@ function EventTable({ events }: { events: RecordData[] }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-function money(cents: unknown) {
-  const amount = number(cents);
-  return amount === null ? "—" : dollars.format(amount / 100);
-}
-
-function ReportSummary({ report }: { report: RecordData }) {
-  const result = record(report.result);
-  const final = record(result.final_state);
-  const sims = rows(result.simulations);
-  const holdout = record(record(result.holdout).summary);
-  if (Object.keys(final).length)
-    return (
-      <div className="metrics contained">
-        <Metric
-          title="Paper balance"
-          value={money(final.balance_cents)}
-          detail={label(final.phase)}
-        />
-        <Metric
-          title="Loss floor"
-          value={money(final.loss_floor_cents)}
-          detail={label(final.breach_metric)}
-        />
-        <Metric
-          title="Remaining allowance"
-          value={money(final.remaining_to_floor_cents)}
-          detail={label(final.status)}
-        />
-        <Metric
-          title="Observed marks"
-          value={String(result.observed_marks ?? 0)}
-          detail={label(result.data_kind)}
-        />
-      </div>
-    );
-  if (sims.length)
-    return (
-      <div className="metrics contained">
-        {sims.slice(0, 6).map((sim, index) => {
-          const scenario = record(sim.scenario);
-          const rate = number(scenario.win_rate_bps);
-          const breach = number(sim.breach_probability);
-          return (
-            <Metric
-              key={index}
-              title={
-                rate === null ? label(sim.mode) : rate / 100 + "% assumed wins"
-              }
-              value={money(record(sim.ending_equity_cents).median)}
-              detail={
-                breach === null
-                  ? "Conditional scenario"
-                  : (breach * 100).toFixed(1) + "% modeled breach"
-              }
-            />
-          );
-        })}
-      </div>
-    );
-  if (Object.keys(holdout).length)
-    return (
-      <div className="metrics contained">
-        <Metric
-          title="Holdout net"
-          value={money(holdout.net_cents)}
-          detail={label(result.data_kind)}
-        />
-        <Metric
-          title="Holdout trades"
-          value={String(holdout.trades ?? 0)}
-          detail="Excluded from selection"
-        />
-        <Metric
-          title="Holdout expectancy"
-          value={money(holdout.expectancy_cents)}
-          detail="Net per observation"
-        />
-      </div>
-    );
-  return (
-    <p className="muted">Inspect the saved definition and evidence below.</p>
   );
 }

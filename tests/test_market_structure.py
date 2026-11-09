@@ -30,6 +30,7 @@ from aurum.market_structure import (
     Trend,
     TrendChange,
 )
+from aurum.research_reports import backtest_analytics
 from aurum.storage import SCHEMA_VERSION, DatasetStore
 from aurum.strategy import SetupState, StrategyReplay
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -551,6 +552,14 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert trade["exit_ticks"] == signal["stop_ticks"] == 77
     assert trade["recorded_at"] == (bars[13].opened_at + MINUTE).isoformat()
     assert trade["gross_cents"] == -3300
+    analytics = backtest_analytics(store, run["run_id"], window=5)
+    assert analytics["completed_trades"] == analytics["signal_count"] == 1
+    assert analytics["signals_by_utc_date"] == {"2025-03-10": 1}
+    assert analytics["signals_by_session"] == {"new_york": 1}
+    assert analytics["scored_trades"] == 1
+    costs = analytics["cost_sensitivity_fixed_fills"]
+    assert isinstance(costs, list)
+    assert costs[1]["net_cents"] == int(str(trade["net_cents"])) - 50 * int(str(trade["quantity"]))
     repeated = subprocess.run(args, check=True, capture_output=True, text=True)
     assert repeated.stdout == output.stdout
     report = subprocess.run(

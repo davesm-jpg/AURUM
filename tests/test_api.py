@@ -68,6 +68,13 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
     assert response.json() == {"markers": [], "spans": []}
     inverted = {"start": bounds["through"], "through": bounds["start"]}
     assert client.get(path_to_chart, params=inverted).status_code == 422
+    analytics_route = f"/api/backtests/{run['run_id']}/analytics"
+    diagnostics = client.get(analytics_route, params={"window": 5}).json()
+    assert diagnostics["dataset"]["data_kind"] == "synthetic"
+    assert diagnostics["sample_kind"] == "unpartitioned_replay"
+    assert diagnostics["rolling_outcomes"] == []
+    assert diagnostics["signal_count"] == diagnostics["completed_trades"] == 0
+    assert client.get(analytics_route, params={"window": 1}).status_code == 422
 
 
 def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(

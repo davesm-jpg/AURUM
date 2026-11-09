@@ -1,4 +1,5 @@
-from dataclasses import asdict
+from collections import Counter
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from aurum.monte_carlo import (
@@ -9,7 +10,16 @@ from aurum.monte_carlo import (
     WinRateScenario,
     simulate,
 )
-from aurum.statistics import VALIDATION_VERSION, Candidate, Observation, ValidationConfig, evaluate
+from aurum.statistics import (
+    VALIDATION_VERSION,
+    Candidate,
+    Observation,
+    ValidationConfig,
+    cost_sensitivity,
+    evaluate,
+    outcomes_by_score,
+    rolling_outcomes,
+)
 from aurum.storage import DatasetStore
 
 _COMPARABLE_FIELDS = (
@@ -26,6 +36,14 @@ _COMPARABLE_FIELDS = (
     "economic_calendar",
     "execution_config",
 )
+BACKTEST_ANALYTICS_VERSION = 1
+
+
+@dataclass(frozen=True, slots=True)
+class _BacktestEvidence:
+    candidate: Candidate
+    signals_by_date: Counter[str]
+    signals_by_session: Counter[str]
 
 
 def validate_runs(store: DatasetStore, run_ids: tuple[str, ...], config: ValidationConfig) -> str:
@@ -114,16 +132,48 @@ def simulate_report(
 
 
 def load_candidate(store: DatasetStore, run_id: str) -> Candidate:
+    return _load_backtest_evidence(store, run_id).candidate
+
+
+def backtest_analytics(store: DatasetStore, run_id: str, window: int) -> dict[str, object]:
+    run = store.describe_backtest(run_id)
+    dataset_id = str(run["dataset_id"])
+    dataset = store.describe(dataset_id)
+    evidence = _load_backtest_evidence(store, run_id)
+    items = evidence.candidate.observations
+    return {
+        "backtest_analytics_version": BACKTEST_ANALYTICS_VERSION,
+        "sample_kind": "unpartitioned_replay",
+        "run_id": run_id,
+        "dataset": _source(dataset["provenance"], dataset_id),
+        "first_open": dataset["first_open"],
+        "last_close": dataset["last_close"],
+        "completed_trades": len(items),
+        "scored_trades": sum(item.score is not None for item in items),
+        "signal_count": evidence.signals_by_date.total(),
+        "signals_by_utc_date": dict(sorted(evidence.signals_by_date.items())),
+        "signals_by_session": dict(sorted(evidence.signals_by_session.items())),
+        "rolling_window_trades": window,
+        "rolling_outcomes": rolling_outcomes(items, window),
+        "by_score_decile": outcomes_by_score(items),
+        "cost_sensitivity_fixed_fills": cost_sensitivity(items, (0, 50, 100, 200)),
+    }
+
+
+def _load_backtest_evidence(store: DatasetStore, run_id: str) -> _BacktestEvidence:
     signals: dict[str, tuple[datetime, int | None]] = {}
     observations = []
+    by_date: Counter[str] = Counter()
+    by_session: Counter[str] = Counter()
     for item in store.structure_events(run_id):
         if item["event"] == "paper_setup_transition" and item["state"] == "paper_signal":
             score = item["score"]
             total = score["total"] if isinstance(score, dict) else None
-            signals[str(item["setup_id"])] = (
-                datetime.fromisoformat(str(item["confirmed_at"])),
-                total,
-            )
+            decision = datetime.fromisoformat(str(item["confirmed_at"]))
+            signals[str(item["setup_id"])] = decision, total
+            by_date[decision.date().isoformat()] += 1
+            context = item["context"]
+            by_session[str(context["session"]) if isinstance(context, dict) else "unknown"] += 1
         elif item["event"] == "paper_trade_completed":
             setup = str(item["setup_id"])
             if setup not in signals:
@@ -145,7 +195,7 @@ def load_candidate(store: DatasetStore, run_id: str) -> Candidate:
             )
         elif item["event"] == "paper_entry_canceled" and item["reason"] != "duplicate_setup":
             signals.pop(str(item["setup_id"]), None)
-    return Candidate(run_id, tuple(observations))
+    return _BacktestEvidence(Candidate(run_id, tuple(observations)), by_date, by_session)
 
 
 def _integer(value: object) -> int:

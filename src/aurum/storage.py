@@ -454,16 +454,14 @@ class DatasetStore:
     def structure_events(self, run_id: str) -> Iterator[dict[str, object]]:
         with self.connection() as db:
             run = self._structure_run(db, run_id)
-            definition = json.loads(run["definition"])
-            provenance = json.loads(run["dataset_provenance"])
-            for event in db.execute(
-                "SELECT sequence, payload FROM structure_events WHERE run_id = ? ORDER BY sequence",
-                (run_id,),
-            ):
+        definition = json.loads(run["definition"])
+        provenance = json.loads(run["dataset_provenance"])
+        for batch in self.structure_payload_batches(run_id):
+            for sequence, payload in batch:
                 yield {
-                    **json.loads(event["payload"]),
+                    **payload,
                     "run_id": run_id,
-                    "event_id": f"{run_id}/{event['sequence']}",
+                    "event_id": f"{run_id}/{sequence}",
                     "dataset_id": run["dataset_id"],
                     "data_kind": provenance["data_kind"],
                     "contract": provenance["contract"],
@@ -471,6 +469,24 @@ class DatasetStore:
                     "aggregation_version": definition["aggregation_version"],
                     "structure_version": definition["structure_version"],
                 }
+
+    def structure_payload_batches(
+        self, run_id: str
+    ) -> Iterator[list[tuple[int, dict[str, object]]]]:
+        """Read raw immutable payloads from a previously resolved research run."""
+        after = 0
+        while True:
+            with self.connection() as db:
+                rows = db.execute(
+                    """SELECT sequence, payload FROM structure_events
+                       WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT 1000""",
+                    (run_id, after),
+                ).fetchall()
+            if rows:
+                yield [(row["sequence"], json.loads(row["payload"])) for row in rows]
+            if len(rows) < 1000:
+                return
+            after = rows[-1]["sequence"]
 
     def save_analysis(
         self, kind: str, definition: dict[str, object], result: dict[str, object]

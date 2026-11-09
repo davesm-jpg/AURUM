@@ -14,6 +14,7 @@ from aurum.statistics import (
     bootstrap_expectancy,
     cost_sensitivity,
     evaluate,
+    rolling_outcomes,
     select_period,
 )
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -96,6 +97,30 @@ def test_zero_samples_and_boundary_availability() -> None:
             "win_rate": None,
         }
     ]
+
+
+def test_synthetic_rolling_results_release_only_completed_windows() -> None:
+    delayed = synthetic_trade("delayed", 0, -20, outcome_day=3)
+    win = synthetic_trade("win", 1, 30)
+    flat = synthetic_trade("flat", 2, 0)
+    items = (delayed, win, flat)
+    assert rolling_outcomes(items, 2) == [
+        {
+            "recorded_at": flat.observed_at.isoformat(),
+            "through_trade": 2,
+            "trades": 2,
+            "win_rate": 0.5,
+            "expectancy_cents": 15,
+        },
+        {
+            "recorded_at": delayed.observed_at.isoformat(),
+            "through_trade": 3,
+            "trades": 2,
+            "win_rate": 0,
+            "expectancy_cents": -10,
+        },
+    ]
+    assert rolling_outcomes(items, 4) == []
 
 
 def test_bootstrap_is_reproducible_and_discloses_effective_block() -> None:
