@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -150,6 +150,24 @@ SCHEMA_V5 = (
         PRIMARY KEY (monitor_id, alert_id),
         FOREIGN KEY (monitor_id, alert_id) REFERENCES monitor_alerts(run_id, alert_id)
     ) STRICT, WITHOUT ROWID""",
+)
+
+SCHEMA_V6 = (
+    """ALTER TABLE monitor_minutes ADD COLUMN applied_at TEXT
+       CHECK (applied_at IS NULL OR applied = 1)""",
+    """CREATE INDEX monitor_observed_start ON monitor_minutes(run_id, opened_at)
+       WHERE applied_at IS NOT NULL""",
+    """CREATE TABLE monitor_market_events (
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        minute_open TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (run_id, sequence),
+        FOREIGN KEY (run_id, minute_open) REFERENCES monitor_minutes(run_id, opened_at)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE INDEX monitor_market_event_kind
+       ON monitor_market_events(run_id, kind, sequence)""",
 )
 
 
@@ -587,4 +605,7 @@ class DatasetStore:
         if write and version < 5:
             for statement in SCHEMA_V5:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 5")
+        if write and version < 6:
+            for statement in SCHEMA_V6:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 6")

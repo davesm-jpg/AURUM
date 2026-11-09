@@ -14,7 +14,14 @@ from aurum.feed_frames import FeedFrame
 from aurum.instruments import MgcContract
 from aurum.market_data import Candle
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
-from aurum.monitoring import MarketMonitor, MonitorConfig, MonitorState, monitor_events
+from aurum.monitoring import (
+    MarketMonitor,
+    MonitorConfig,
+    MonitorState,
+    market_events_page,
+    market_evidence_started_at,
+    monitor_events,
+)
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG
@@ -121,6 +128,64 @@ def test_monitor_transaction_rollback_can_retry_a_failed_apply(tmp_path: Path) -
         assert db.execute("SELECT count(*) FROM monitor_minutes").fetchone() == (0,)
         db.execute("DROP TRIGGER fail_monitor")
     assert monitor.ingest(frame(0))["last_applied_open"] == START.isoformat()
+
+
+def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observation_times(
+    tmp_path: Path,
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic-v5.sqlite")
+    schedule = calendar((0, 10))
+    original = fixture_monitor(store, schedule, FeedStatus.SIMULATED)
+    for index in range(5):
+        original.ingest(frame(index, mode=FeedStatus.SIMULATED))
+    with sqlite3.connect(store.path) as db:
+        db.execute("DROP TABLE monitor_market_events")
+        db.execute("DROP INDEX monitor_observed_start")
+        db.execute("ALTER TABLE monitor_minutes DROP COLUMN applied_at")
+        db.execute("PRAGMA user_version = 5")
+    assert market_events_page(store, original.monitor_id) == []
+
+    migrated = fixture_monitor(store, schedule, FeedStatus.SIMULATED)
+    assert migrated.monitor_id == original.monitor_id
+    assert (
+        market_evidence_started_at(store, migrated.monitor_id, schedule.coverage.end.isoformat())
+        is None
+    )
+    for index in range(5, 10):
+        migrated.ingest(frame(index, mode=FeedStatus.SIMULATED))
+    (context,) = market_events_page(store, migrated.monitor_id, kind="market_context_observed")
+    assert context["confirmed_at"] == (START + 10 * MINUTE).isoformat()
+    assert context["observed_at"] == context["confirmed_at"]
+    assert (
+        market_evidence_started_at(store, migrated.monitor_id, schedule.coverage.end.isoformat())
+        == (START + 6 * MINUTE).isoformat()
+    )
+    with sqlite3.connect(store.path) as db:
+        assert db.execute(
+            "SELECT count(*) FROM monitor_minutes WHERE applied_at IS NULL"
+        ).fetchone() == (5,)
+        assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+
+def test_market_evidence_failure_rolls_back_the_applied_minute(tmp_path: Path) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 10)), FeedStatus.SIMULATED)
+    for index in range(4):
+        monitor.ingest(frame(index, mode=FeedStatus.SIMULATED))
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            """CREATE TRIGGER fail_evidence BEFORE INSERT ON monitor_market_events
+               BEGIN SELECT RAISE(ABORT, 'synthetic market evidence failure'); END"""
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic market evidence failure"):
+        monitor.ingest(frame(4, mode=FeedStatus.SIMULATED))
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT count(*) FROM monitor_minutes").fetchone() == (4,)
+        db.execute("DROP TRIGGER fail_evidence")
+    result = monitor.ingest(frame(4, mode=FeedStatus.SIMULATED))
+    assert result["last_applied_open"] == (START + 4 * MINUTE).isoformat()
+    (context,) = market_events_page(store, monitor.monitor_id, kind="market_context_observed")
+    assert context["observed_at"] == (START + 5 * MINUTE).isoformat()
 
 
 def test_normalized_https_backfill_preserves_source_and_drains_gap(

@@ -19,7 +19,12 @@ from aurum.execution import ExecutionConfig
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG, BreakMode, PivotRule
-from aurum.monitoring import applied_minute_batches, describe_monitor
+from aurum.monitoring import (
+    applied_minute_batches,
+    describe_monitor,
+    market_events_page,
+    market_evidence_started_at,
+)
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
@@ -68,6 +73,10 @@ class MonitorChart(BaseModel):
     calendar_version: str
     analysis_timeframe: Timeframe
     candles: list[MonitorCandleRecord]
+    market_evidence_started_at: str | None
+    market_evidence: ChartEvidence
+    paper_evidence: ChartEvidence
+    context_event: dict[str, object] | None
 
 
 class BacktestRequest(BaseModel):
@@ -297,6 +306,16 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     ) -> list[dict[str, object]]:
         return _events(store, monitor_id, after, limit, monitor=True, latest=latest)
 
+    @router.get("/monitors/{monitor_id}/market-events")
+    def monitored_market_events(
+        monitor_id: RecordId,
+        after: Annotated[int, Query(ge=0)] = 0,
+        limit: PageLimit = 200,
+        latest: bool = False,
+    ) -> list[dict[str, object]]:
+        describe_monitor(store, monitor_id)
+        return market_events_page(store, monitor_id, after=after, limit=limit, latest=latest)
+
     @router.get("/monitors/{monitor_id}/stream")
     async def stream(
         request: Request,
@@ -517,6 +536,40 @@ def _monitor_chart(
         if start is not None and start < end:
             bars = _applied_bars(store, monitor_id, calendar, contract, frame, start, end, limit)
 
+    market_evidence = paper_evidence = ChartEvidence([], [])
+    capture_started = None
+    context = None
+    if isinstance(last_open, str):
+        capture_started = market_evidence_started_at(store, monitor_id, last_open)
+        recent_context = market_events_page(
+            store,
+            monitor_id,
+            limit=1,
+            latest=True,
+            through_open=last_open,
+            observed_through=bound,
+            kind="market_context_observed",
+        )
+        context = recent_context[0] if recent_context else None
+        if bars:
+            left = datetime.fromisoformat(bars[0].opened_at)
+            right = datetime.fromisoformat(bars[-1].available_at)
+            if capture_started is not None:
+                market_evidence = chart_evidence(
+                    _monitor_chart_events(store, monitor_id, last_open, market=True),
+                    left,
+                    right,
+                    tracks_execution=False,
+                    use_observed_time=True,
+                )
+            paper_evidence = chart_evidence(
+                _monitor_chart_events(store, monitor_id, last_open, market=False),
+                left,
+                right,
+                tracks_execution=False,
+                use_observed_time=True,
+            )
+
     now = datetime.now(UTC)
     market = "unavailable"
     if calendar.coverage.start <= now < calendar.coverage.end:
@@ -534,8 +587,36 @@ def _monitor_chart(
             "last_applied_close": last_close.isoformat() if last_close is not None else None,
             "market_status": market,
             "candles": bars,
+            "market_evidence_started_at": capture_started,
+            "market_evidence": market_evidence,
+            "paper_evidence": paper_evidence,
+            "context_event": context,
         }
     )
+
+
+def _monitor_chart_events(
+    store: DatasetStore, monitor_id: str, last_open: str, *, market: bool
+) -> Iterator[tuple[int, dict[str, object]]]:
+    after = 0
+    applied_close = datetime.fromisoformat(last_open) + MINUTE
+    while True:
+        batch = (
+            market_events_page(store, monitor_id, after=after, limit=500, through_open=last_open)
+            if market
+            else _events(store, monitor_id, after, 500, monitor=True)
+        )
+        for event in batch:
+            sequence = int(str(event["sequence"]))
+            if market and event["event"] in _CHART_KINDS:
+                yield sequence, event
+            if not market and event["event"] == "paper_setup_transition":
+                if datetime.fromisoformat(str(event["confirmed_at"])) > applied_close:
+                    return
+                yield sequence, event
+        if len(batch) < 500:
+            return
+        after = int(str(batch[-1]["sequence"]))
 
 
 def _applied_bars(

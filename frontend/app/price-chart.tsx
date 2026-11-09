@@ -203,7 +203,9 @@ export function PriceChart({
         size: 0.55,
       });
     }
-    state.markers.setMarkers(markers);
+    state.markers.setMarkers(
+      markers.sort((left, right) => left.time - right.time),
+    );
     const ranges: Segment[] = [];
     for (const item of evidence.spans) {
       if (!overlays.has(item.category)) continue;

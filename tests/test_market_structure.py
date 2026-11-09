@@ -351,6 +351,7 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         db.execute("DROP TABLE notification_cancellations")
         db.execute("DROP TABLE monitor_events")
         db.execute("DROP TABLE monitor_alerts")
+        db.execute("DROP TABLE monitor_market_events")
         db.execute("DROP TABLE monitor_minutes")
         db.execute("DROP TABLE monitor_runs")
         db.execute("PRAGMA user_version = 1")
@@ -580,8 +581,15 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
 def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(
     tmp_path: Path,
 ) -> None:
+    from aurum.evidence import EvidenceEngine
     from aurum.feed_frames import FeedFrame
-    from aurum.monitoring import MarketMonitor, MonitorConfig, monitor_alerts, monitor_events
+    from aurum.monitoring import (
+        MarketMonitor,
+        MonitorConfig,
+        market_events_page,
+        monitor_alerts,
+        monitor_events,
+    )
     from aurum.providers import FeedStatus
     from aurum.strategy import DEFAULT_STRATEGY_CONFIG
 
@@ -615,7 +623,22 @@ def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(
         assert item["source_status"] == "simulated"
         assert item["alert_eligible"] is False
     assert list(monitor_alerts(store, monitor_id)) == []
+    recorded_market = market_events_page(store, monitor_id, limit=500)
+    expected_market = EvidenceEngine(calendar, CONTRACT, TIMEFRAME, structure).consume(
+        store.replay(dataset)
+    )
+    assert [
+        {
+            key: value
+            for key, value in item.items()
+            if key
+            not in ("sequence", "event_id", "source_status", "source_received_at", "observed_at")
+        }
+        for item in recorded_market
+        if item["event"] != "market_context_observed"
+    ] == [event.as_dict() for event in expected_market]
     assert subprocess.run(args, check=True, capture_output=True, text=True).stdout == result.stdout
+    assert market_events_page(store, monitor_id, limit=500) == recorded_market
 
     live_config = MonitorConfig(
         "synthetic fixture classified real-time to test alert gate", FeedStatus.REAL_TIME

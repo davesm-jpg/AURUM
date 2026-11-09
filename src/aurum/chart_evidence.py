@@ -108,6 +108,7 @@ def chart_evidence(
     through: datetime,
     *,
     tracks_execution: bool,
+    use_observed_time: bool = False,
 ) -> ChartEvidence:
     """Fold the prefix, retaining only points and ranges intersecting the requested window."""
     markers: list[ChartMarker] = []
@@ -115,6 +116,8 @@ def chart_evidence(
     active: dict[tuple[str, str], tuple[_OpenSpan, ...]] = {}
     for sequence, event in events:
         at = datetime.fromisoformat(event.get("recorded_at") or event["confirmed_at"])
+        if use_observed_time:
+            at = max(at, datetime.fromisoformat(event["observed_at"]))
         if at > through:
             continue
         kind = event["event"]

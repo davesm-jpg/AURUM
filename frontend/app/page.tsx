@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -186,6 +187,22 @@ export default function Dashboard() {
     monitorRefresh,
   );
   const feed = monitorView?.chart;
+  const monitorEvidence = useMemo(
+    () =>
+      feed
+        ? {
+            markers: [
+              ...feed.market_evidence.markers,
+              ...feed.paper_evidence.markers,
+            ],
+            spans: [
+              ...feed.market_evidence.spans,
+              ...feed.paper_evidence.spans,
+            ],
+          }
+        : EMPTY_EVIDENCE,
+    [feed],
+  );
   const chartKey = datasetId
     ? "datasets/" + datasetId + "/candles?limit=240&timeframe=" + frame
     : "";
@@ -345,8 +362,7 @@ export default function Dashboard() {
         unique.set(event.setup_id, event);
     return Array.from(unique.values()).reverse().slice(0, 8);
   }, [displayedEvents]);
-  const latestSetup =
-    setups.find((item) => item.state === "paper_signal") ?? setups[0];
+  const latestSetup = setups[0];
 
   function flipOverlay(item: Overlay) {
     setOverlays((current) => {
@@ -624,6 +640,13 @@ export default function Dashboard() {
                   are held outside the chart.
                 </p>
               )}
+              {showMonitor &&
+                !!feed?.candles.length &&
+                !feed.market_evidence_started_at && (
+                  <p className="notice">
+                    Market evidence capture starts with newly applied minutes.
+                  </p>
+                )}
               {evidenceQuery && overlayError && (
                 <p className="notice">{overlayError}</p>
               )}
@@ -631,14 +654,18 @@ export default function Dashboard() {
                 key={(showMonitor ? monitorId : datasetId) + "/" + frame}
                 bars={bars}
                 evidence={
-                  chartEvidence?.key === evidenceQuery
-                    ? chartEvidence.data
-                    : EMPTY_EVIDENCE
+                  showMonitor
+                    ? monitorEvidence
+                    : chartEvidence?.key === evidenceQuery
+                      ? chartEvidence.data
+                      : EMPTY_EVIDENCE
                 }
                 overlays={overlays}
               />
               <div className="chart-footer">
-                {!showMonitor && (
+                {(!showMonitor ||
+                  !!feed?.market_evidence_started_at ||
+                  !!monitorEvidence.markers.length) && (
                   <div className="overlays">
                     {overlayKeys.map((item) => (
                       <button
@@ -655,7 +682,7 @@ export default function Dashboard() {
                 <span>
                   UTC candle close
                   {showMonitor
-                    ? " · applied prefix"
+                    ? " · observed monitor evidence"
                     : activeRun
                       ? " · " + activeRun.timeframe + " evidence"
                       : ""}
@@ -705,6 +732,9 @@ export default function Dashboard() {
                   <dd>{latest?.trade_date ?? "—"}</dd>
                 </dl>
               </section>
+              {showMonitor && feed?.context_event && (
+                <ContextPanel event={feed.context_event} />
+              )}
               <section className="panel sidebar-panel">
                 <p className="eyebrow">Research desk</p>
                 <h2>Latest setup</h2>
@@ -758,7 +788,7 @@ export default function Dashboard() {
               events={displayedEvents
                 .filter(
                   (item) =>
-                    showMonitor ||
+                    (showMonitor && item.event !== "market_context_observed") ||
                     eventGroup(item) !== null ||
                     item.event === "paper_setup_transition",
                 )
@@ -992,6 +1022,38 @@ function Metric({
       <strong>{value}</strong>
       <small>{detail}</small>
     </div>
+  );
+}
+
+function ContextPanel({ event }: { event: RecordData }) {
+  const context = record(event.context);
+  return (
+    <section className="panel sidebar-panel">
+      <p className="eyebrow">Observed market context</p>
+      <h2>Structure & regime</h2>
+      <dl className="details">
+        <dt>Session</dt>
+        <dd>{label(context.session)}</dd>
+        <dt>Regime</dt>
+        <dd>{label(context.regime)}</dd>
+        <dt>Primary structure</dt>
+        <dd>{label(context.structure)}</dd>
+        {rows(context.higher).map((item) => (
+          <Fragment key={String(item.timeframe)}>
+            <dt>{String(item.timeframe)} structure</dt>
+            <dd title={stamp(item.available_at) + " UTC"}>
+              {label(item.trend)}
+            </dd>
+          </Fragment>
+        ))}
+        <dt>Observed</dt>
+        <dd>{stamp(event.observed_at)} UTC</dd>
+      </dl>
+      <details className="audit">
+        <summary>Context evidence</summary>
+        <pre>{JSON.stringify(event, null, 2)}</pre>
+      </details>
+    </section>
   );
 }
 

@@ -150,3 +150,59 @@ def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(
         current = client.get(route).json()
         assert current["last_applied_close"] == span.end.isoformat()
         assert len(current["candles"]) == 2
+
+
+def test_recovered_synthetic_monitor_evidence_uses_observed_time_on_chart(tmp_path: Path) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    start = minute_timestamp("2025-03-10T13:00Z")
+    span = TradingWindow(start, start + 25 * MINUTE)
+    calendar = SessionCalendar(
+        "synthetic monitor chart calendar",
+        "synthetic-gap-v1",
+        span,
+        sessions=(TradingSession(date(2025, 3, 10), (span,)),),
+    )
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    contract = MgcContract("MGC-2025-04")
+    monitor = MarketMonitor(
+        store,
+        calendar,
+        contract,
+        MonitorConfig("synthetic recovery", FeedStatus.SIMULATED),
+        DEFAULT_STRUCTURE_CONFIG,
+        DEFAULT_STRATEGY_CONFIG,
+    )
+
+    def send(index: int, received: int) -> None:
+        ticks = 29000 + min(index // 5, 2) * 10
+        candle = Candle(contract, start + index * MINUTE, ticks, ticks, ticks, ticks, 1)
+        monitor.ingest(
+            FeedFrame.from_replay(candle, FeedStatus.SIMULATED, start + received * MINUTE)
+        )
+
+    for index in range(17):
+        if index != 10:
+            send(index, index + 1)
+    send(10, 17)
+    with http.TestClient(api.create_app(store)) as client:
+        root = f"/api/monitors/{monitor.monitor_id}"
+        source_close = (start + 15 * MINUTE).isoformat()
+        observed = (start + 17 * MINUTE).isoformat()
+        (gap,) = [
+            event
+            for event in client.get(root + "/market-events").json()
+            if event["event"] == "fvg_confirmed"
+        ]
+        assert gap["confirmed_at"] == gap["source_received_at"] == source_close
+        assert gap["observed_at"] == observed
+        prefix = client.get(
+            root + "/chart", params={"timeframe": "1m", "through": source_close}
+        ).json()
+        assert not any(span["category"] == "fvg" for span in prefix["market_evidence"]["spans"])
+        assert prefix["context_event"]["observed_at"] == (start + 10 * MINUTE).isoformat()
+        later = client.get(root + "/chart", params={"timeframe": "1m"}).json()
+        (zone,) = [span for span in later["market_evidence"]["spans"] if span["category"] == "fvg"]
+        assert zone["source_sequence"] == gap["sequence"]
+        assert minute_timestamp(zone["available_at"]) == minute_timestamp(observed)
+        assert later["context_event"]["observed_at"] == observed

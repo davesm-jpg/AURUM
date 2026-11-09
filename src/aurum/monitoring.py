@@ -18,7 +18,14 @@ from aurum.market_data import Candle, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
-from aurum.strategy import STRATEGY_VERSION, SetupEvent, SetupState, StrategyConfig, StrategyReplay
+from aurum.strategy import (
+    STRATEGY_VERSION,
+    SetupEvent,
+    SetupState,
+    StrategyConfig,
+    StrategyReplay,
+    StrategyStep,
+)
 from aurum.timestamps import MINUTE, source_timezone
 
 MONITOR_VERSION = 1
@@ -205,11 +212,14 @@ class MarketMonitor:
             self._latch(db, now, "pending_buffer_limit")
             return self._refresh(db, now)
         db.execute(
-            "INSERT INTO monitor_minutes VALUES (?, ?, ?, ?, ?, ?, 0)",
+            """INSERT INTO monitor_minutes
+               (run_id, opened_at, candle, raw, received_at, source_status, applied)
+               VALUES (?, ?, ?, ?, ?, ?, 0)""",
             (self.monitor_id, opened, normalized, frame.raw, now.isoformat(), frame.source_status),
         )
         expected = row["next_open"]
         last_applied = row["last_applied"]
+        observed = max(now.isoformat(), row["last_received"] or "")
         fresh_frame = (
             pending == 0
             and expected == opened
@@ -228,7 +238,15 @@ class MarketMonitor:
             if available is None:
                 break
             minute = candle_from_dict(json.loads(available["candle"]))
-            for event in self._engine.push(minute):
+            step = self._engine.step(minute)
+            db.execute(
+                """UPDATE monitor_minutes SET applied = 1, applied_at = ?
+                   WHERE run_id = ? AND opened_at = ?""",
+                (observed, self.monitor_id, expected),
+            )
+            if step is not None:
+                self._record_market(db, minute, step)
+            for event in step.setups if step is not None else ():
                 alert_eligible = (
                     fresh_frame and expected == opened and event.state is SetupState.PAPER_SIGNAL
                 )
@@ -238,16 +256,12 @@ class MarketMonitor:
                         **event.as_dict(),
                         "source_status": available["source_status"],
                         "source_received_at": available["received_at"],
-                        "observed_at": now.isoformat(),
+                        "observed_at": observed,
                         "alert_eligible": alert_eligible,
                     },
                 )
                 if alert_eligible:
                     self._alert(db, event, now)
-            db.execute(
-                "UPDATE monitor_minutes SET applied = 1 WHERE run_id = ? AND opened_at = ?",
-                (self.monitor_id, expected),
-            )
             last_applied = expected
             expected = self._next_open(minute.opened_at)
         db.execute(
@@ -365,6 +379,33 @@ class MarketMonitor:
             (self.monitor_id, canonical_json(payload), self.monitor_id),
         )
 
+    def _record_market(self, db: sqlite3.Connection, minute: Candle, step: StrategyStep) -> None:
+        sequence = db.execute(
+            "SELECT coalesce(max(sequence), 0) FROM monitor_market_events WHERE run_id = ?",
+            (self.monitor_id,),
+        ).fetchone()[0]
+        payloads = [event.as_dict() for event in step.evidence]
+        payloads.append(
+            {
+                "event": "market_context_observed",
+                "confirmed_at": minute.available_at.isoformat(),
+                "context": step.context.as_dict(),
+            }
+        )
+        db.executemany(
+            "INSERT INTO monitor_market_events VALUES (?, ?, ?, ?, ?)",
+            (
+                (
+                    self.monitor_id,
+                    number,
+                    minute.opened_at.isoformat(),
+                    payload["event"],
+                    canonical_json(payload),
+                )
+                for number, payload in enumerate(payloads, start=sequence + 1)
+            ),
+        )
+
     def _alert(self, db: sqlite3.Connection, event: SetupEvent, now: datetime) -> None:
         alert_id = f"{self.monitor_id}/{event.setup_id}"
         payload = {
@@ -440,6 +481,67 @@ def applied_minute_batches(
         if len(rows) < 1000:
             return
         start = (datetime.fromisoformat(rows[-1]["opened_at"]) + MINUTE).isoformat()
+
+
+def market_events_page(
+    store: DatasetStore,
+    monitor_id: str,
+    *,
+    after: int = 0,
+    limit: int = 200,
+    latest: bool = False,
+    through_open: str | None = None,
+    observed_through: datetime | None = None,
+    kind: str | None = None,
+) -> list[dict[str, object]]:
+    with store.connection() as db:
+        if db.execute("PRAGMA user_version").fetchone()[0] < 6:
+            return []
+        query = """SELECT e.sequence, e.payload, m.source_status, m.received_at, m.applied_at
+                   FROM monitor_market_events AS e
+                   JOIN monitor_minutes AS m
+                     ON e.run_id = m.run_id AND e.minute_open = m.opened_at
+                   WHERE e.run_id = ? AND e.sequence > ?"""
+        parameters: tuple[object, ...] = (monitor_id, after)
+        if through_open is not None:
+            query += " AND e.minute_open <= ?"
+            parameters += (through_open,)
+        if observed_through is not None:
+            query += " AND m.applied_at <= ?"
+            parameters += (observed_through.isoformat(),)
+        if kind is not None:
+            query += " AND e.kind = ?"
+            parameters += (kind,)
+        query += " ORDER BY e.sequence DESC LIMIT ?" if latest else " ORDER BY e.sequence LIMIT ?"
+        rows = db.execute(query, (*parameters, limit)).fetchall()
+    if latest:
+        rows.reverse()
+    return [
+        {
+            **json.loads(row["payload"]),
+            "sequence": row["sequence"],
+            "event_id": f"{monitor_id}/market/{row['sequence']}",
+            "source_status": row["source_status"],
+            "source_received_at": row["received_at"],
+            "observed_at": row["applied_at"],
+        }
+        for row in rows
+    ]
+
+
+def market_evidence_started_at(
+    store: DatasetStore, monitor_id: str, through_open: str
+) -> str | None:
+    with store.connection() as db:
+        if db.execute("PRAGMA user_version").fetchone()[0] < 6:
+            return None
+        row = db.execute(
+            """SELECT applied_at FROM monitor_minutes
+               WHERE run_id = ? AND applied_at IS NOT NULL AND opened_at <= ?
+               ORDER BY opened_at LIMIT 1""",
+            (monitor_id, through_open),
+        ).fetchone()
+    return str(row["applied_at"]) if row is not None else None
 
 
 def monitor_events(store: DatasetStore, monitor_id: str) -> Iterator[dict[str, object]]:

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Candle } from "./chart-evidence";
+import type { Candle, ChartEvidence } from "./chart-evidence";
 import { api, type RecordData } from "./client";
 
 type FeedClass = "real_time" | "delayed" | "historical" | "simulated";
@@ -23,6 +23,10 @@ type MonitorChart = {
   calendar_version: string;
   analysis_timeframe: string;
   candles: (Candle & { source_minutes: Partial<Record<FeedClass, number>> })[];
+  market_evidence_started_at: string | null;
+  market_evidence: ChartEvidence;
+  paper_evidence: ChartEvidence;
+  context_event: RecordData | null;
 };
 
 type MonitorView = {
@@ -47,12 +51,18 @@ export function useMonitorChart(
     let timer: ReturnType<typeof setTimeout>;
     async function load() {
       try {
-        const [chart, events, alerts] = await Promise.all([
+        const [chart, journal, market, alerts] = await Promise.all([
           api<MonitorChart>(chartKey, init),
           api<RecordData[]>(key + "/events?latest=true&limit=80", init),
+          api<RecordData[]>(key + "/market-events?latest=true&limit=80", init),
           api<RecordData[]>(key + "/alerts?limit=5", init),
         ]);
         if (controller.signal.aborted) return;
+        const eventTime = (item: RecordData) =>
+          String(item.observed_at ?? item.at ?? item.confirmed_at ?? "");
+        const events = [...journal, ...market].sort((left, right) =>
+          eventTime(left).localeCompare(eventTime(right)),
+        );
         setValue({ key: chartKey, data: { chart, events, alerts } });
         setFailure(undefined);
       } catch (error) {

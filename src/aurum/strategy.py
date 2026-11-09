@@ -440,6 +440,13 @@ class SetupEngine:
         return event
 
 
+@dataclass(frozen=True, slots=True)
+class StrategyStep:
+    context: ContextSnapshot
+    evidence: tuple[EvidenceEvent, ...]
+    setups: tuple[SetupEvent, ...]
+
+
 class StrategyReplay:
     """Share market evidence and setup state between replay and incremental callers."""
 
@@ -466,14 +473,20 @@ class StrategyReplay:
         self._setups = SetupEngine(strategy)
 
     def push(self, candle: Candle) -> tuple[SetupEvent, ...]:
+        step = self.step(candle)
+        return step.setups if step else ()
+
+    def step(self, candle: Candle) -> StrategyStep | None:
         step = self._evidence.step(candle)
         if step is None:
-            return ()
+            return None
         self._context.observe_higher(step.bars)
         if step.analysis is None:
-            return ()
+            return None
         context = self._context.observe_primary(step.analysis, step.events)
-        return self._setups.push(step.analysis, step.events, context)
+        return StrategyStep(
+            context, step.events, self._setups.push(step.analysis, step.events, context)
+        )
 
     def consume(self, candles: Iterable[Candle]) -> Iterator[SetupEvent]:
         for candle in candles:
