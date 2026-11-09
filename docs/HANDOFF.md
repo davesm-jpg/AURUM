@@ -5,7 +5,7 @@
 - Current phase — Historical adapters and contract mapping D05 are complete. L01 normalized monitoring is the next implementation slice. D04 and B02 await authorized historical data.
 - Current milestone — D05 Parquet, HTTPS history, reviewed contracts and continuous research mapping.
 - Current branch — `main`.
-- Last verified commit — the D05 implementation commit containing this handoff.
+- Last verified commit — `a6176fe1230434156faf3286a2c642650ec9a889`.
 
 ## Current Objective
 
