@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from aurum.api_config import BacktestRequest, ForwardStartRequest, backtest_configuration
 from aurum.api_reports import (
+    ForwardReportRequest,
     MonteCarloReportRequest,
     PaperAccountReportRequest,
     ValidationReportRequest,
@@ -266,6 +267,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/paper-account", status_code=201)
     def create_account(request: PaperAccountReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/forward", status_code=201)
+    def create_forward_report(request: ForwardReportRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.get("/monitors")

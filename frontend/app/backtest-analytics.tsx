@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type RecordData } from "./client";
 import { returnHistogram } from "./distribution";
 import {
@@ -33,7 +33,7 @@ const WEEKDAYS = [
 const WINDOWS = [5, 20, 50, 100];
 
 type Format = (value: unknown) => string;
-type Column = { title: string; value: (row: RecordData) => string };
+type Column = { title: string; value: (row: RecordData) => ReactNode };
 const outcomeColumns: Column[] = [
   { title: "Trades", value: (row) => String(row.trades ?? 0) },
   { title: "Win rate", value: (row) => percentage(row.win_rate) },

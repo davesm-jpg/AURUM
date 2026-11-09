@@ -6,7 +6,7 @@ import sys
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import asdict, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from importlib import import_module
 from pathlib import Path
 from time import sleep
@@ -28,6 +28,7 @@ from aurum.forward import (
     list_forward_runs,
     register_forward,
 )
+from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import (
@@ -233,6 +234,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("forward-status", "forward-events"):
         command = commands.add_parser(name)
         command.add_argument("forward_id")
+    forward_report = commands.add_parser("forward-report", help="save a forward research period")
+    forward_report.add_argument("forward_id")
+    forward_report.add_argument(
+        "--period", type=ForwardPeriod, choices=ForwardPeriod, default=ForwardPeriod.DAILY
+    )
+    forward_report.add_argument("--trade-date", required=True, type=date.fromisoformat)
+    forward_report.add_argument("--baseline-validation")
+    forward_report.add_argument("--bootstrap-draws", type=int, default=1000)
+    forward_report.add_argument("--block-length", type=int, default=5)
+    forward_report.add_argument("--seed", type=int, default=42)
 
     delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
     delivery.add_argument("monitor_id")
@@ -314,6 +325,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(_sync_forward(store, args)))
         elif args.command == "forward-runs":
             print(canonical_json(list_forward_runs(store)))
+        elif args.command == "forward-report":
+            reference = save_forward_report(
+                store,
+                args.forward_id,
+                args.period,
+                args.trade_date,
+                baseline_validation_id=args.baseline_validation,
+                bootstrap_draws=args.bootstrap_draws,
+                block_length=args.block_length,
+                seed=args.seed,
+            )
+            print(canonical_json(store.describe_analysis(reference)))
         elif args.command == "forward-status":
             print(canonical_json(describe_forward(store, args.forward_id)))
         elif args.command == "forward-events":

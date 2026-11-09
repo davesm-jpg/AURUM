@@ -43,12 +43,12 @@ export function percentage(value: unknown) {
       }).format(rate);
 }
 
-export function utcDateTime(value: unknown) {
+export function utcDateTime(value: unknown, seconds = false) {
   if (typeof value !== "string") return "Unavailable";
   return (
     new Intl.DateTimeFormat("en-GB", {
       dateStyle: "medium",
-      timeStyle: "short",
+      timeStyle: seconds ? "medium" : "short",
       timeZone: "UTC",
       hourCycle: "h23",
     }).format(new Date(value)) + " UTC"

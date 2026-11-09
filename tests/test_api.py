@@ -303,3 +303,10 @@ def test_recovered_synthetic_monitor_evidence_uses_observed_time_on_chart(tmp_pa
         route = f"/api/forward-runs/{run['forward_id']}"
         assert client.post(route + "/sync").json()["processed_minutes"] == 0
         assert client.get(route + "/events").json() == []
+        report = client.post(
+            "/api/reports/forward",
+            json={"forward_id": run["forward_id"], "period": "weekly", "trade_date": "2025-03-10"},
+        )
+        assert report.status_code == 201
+        assert report.json()["result"]["period"]["outcomes"]["trades"] == 0
+        assert report.json()["result"]["period"]["coverage"]["applied_forward_minutes"] == 0

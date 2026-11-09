@@ -16,6 +16,13 @@ import {
 } from "./format";
 import { Metric } from "./metric";
 
+function interval(uncertainty: unknown) {
+  const bounds = record(uncertainty).expectancy_95_percentile_cents;
+  return Array.isArray(bounds) && bounds.length === 2
+    ? `${money(bounds[0])} to ${money(bounds[1])}`
+    : "—";
+}
+
 function MonteCarloReport({ result }: { result: RecordData }) {
   const source = record(result.source);
   const simulations = rows(result.simulations);
@@ -105,7 +112,6 @@ function MonteCarloReport({ result }: { result: RecordData }) {
 function ValidationReport({ result }: { result: RecordData }) {
   const holdout = record(result.holdout);
   const summary = record(holdout.summary);
-  const uncertainty = record(holdout.uncertainty);
   const folds: [string, RecordData][] = rows(
     result.walk_forward_before_holdout,
   ).map((fold) => [
@@ -212,11 +218,7 @@ function ValidationReport({ result }: { result: RecordData }) {
             />
             <Metric
               title="Bootstrap interval"
-              value={
-                number(uncertainty.lower_cents) === null
-                  ? "—"
-                  : `${money(uncertainty.lower_cents)} to ${money(uncertainty.upper_cents)}`
-              }
+              value={interval(holdout.uncertainty)}
               detail="95% net expectancy interval"
             />
           </div>
@@ -301,6 +303,124 @@ function AccountReport({ result }: { result: RecordData }) {
   );
 }
 
+function ForwardReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const definition = record(report.definition);
+  const current = record(result.period);
+  const prior = record(result.previous_period);
+  const outcomes = record(current.outcomes);
+  const coverage = record(current.coverage);
+  const historical = record(result.historical_holdout);
+  const comparison: [string, RecordData][] = [
+    [
+      "Prior forward period",
+      {
+        ...record(prior.outcomes),
+        delta: record(record(result.prior_period_change).difference)
+          .expectancy_cents,
+        date: prior.first_trade_date,
+      },
+    ],
+  ];
+  if (historical.report_id)
+    comparison.push([
+      "Historical holdout",
+      {
+        ...record(historical.outcomes),
+        delta: record(record(result.historical_holdout_change).difference)
+          .expectancy_cents,
+        date: utcDateTime(historical.holdout_start),
+      },
+    ]);
+  return (
+    <>
+      <section className="analytics-section">
+        <h3>Forward paper period</h3>
+        <p className="muted">
+          {label(result.data_kind)} · {String(result.contract)} ·{" "}
+          {String(result.source)}
+        </p>
+        <p className="muted">
+          {label(definition.period)} exchange trade dates{" "}
+          {String(current.first_trade_date)} through{" "}
+          {String(current.end_trade_date_exclusive)} exclusive.
+        </p>
+        <p className="muted">
+          Applied minutes {String(coverage.applied_forward_minutes ?? 0)} of{" "}
+          {String(coverage.reviewed_minutes ?? 0)} reviewed ·{" "}
+          {String(coverage.execution_eligible_minutes ?? 0)} eligible.
+        </p>
+        <div className="metrics contained">
+          <Metric
+            title="Qualified setups"
+            value={String(current.qualified_signals ?? 0)}
+            detail={`${String(current.entries_filled ?? 0)} simulated fills`}
+          />
+          <Metric
+            title="Completed trades"
+            value={String(outcomes.trades ?? 0)}
+            detail={`${String(current.unresolved_outcomes ?? 0)} unresolved excluded`}
+          />
+          <Metric
+            title="Net expectancy"
+            value={money(outcomes.expectancy_cents)}
+            detail="Per completed paper trade"
+          />
+          <Metric
+            title="Bootstrap interval"
+            value={interval(current.uncertainty)}
+            detail="95% net expectancy interval"
+          />
+          <Metric
+            title="Net P&L"
+            value={money(outcomes.net_cents)}
+            detail="Closed trades after modeled costs"
+          />
+          <Metric
+            title="Period drawdown"
+            value={money(current.period_max_closed_trade_drawdown_cents)}
+            detail="Closed trades within this period"
+          />
+        </div>
+      </section>
+      <section className="analytics-section">
+        <h3>Descriptive comparison</h3>
+        <p className="muted">
+          Changes use completed trades in each separately labeled sample.
+        </p>
+        <DataTable
+          labelHeading="Comparison sample"
+          items={comparison}
+          columns={[
+            { title: "Starts", value: (row) => String(row.date ?? "—") },
+            { title: "Trades", value: (row) => String(row.trades ?? 0) },
+            { title: "Win rate", value: (row) => percentage(row.win_rate) },
+            {
+              title: "Net expectancy",
+              value: (row) => money(row.expectancy_cents),
+            },
+            {
+              title: "Current minus comparison",
+              value: (row) => money(row.delta),
+            },
+          ]}
+        />
+      </section>
+      <OutcomeTable
+        title="Forward performance by regime"
+        groups={outcomes.by_regime}
+        heading="Regime"
+      />
+      <OutcomeTable
+        title="Forward experimental score bands"
+        groups={outcomes.by_score_decile}
+        heading="Score band"
+        format={(name) => `${name}–${name === "90" ? 100 : Number(name) + 9}`}
+      />
+    </>
+  );
+}
+
 export function ReportSummary({ report }: { report: RecordData }) {
   const result = record(report.result);
   if (report.kind === "monte_carlo")
@@ -308,6 +428,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
   if (report.kind === "chronological_validation")
     return <ValidationReport result={result} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
+  if (report.kind === "forward_paper_research")
+    return <ForwardReport report={report} />;
   return (
     <p className="muted">Inspect the saved definition and evidence below.</p>
   );

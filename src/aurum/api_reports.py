@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import date
 from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -6,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from aurum.account_reports import simulate_account_document
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, AccountRules
 from aurum.exchange_calendar import SessionCalendar
+from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.market_data import canonical_json
 from aurum.monte_carlo import (
     REFERENCE_WIN_RATES_BPS,
@@ -97,6 +99,30 @@ class PaperAccountReportRequest(BaseModel):
             SessionCalendar.from_dict(self.calendar),
             self.phase,
             self.rules,
+        )
+
+
+class ForwardReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    forward_id: _RunId
+    period: ForwardPeriod = ForwardPeriod.DAILY
+    trade_date: date
+    baseline_validation_id: _RunId | None = None
+    bootstrap_draws: int = Field(default=1000, ge=2, le=10000)
+    block_length: int = Field(default=5, ge=1, le=1000)
+    seed: int = 42
+
+    def run(self, store: DatasetStore) -> str:
+        return save_forward_report(
+            store,
+            self.forward_id,
+            self.period,
+            self.trade_date,
+            baseline_validation_id=self.baseline_validation_id,
+            bootstrap_draws=self.bootstrap_draws,
+            block_length=self.block_length,
+            seed=self.seed,
         )
 
 

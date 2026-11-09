@@ -4,7 +4,7 @@ import subprocess
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from sys import executable
 from threading import Barrier, Event
@@ -13,8 +13,10 @@ import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
+from aurum.execution import DEFAULT_EXECUTION_CONFIG
 from aurum.feed_frames import FeedFrame
 from aurum.forward import ForwardPaper, forward_events, register_forward
+from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.market_structure import (
@@ -35,7 +37,8 @@ from aurum.market_structure import (
 )
 from aurum.monitoring import MarketMonitor, MonitorConfig
 from aurum.providers import FeedStatus
-from aurum.research_reports import backtest_analytics
+from aurum.research_reports import backtest_analytics, validate_runs
+from aurum.statistics import ValidationConfig
 from aurum.storage import SCHEMA_VERSION, DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -686,6 +689,7 @@ def test_forward_paper_restores_after_observed_signal_and_handles_recovery(
         synthetic_bar(11, 88, 118, 116),
         synthetic_bar(12, 91, 118, 110),
         synthetic_bar(13, 102, 122, 111, 110),
+        synthetic_bar(14, 105, 190, 181, 110),
     ]
     store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
     calendar = SessionCalendar.from_dict(store.describe(dataset)["provenance"]["calendar"])
@@ -767,3 +771,47 @@ def test_forward_paper_restores_after_observed_signal_and_handles_recovery(
     late = register_forward(store, monitor.monitor_id, receipt, synthetic=True)
     assert ForwardPaper(store, late).sync()["processed_minutes"] == 0
     assert forward_events(store, late) == []
+
+    for period in ForwardPeriod:
+        report_id = save_forward_report(store, run, period, TRADE_DATE, bootstrap_draws=10)
+        assert save_forward_report(store, run, period, TRADE_DATE, bootstrap_draws=10) == report_id
+        report = store.describe_analysis(report_id)
+        result = report["result"]
+        assert isinstance(result, dict)
+        assert result["data_kind"] == "synthetic_forward_verification"
+        sample = result["period"]
+        assert sample["qualified_signals"] == sample["entries_filled"] == 1
+        assert sample["outcomes"]["trades"] == (0 if recover else 1)
+        assert sample["unresolved_outcomes"] == int(recover)
+        assert not sample["coverage"]["all_reviewed_minutes_applied"]
+        assert result["prior_period_change"]["difference"]["expectancy_cents"] is None
+    if not recover:
+        history = store.build_strategy_run(
+            dataset,
+            TIMEFRAME,
+            StructureConfig(PivotRule(1, 1)),
+            DEFAULT_STRATEGY_CONFIG,
+            execution=DEFAULT_EXECUTION_CONFIG,
+        )
+        baseline = validate_runs(
+            store,
+            (history,),
+            ValidationConfig(
+                START + 55 * MINUTE,
+                START + 72 * MINUTE,
+                minimum_selection_trades=1,
+                bootstrap_draws=10,
+            ),
+        )
+        with pytest.raises(ValueError, match="history ending before registration"):
+            save_forward_report(
+                store, run, ForwardPeriod.DAILY, TRADE_DATE, baseline_validation_id=baseline
+            )
+        later = register_forward(store, monitor.monitor_id, datetime.now(UTC), synthetic=True)
+        compared = save_forward_report(
+            store, later, ForwardPeriod.DAILY, TRADE_DATE, baseline_validation_id=baseline
+        )
+        comparison = store.describe_analysis(compared)["result"]
+        assert isinstance(comparison, dict)
+        assert comparison["historical_holdout"]["used_for_selection"] is False
+        assert comparison["historical_holdout"]["backtest_run_id"] == history

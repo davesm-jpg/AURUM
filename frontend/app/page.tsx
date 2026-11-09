@@ -18,6 +18,7 @@ import { BacktestAnalytics } from "./backtest-analytics";
 import { BacktestForm } from "./backtest-form";
 import { ReportSummary } from "./report-summary";
 import { ReportBuilder } from "./report-builder";
+import { ForwardWorkspace } from "./forward-workspace";
 type Dataset = {
   dataset_id: string;
   contract: string;
@@ -45,7 +46,7 @@ type Monitor = {
   source_status: string;
   checked_at: string | null;
 };
-type Tab = "Market" | "Research" | "Reports";
+type Tab = "Market" | "Research" | "Forward" | "Reports";
 
 const FRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const EMPTY_BARS: Candle[] = [];
@@ -325,16 +326,18 @@ export default function Dashboard() {
           </div>
         </div>
         <nav aria-label="Workspace">
-          {(["Market", "Research", "Reports"] as Tab[]).map((item) => (
-            <button
-              key={item}
-              className={tab === item ? "selected" : ""}
-              aria-pressed={tab === item}
-              onClick={() => setTab(item)}
-            >
-              {item}
-            </button>
-          ))}
+          {(["Market", "Research", "Forward", "Reports"] as Tab[]).map(
+            (item) => (
+              <button
+                key={item}
+                className={tab === item ? "selected" : ""}
+                aria-pressed={tab === item}
+                onClick={() => setTab(item)}
+              >
+                {item}
+              </button>
+            ),
+          )}
         </nav>
         <span className="paper-tag">
           <span /> Paper research
@@ -376,7 +379,7 @@ export default function Dashboard() {
             </select>
           </label>
         ) : (
-          tab !== "Reports" && (
+          (tab === "Market" || tab === "Research") && (
             <>
               <label>
                 Dataset
@@ -751,6 +754,19 @@ export default function Dashboard() {
             <EventTable events={setups} />
           </section>
         </div>
+      )}
+
+      {tab === "Forward" && (
+        <ForwardWorkspace
+          monitors={monitors}
+          baselines={reports.filter(
+            (report) => report.kind === "chronological_validation",
+          )}
+          onReport={async (id) => {
+            await selectCompletedReport(id);
+            setTab("Reports");
+          }}
+        />
       )}
 
       {tab === "Reports" && (
