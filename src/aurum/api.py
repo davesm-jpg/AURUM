@@ -8,10 +8,17 @@ from secrets import compare_digest
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Path, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from aurum.api_config import BacktestRequest, ForwardStartRequest, backtest_configuration
+from aurum.api_config import (
+    BacktestRequest,
+    DeliveryProfileRequest,
+    ForwardStartRequest,
+    ProviderProfileRequest,
+    backtest_configuration,
+)
 from aurum.api_reports import (
     ForwardReportRequest,
     MonteCarloReportRequest,
@@ -39,6 +46,11 @@ from aurum.monitoring import (
 )
 from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics
+from aurum.runtime_profiles import (
+    describe_runtime_profile,
+    list_runtime_profiles,
+    save_runtime_profile,
+)
 from aurum.storage import DatasetStore
 from aurum.timestamps import MINUTE, minute_timestamp
 
@@ -117,6 +129,13 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @app.exception_handler(sqlite3.Error)
     async def unavailable_store(request: Request, exc: sqlite3.Error) -> JSONResponse:
         return JSONResponse({"detail": "research store unavailable"}, status_code=503)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_body(request: Request, exc: RequestValidationError) -> JSONResponse:
+        issues = [
+            {field: issue[field] for field in ("loc", "msg", "type")} for issue in exc.errors()
+        ]
+        return JSONResponse({"detail": issues}, status_code=422)
 
     @router.get("/health")
     def health() -> dict[str, object]:
@@ -219,6 +238,18 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @router.get("/configuration/backtest")
     def default_backtest_configuration() -> dict[str, object]:
         return backtest_configuration()
+
+    @router.get("/configuration/runtime")
+    def runtime_profiles(limit: PageLimit = 100) -> list[dict[str, object]]:
+        return list_runtime_profiles(store, limit)
+
+    @router.post("/configuration/providers", status_code=201)
+    def configure_provider(request: ProviderProfileRequest) -> dict[str, object]:
+        return describe_runtime_profile(store, save_runtime_profile(store, request.profile))
+
+    @router.post("/configuration/deliveries", status_code=201)
+    def configure_delivery(request: DeliveryProfileRequest) -> dict[str, object]:
+        return describe_runtime_profile(store, save_runtime_profile(store, request.profile))
 
     @router.post("/backtests", status_code=201)
     def build_backtest(request: BacktestRequest) -> dict[str, object]:

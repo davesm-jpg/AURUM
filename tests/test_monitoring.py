@@ -141,6 +141,7 @@ def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observatio
     with sqlite3.connect(store.path) as db:
         db.execute("DROP TABLE monitor_market_events")
         db.execute("DROP TABLE forward_report_publications")
+        db.execute("DROP TABLE runtime_profiles")
         db.execute("DROP TABLE forward_events")
         db.execute("DROP TABLE forward_runs")
         db.execute("DROP INDEX monitor_signal_close")

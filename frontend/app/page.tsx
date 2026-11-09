@@ -19,6 +19,7 @@ import { BacktestForm } from "./backtest-form";
 import { ReportSummary } from "./report-summary";
 import { ReportBuilder } from "./report-builder";
 import { ForwardWorkspace } from "./forward-workspace";
+import { RuntimeSettings } from "./runtime-settings";
 type Dataset = {
   dataset_id: string;
   contract: string;
@@ -46,7 +47,7 @@ type Monitor = {
   source_status: string;
   checked_at: string | null;
 };
-type Tab = "Market" | "Research" | "Forward" | "Reports";
+type Tab = "Market" | "Research" | "Forward" | "Reports" | "Settings";
 
 const FRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const EMPTY_BARS: Candle[] = [];
@@ -326,18 +327,18 @@ export default function Dashboard() {
           </div>
         </div>
         <nav aria-label="Workspace">
-          {(["Market", "Research", "Forward", "Reports"] as Tab[]).map(
-            (item) => (
-              <button
-                key={item}
-                className={tab === item ? "selected" : ""}
-                aria-pressed={tab === item}
-                onClick={() => setTab(item)}
-              >
-                {item}
-              </button>
-            ),
-          )}
+          {(
+            ["Market", "Research", "Forward", "Reports", "Settings"] as Tab[]
+          ).map((item) => (
+            <button
+              key={item}
+              className={tab === item ? "selected" : ""}
+              aria-pressed={tab === item}
+              onClick={() => setTab(item)}
+            >
+              {item}
+            </button>
+          ))}
         </nav>
         <span className="paper-tag">
           <span /> Paper research
@@ -817,6 +818,10 @@ export default function Dashboard() {
             onComplete={selectCompletedReport}
           />
         </>
+      )}
+
+      {tab === "Settings" && (
+        <RuntimeSettings datasets={datasets} monitors={monitors} />
       )}
 
       <footer className="footer">

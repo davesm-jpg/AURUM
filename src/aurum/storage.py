@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -208,6 +208,13 @@ SCHEMA_V8 = (
         PRIMARY KEY (forward_id, period, first_trade_date, baseline_key)
     ) STRICT, WITHOUT ROWID""",
 )
+
+SCHEMA_V9 = """CREATE TABLE runtime_profiles (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('provider', 'delivery')),
+    definition TEXT NOT NULL,
+    created_at TEXT NOT NULL
+) STRICT"""
 
 
 class DatasetDescription(TypedDict):
@@ -669,4 +676,6 @@ class DatasetStore:
         if write and version < 8:
             for statement in SCHEMA_V8:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 8")
+        if write and version < 9:
+            db.execute(SCHEMA_V9)
+            db.execute("PRAGMA user_version = 9")

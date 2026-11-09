@@ -18,6 +18,7 @@ from aurum.market_structure import (
     StructureConfig,
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
+from aurum.runtime_profiles import DeliveryProfile, ProviderProfile
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, StrategyConfig, Variant
 
 
@@ -129,6 +130,18 @@ class ForwardStartRequest(BaseModel):
     monitor_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     synthetic: bool = False
     execution_config: ExecutionConfig = DEFAULT_EXECUTION_CONFIG
+
+
+class ProviderProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile: ProviderProfile
+
+
+class DeliveryProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile: DeliveryProfile
 
 
 def backtest_configuration() -> dict[str, object]:

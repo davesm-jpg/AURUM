@@ -478,6 +478,15 @@ form {
   margin: 0;
   min-width: 0;
 }
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.settings-workspace .settings-group + .settings-group {
+  margin-top: 8px;
+}
 .settings-group {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -564,6 +573,7 @@ textarea {
   .masthead nav {
     order: 3;
     width: 100%;
+    flex-wrap: wrap;
   }
   .selection {
     grid-template-columns: 1fr 1fr;

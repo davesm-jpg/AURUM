@@ -13,6 +13,7 @@ from aurum.market_data import Candle, DataKind, ImportConfig, TimestampLabel, pr
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
 from aurum.monitoring import MarketMonitor, MonitorConfig
 from aurum.providers import FeedStatus
+from aurum.runtime_profiles import load_delivery_profile, provider_runtime
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -104,6 +105,61 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
     assert validation.json()["result"]["holdout"] is None
 
 
+def test_api_provider_profiles_keep_environment_values_out_of_storage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    start = minute_timestamp("2025-03-10T13:00Z")
+    span = TradingWindow(start, start + MINUTE)
+    calendar = SessionCalendar(
+        "synthetic profile calendar",
+        "synthetic-v1",
+        span,
+        sessions=(TradingSession(date(2025, 3, 10), (span,)),),
+    )
+    contract = MgcContract("MGC-2025-04")
+    path = tmp_path / "synthetic.csv"
+    path.write_text(
+        "timestamp,contract,open,high,low,close,volume\n"
+        f"{start.isoformat()},{contract.code},2900,2900,2900,2900,1\n",
+        encoding="utf-8",
+    )
+    store = DatasetStore(tmp_path / "synthetic-profiles.sqlite")
+    config = ImportConfig(
+        "synthetic profile source", contract, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC
+    )
+    dataset = store.save(prepare_csv(path, config, calendar))
+    with http.TestClient(api.create_app(store, "synthetic-access")) as client:
+        route = "/api/configuration/providers"
+        profile = {
+            "name": "Synthetic loopback",
+            "calendar_dataset_id": dataset,
+            "endpoint_env": "AURUM_TEST_ENDPOINT",
+            "source_status": "simulated",
+        }
+        assert client.post(route, json={"profile": profile}).status_code == 401
+        client.headers["Authorization"] = "Bearer synthetic-access"
+        rejected = client.post(
+            route, json={"profile": {**profile, "endpoint_env": "synthetic-value-must-not-echo"}}
+        )
+        assert rejected.status_code == 422
+        assert "synthetic-value-must-not-echo" not in rejected.text
+        denied = client.post(route, json={"profile": {**profile, "source_status": "real_time"}})
+        assert denied.status_code == 422
+        saved = client.post(route, json={"profile": profile})
+        assert saved.status_code == 201
+        reference = saved.json()["profile_id"]
+        assert client.post(route, json={"profile": profile}).json()["profile_id"] == reference
+        monkeypatch.setenv("AURUM_TEST_ENDPOINT", "ws://127.0.0.1:18991/synthetic")
+        monitor, source, backfill = provider_runtime(store, reference)
+        assert monitor.contract == contract and source.mode is FeedStatus.SIMULATED
+        assert backfill is None
+        listed = client.get("/api/configuration/runtime")
+        assert listed.json()[0]["settings"]["endpoint_env"] == "AURUM_TEST_ENDPOINT"
+        assert "18991" not in listed.text
+
+
 def test_api_saves_assumed_and_explicit_synthetic_paper_reports(tmp_path: Path) -> None:
     api = pytest.importorskip("aurum.api")
     http = pytest.importorskip("fastapi.testclient")
@@ -189,6 +245,25 @@ def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(
         monitor.ingest(FeedFrame.from_replay(candle, status, start + received * MINUTE))
 
     with http.TestClient(api.create_app(store)) as client:
+        prefs = {
+            "name": "Synthetic notification profile fixture",
+            "monitor_id": monitor.monitor_id,
+            "channel": "telegram",
+            "destination_env": "AURUM_TEST_CHAT",
+            "token_env": "AURUM_TEST_TOKEN",
+            "preferences": {
+                "quiet_start_minute": 1320,
+                "quiet_end_minute": 360,
+                "min_score": 70,
+                "allowed_sessions": ["new_york"],
+            },
+        }
+        settings = client.post("/api/configuration/deliveries", json={"profile": prefs})
+        assert settings.status_code == 201
+        loaded = load_delivery_profile(store, settings.json()["profile_id"])
+        assert loaded.preferences.min_score == 70
+        assert loaded.preferences.allowed_sessions == ("new_york",)
+        assert loaded.token_env == "AURUM_TEST_TOKEN"
         route = f"/api/monitors/{monitor.monitor_id}/chart"
         assert client.get(route).json()["candles"] == []
         send(0, 1)

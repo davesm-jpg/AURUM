@@ -71,6 +71,7 @@ from aurum.notifications import (
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, SourceFormat
 from aurum.research_reports import simulate_report, validate_runs
+from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
@@ -271,6 +272,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     cancel_alert.add_argument("monitor_id")
     cancel_alert.add_argument("alert_id")
 
+    commands.add_parser("runtime-profiles", help="list saved provider and delivery settings")
+    monitor_profile = commands.add_parser("monitor-profile", help="run a saved market-data profile")
+    monitor_profile.add_argument("profile_id")
+    monitor_profile.add_argument("--max-frames", type=int)
+    delivery_profile = commands.add_parser(
+        "deliver-profile", help="run a saved paper delivery profile"
+    )
+    delivery_profile.add_argument("profile_id")
+    delivery_profile.add_argument("--watch", action="store_true")
+
     serve = commands.add_parser("serve", help="serve the local AURUM research API")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--token-env")
@@ -306,6 +317,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "continuous-bars":
             for event in replay_series(store, args.report_id):
                 print(canonical_json(event))
+        elif args.command == "runtime-profiles":
+            print(canonical_json(list_runtime_profiles(store)))
+        elif args.command == "monitor-profile":
+            instance, source, backfill = provider_runtime(store, args.profile_id)
+            print(canonical_json(_watch_monitor(instance, source, backfill, args.max_frames)))
+        elif args.command == "deliver-profile":
+            profile = load_delivery_profile(store, args.profile_id)
+            print(
+                canonical_json(
+                    _run_delivery(
+                        store,
+                        profile.monitor_id,
+                        profile.channel,
+                        profile.destination_env,
+                        profile.token_env,
+                        profile.preferences,
+                        args.watch,
+                    )
+                )
+            )
         elif args.command == "deliver":
             print(canonical_json(_deliver(store, args)))
         elif args.command == "delivery-status":
@@ -772,10 +803,19 @@ def _monitor_live(store: DatasetStore, args: Namespace) -> dict[str, object]:
     backfill = (
         HttpsGapBackfill(args.backfill_url, args.backfill_token_env) if args.backfill_url else None
     )
+    return _watch_monitor(instance, source, backfill, args.max_frames)
+
+
+def _watch_monitor(
+    instance: MarketMonitor,
+    source: WebSocketSource,
+    backfill: HttpsGapBackfill | None,
+    max_frames: int | None,
+) -> dict[str, object]:
     print(f"aurum: paper monitor {instance.monitor_id}", file=sys.stderr)
     previous = signal.signal(signal.SIGTERM, _stop_monitor)
     try:
-        return run_stream(instance, source, backfill=backfill, max_frames=args.max_frames)
+        return run_stream(instance, source, backfill=backfill, max_frames=max_frames)
     finally:
         signal.signal(signal.SIGTERM, previous)
 
@@ -842,16 +882,6 @@ def _serve(store: DatasetStore, args: Namespace) -> None:
 
 
 def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:
-    destination = os.environ.get(args.destination_env)
-    if not destination:
-        raise ValueError("configured notification destination variable is unset")
-    if args.channel is Channel.TELEGRAM:
-        token = os.environ.get(args.token_env) if args.token_env else None
-        if not token:
-            raise ValueError("configured Telegram token variable is unset")
-        transport = HttpAlertChannel.telegram(token, destination)
-    else:
-        transport = HttpAlertChannel.discord(destination)
     start, end = args.quiet or (None, None)
     prefs = DeliveryPreferences(
         timezone=args.timezone,
@@ -864,14 +894,44 @@ def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:
         max_attempts=args.max_attempts,
         expiry_minutes=args.expiry_minutes,
     )
-    worker = DeliveryWorker(store, args.monitor_id, transport, prefs)
+    return _run_delivery(
+        store,
+        args.monitor_id,
+        args.channel,
+        args.destination_env,
+        args.token_env,
+        prefs,
+        args.watch,
+    )
+
+
+def _run_delivery(
+    store: DatasetStore,
+    monitor_id: str,
+    channel: Channel,
+    destination_env: str,
+    token_env: str | None,
+    preferences: DeliveryPreferences,
+    watch: bool,
+) -> dict[str, object]:
+    destination = os.environ.get(destination_env)
+    if not destination:
+        raise ValueError("configured notification destination variable is unset")
+    if channel is Channel.TELEGRAM:
+        token = os.environ.get(token_env) if token_env else None
+        if not token:
+            raise ValueError("configured Telegram token variable is unset")
+        transport = HttpAlertChannel.telegram(token, destination)
+    else:
+        transport = HttpAlertChannel.discord(destination)
+    worker = DeliveryWorker(store, monitor_id, transport, preferences)
     attempts = 0
     try:
         while True:
             attempts += worker.run_once()
-            if not args.watch:
+            if not watch:
                 break
             sleep(5)
     except KeyboardInterrupt:
         pass
-    return {"channel": args.channel, "monitor_id": args.monitor_id, "attempted": attempts}
+    return {"channel": channel, "monitor_id": monitor_id, "attempted": attempts}
