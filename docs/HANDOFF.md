@@ -5,7 +5,7 @@
 - Current phase — Phase 2 market evidence is implemented. Phase 3 paper strategy S03 is the highest-priority unblocked research slice. D04 still needs an authorized source.
 - Current milestone — S02 causal liquidity, sweep, FVG and IFVG replay.
 - Current branch — `main`.
-- Last verified commit — the S02 implementation commit containing this handoff.
+- Last verified commit — `d726e308c354341ebf4d589b3fbe5ce47bf085e6`.
 
 ## Current Objective
 
