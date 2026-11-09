@@ -220,10 +220,57 @@ def test_failed_write_rolls_back_provenance_and_raw_bytes(tmp_path: Path) -> Non
         assert db.execute("SELECT count(*) FROM candles").fetchone() == (2,)
 
 
-def test_cli_import_inspect_and_replay(tmp_path: Path) -> None:
+def test_dated_import_uses_coverage_without_losing_full_session_anchors(tmp_path: Path) -> None:
+    snapshot = json.loads(schedule(coverage=window("13:01", "13:04")))
+    snapshot.pop("windows")
+    snapshot.update(
+        schema_version=2,
+        sessions=[
+            {
+                "trade_date": "2025-03-10",
+                "windows": [
+                    {"start": "2025-03-09T17:00-05:00", "end": "2025-03-10T13:02Z"},
+                    window("13:03", "16:30"),
+                ],
+            }
+        ],
+    )
+    calendar = SessionCalendar.from_dict(snapshot)
+    assert calendar.sessions is not None
+    session = calendar.sessions[0]
+    assert session.start == datetime(2025, 3, 9, 22, tzinfo=UTC)
+    assert session.end == datetime(2025, 3, 10, 16, 30, tzinfo=UTC)
+    assert calendar.windows[0].start == calendar.coverage.start
+    assert calendar.windows[-1].end == calendar.coverage.end
+
+    path = csv_file(tmp_path, row("2025-03-10T13:01Z"), row("2025-03-10T13:03Z"))
+    dataset = prepare_csv(path, CONFIG, calendar)
+    assert dataset.issues == ()
+    restored = SessionCalendar.from_dict(json.loads(dataset.provenance_json)["calendar"])
+    assert restored == calendar
+    assert prepare_csv(path, CONFIG, restored).dataset_id == dataset.dataset_id
+    snapshot["sessions"][0]["trade_date"] = "2025-03-11"
+    reassigned = prepare_csv(path, CONFIG, SessionCalendar.from_dict(snapshot))
+    assert reassigned.dataset_id != dataset.dataset_id
+
+    path = csv_file(tmp_path, row("2025-03-10T13:01Z"))
+    incomplete = prepare_csv(path, CONFIG, calendar)
+    assert [(issue.code, issue.count, issue.start) for issue in incomplete.issues] == [
+        ("missing_candles", 1, "2025-03-10T13:03:00+00:00")
+    ]
+
+
+@pytest.mark.parametrize("dated", [False, True])
+def test_cli_import_inspect_and_replay(tmp_path: Path, dated: bool) -> None:
     path = csv_file(tmp_path, row("2025-03-10T13:00Z"), row("2025-03-10T13:01Z"))
     calendar = tmp_path / "schedule.json"
-    calendar.write_text(schedule(), encoding="utf-8")
+    snapshot = json.loads(schedule())
+    if dated:
+        snapshot.update(
+            schema_version=2,
+            sessions=[{"trade_date": "2025-03-10", "windows": snapshot.pop("windows")}],
+        )
+    calendar.write_text(json.dumps(snapshot), encoding="utf-8")
     aurum = [str(Path(executable).with_name("aurum")), "--db", str(tmp_path / "test.sqlite")]
     imported = subprocess.run(
         [
@@ -265,3 +312,8 @@ def test_cli_import_inspect_and_replay(tmp_path: Path) -> None:
     assert events[0]["available_at"] == "2025-03-10T13:01:00+00:00"
     assert events[0]["contract"] == CONTRACT.code
     assert events[1]["available_at"] == "2025-03-10T13:02:00+00:00"
+    if dated:
+        assert [event["trade_date"] for event in events] == ["2025-03-10", "2025-03-10"]
+    else:
+        assert all("trade_date" not in event for event in events)
+        assert dataset_id == "be2863eb8f8d69c29ace0411e0f37628694e05427e92bd611bd691ef821147bd"

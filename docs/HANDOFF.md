@@ -3,68 +3,67 @@
 ## Project Status
 
 - Current phase — Phase 1, repository and data foundation.
-- Current milestone — D01 is verified on synthetic fixtures and complete. Phase 1 continues with D02 and D03. External historical-data verification D04 is blocked.
+- Current milestone — D01 CSV import/replay and D02 dated exchange calendars are complete. D03 aggregation is next. D04 reconciliation with an authorized export remains blocked.
 - Current branch — `main`.
-- Last verified commit — `4aff6206a8cb5f51f8f988f93558d1c25fd2676b`. Later handoff-only changes may be ahead of this code checkpoint.
+- Last verified commit — the D02 implementation commit containing this handoff. A handoff-only update may be ahead of the code checkpoint.
 
 ## Current Objective
 
-- Task ID — D02.
-- Objective — Add versioned exchange trading-date semantics and normalize reviewed MGC session snapshots before aggregation.
-- Acceptance criteria — A new snapshot explicitly assigns trade dates to windows, represents separate windows within one session and models calendar exceptions. Existing v1 datasets retain their IDs, provenance and replay behavior. Tests cover evening opens, maintenance, weekends, early close, holiday closure, exceptional halt and US/Europe DST divergence. Identify which fixture information is synthetic and which rules were sourced from the exchange.
+- Task ID — D03.
+- Objective — Aggregate validated 1-minute candles into exchange-aware 5m, 15m, 1h, 4h and daily candles through a shared incremental path.
+- Acceptance criteria — Each published aggregate is complete and available only at its close. Calendar v2 supplies exchange trade dates and stable full session boundaries. Intraday buckets respect session windows and closures. Daily bars combine all expected open windows of a trade date. Partial export coverage and missing source candles cannot produce complete-looking aggregates. Replay and equivalent streaming inputs produce identical results. Document and test the chosen interval alignment and shortened-bucket policy.
 
 ## Completed Work
 
-- Initialized an empty Git repository and Python package. Saved the canonical numbered requirements, operating instructions, architecture, roadmap, ADRs, validation, known issues and changelog.
-- Implemented the CLI flow `import-csv` → `inspect` → `replay`. It handles a single dated, unadjusted MGC contract with 1-minute OHLCV per dataset. CSV bytes and the normalized calendar, source metadata, import settings, version, checksum and quality findings are retained.
-- Implemented deterministic tick conversion, timestamp handling with pinned timezone rules, contract and OHLCV checks, duplicate rejection, out-of-order sorting, calendar checks and coverage-based gap detection. Gaps block replay. Each emitted event carries the data kind, contract, stable ID and UTC close availability.
-- Verified persistence across connections and subprocesses, concurrent idempotent re-import, source blob deduplication and rollback after a simulated candle write failure. See `tests/test_data_pipeline.py` and `docs/VALIDATION.md`.
+- D01 — The CLI validates one dated unadjusted MGC contract with 1-minute OHLCV per CSV, preserves original bytes and immutable provenance in SQLite, and replays chronological candle-close events. Missing candles block replay. Source validation covers contract, prices, volume, calendar and UTC timestamps. See `src/aurum/market_data.py`, `src/aurum/storage.py` and `tests/test_data_pipeline.py`.
+- D02 — Calendar schema v2 groups full, UTC-normalized open windows by an explicit exchange trade date. The importer intersects the windows with dataset coverage and stores the full schedule. The CLI derives `trade_date` from each candle open for dated datasets. Legacy snapshots retain their serialized form and event shape. SQLite schema v1 required no migration.
+- D02 verification — `tests/test_exchange_calendar.py` and the integration tests cover evening opens, maintenance, weekends, split sessions, early closes, holiday closures, DST divergence, coverage clipping and dated replay. An SQLite dataset created by the D01 CLI had identical inspect, replay and re-import output after D02.
 
 ## Work In Progress
 
-- Current files for D02 — `src/aurum/exchange_calendar.py`, `src/aurum/market_data.py`, `src/aurum/storage.py`, `tests/test_data_pipeline.py` and README.
-- Implemented portions — V1 accepts an ordered schedule of half-open UTC windows and explicit coverage, without grouping windows by exchange trading date. The normalized calendar is part of the immutable dataset identity.
-- Remaining portions — D02 design and code are pending. D03 will aggregate completed 5m, 15m, 1h, 4h and daily bars through a shared incremental input path. Research strategy and service phases follow the roadmap.
+- Current files — D03 has no implementation. Start with `src/aurum/exchange_calendar.py`, `src/aurum/market_data.py` and `src/aurum/storage.py`. The planned aggregation module is `src/aurum/candles.py`.
+- Implemented foundations — `SessionCalendar.from_dict` reconstructs a stored calendar from dataset provenance. `sessions` holds full windows with their exchange dates for v2, and `windows` holds the importable intersections. `session_at` looks up the dated session for a covered candle open. `DatasetStore.replay` yields validated 1-minute `Candle` objects with `opened_at` and `available_at`.
+- Remaining portions — Set an explicit bucket policy, build the incremental aggregation and its replay entry point, then verify gap handling, session and bucket boundaries, close-time availability and parity. Structure detection starts after D03.
 
 ## Important Decisions
 
-- ADR-001 — Use a local SQLite v1 store with no external services for the initial data path.
-- ADR-002 — Require independently reviewed, caller-supplied windows covering the expected export range. Use pinned IANA timezone rules for CSV timestamp conversion.
-- ADR-003 — Preserve raw bytes and versioned identity, store integer ticks and block incomplete replay. Zero volume is a warning. Corrected inputs produce new dataset IDs.
-- Source of reference tick economics — COMEX Rulebook Chapter 120, linked in `docs/VALIDATION.md`. For effective calendar rules consult CME's product and trading-hours publications, linked in the architecture and README.
+- ADR-001 — Use local transactional SQLite for the data foundation.
+- ADR-002 and ADR-003 — Require independently reviewed calendars, preserve source bytes and versioned identity, and block incomplete replay.
+- ADR-004 — Preserve full session windows separately from clipped import coverage. Use explicit exchange trade dates without inferring them from civil dates or generic weekly rules. Keep the legacy calendar and replay format unchanged. Read the ADR before choosing aggregation boundaries.
+- Calendar authority — Regular hours and exchange trade-date conventions were checked against CME. Effective holiday and halt windows are supplied by the caller. See the source links in `docs/VALIDATION.md`.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized MGC sample or production-reviewed schedule was supplied. D04 requires both.
-- CAL-001 — Medium, open. Calendar snapshots currently depend on caller review and have no trading-date grouping.
-- DATA-002 — Medium, open. Exports omitting no-trade minutes are treated as incomplete under the current coverage rule.
-- DATA-003 — Medium, open. Imports buffer the CSV and normalized bars in memory. Use bounded export windows.
+- DATA-001 — High, blocked. The workspace has no authorized MGC export or production-reviewed schedule for reconciliation.
+- CAL-002 — Medium, open. The caller verifies effective schedule coverage and trade dates. The CLI currently ingests the supplied snapshot.
+- DATA-002 — Medium, open. A vendor export that omits no-trade minutes triggers gap detection under the current coverage rule.
+- DATA-003 — Medium, open. Imports buffer CSV bytes and normalized candles. Use bounded exports.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (25 cases), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (8 files), `.venv/bin/python -m pip check` and staged diff whitespace checks.
+- Passed — `.venv/bin/python -m pytest -q` (43), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (9 files) and `.venv/bin/python -m pip check`. Manual `cmp` checks confirmed compatibility with the previous checkpoint.
 - Failed — No outstanding failures.
-- Not run — Real market data reconciliation, production schedule checks, replay/stream comparison and all later strategy, backtest and live checks.
-- Limitations — All test market observations are synthetic. No trades, research performance or current Lucid account rules were validated.
+- Not run — Authorized historical reconciliation, production schedule validation, aggregate replay/stream parity and all later strategy, backtest and monitoring checks.
+- Limitations — Market observations and calendar exceptions in fixtures are synthetic. No strategy results or trade outcomes have been measured.
 
 ## Environment
 
-- Runtime — Python 3.12.7 on macOS arm64 and SQLite 3.45.3. SQLite 3.37+ is required.
-- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev]'`.
-- Required services — None for the current CLI. Keep local data in the ignored `data/` directory.
-- Missing configuration — Authorized historical CSV and the reviewed schedule for its exact period. No provider or alert credentials are needed for D02.
+- Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. SQLite 3.37+ is required.
+- Setup — `python3.12 -m venv .venv` and `.venv/bin/python -m pip install -e '.[dev]'`.
+- Required services — None for import and replay. Store local source files in the ignored `data/` directory.
+- Missing configuration — An authorized export and reviewed schedule for D04. Neither is required to test D03 with labeled synthetic fixtures.
 
 ## Immediate Next Actions
 
-1. Inspect the v1 calendar format and provenance hashing in `exchange_calendar.py` and `market_data.py`, plus the source identity and close-label tests. Verify the checkpoint with pytest.
-2. Check authoritative CME product/calendar references, define a versioned snapshot with explicit exchange trading dates and keep the v1 calendar representation stable for existing imports. Document what a snapshot can assert and how coverage clipping interacts with trade dates.
-3. Implement D02 and test weekend/maintenance exclusions, normal evening sessions, DST divergence, exceptions and old dataset replay. Update documentation and save the verified checkpoint before starting D03.
+1. Run the checkpoint suite. Read the D03 acceptance and inspect `TradingSession`, `SessionCalendar.session_at`, `Candle` and the replay iterator. Use the full v2 session windows for bucket anchoring.
+2. Specify interval alignment and the treatment of a final shortened intraday bucket. Separately model a scheduled early close and an export ending before a scheduled close. Decide how daily aggregation waits for every expected open minute across a halt.
+3. Implement a shared incremental consumer with tests for OHLCV, availability, missing input, duplicate or out-of-order delivery, coverage edges, DST, closures and replay/stream equivalence. Keep the existing raw replay output stable. Update the handoff after verification.
 
 ## Do Not Repeat
 
-- Repository initialization, instrument tick verification and the D01 pipeline are complete.
-- Avoid inferring closures from absent bars or trusting a generic weekly schedule for historical holiday and halt coverage.
-- Keep synthetic fixtures and unverified account assumptions out of empirical findings.
+- Repository initialization, the D01 data path and D02 dated calendar work are verified.
+- Avoid guessing exchange closures from absent bars or adding dates to legacy datasets from UTC or Chicago civil dates.
+- Keep synthetic fixtures and unverified account assumptions separate from empirical claims.
 
 ## Continuation Instruction
 

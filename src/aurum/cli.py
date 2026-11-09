@@ -51,18 +51,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe(args.dataset_id)))
         else:
             metadata = store.describe(args.dataset_id)
+            calendar = SessionCalendar.from_dict(metadata["provenance"]["calendar"])
             for candle in store.replay(args.dataset_id):
-                print(
-                    canonical_json(
-                        {
-                            "event": "candle_closed",
-                            "dataset_id": args.dataset_id,
-                            "event_id": f"{args.dataset_id}/{candle.opened_at.isoformat()}",
-                            "data_kind": metadata["provenance"]["data_kind"],
-                            **candle.as_dict(),
-                        }
-                    )
-                )
+                event = {
+                    "event": "candle_closed",
+                    "dataset_id": args.dataset_id,
+                    "event_id": f"{args.dataset_id}/{candle.opened_at.isoformat()}",
+                    "data_kind": metadata["provenance"]["data_kind"],
+                    **candle.as_dict(),
+                }
+                if calendar.sessions is not None:
+                    session = calendar.session_at(candle.opened_at)
+                    if session is None:
+                        raise ValueError("stored candle has no matching trading session")
+                    event["trade_date"] = session.trade_date.isoformat()
+                print(canonical_json(event))
     except (OSError, ValueError, OverflowError, csv.Error, sqlite3.Error) as exc:
         print(f"aurum: {exc}", file=sys.stderr)
         return 1

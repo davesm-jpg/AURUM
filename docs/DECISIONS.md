@@ -29,3 +29,13 @@
 - Rationale. The evidence needed for repeatable replay survives restarts and source revisions. Missing minutes cannot reach the research path.
 - Consequences. Identical re-imports are idempotent. Correcting source or calendar inputs yields a new dataset. Sparse exports that omit no-trade minutes need a future explicit policy.
 - Files. `src/aurum/instruments.py`, `src/aurum/market_data.py`, `src/aurum/storage.py`.
+
+## ADR-004 — Date full sessions independently of import coverage
+
+- Date 2026-11-09.
+- Context. A single exchange trade date can begin on a previous civil day and contain several open intervals. Clipping the source windows at import boundaries would lose the information needed to anchor and complete aggregate bars.
+- Alternatives. Infer the trade date from local time, store only clipped dated windows, or preserve full sessions with separately bounded coverage.
+- Decision. Calendar schema v2 preserves full UTC-normalized open windows under an explicit exchange trade date. Use coverage to constrain expected source bars. Preserve the legacy format and JSON identity for existing datasets.
+- Rationale. An authoritative schedule can assign holiday trade dates and exceptions. Full windows retain the information needed to distinguish partial coverage from a shortened exchange session.
+- Consequences. The caller supplies and reviews the schedule. Dated snapshots add the trade date at replay from provenance without a database migration. A legacy dataset needs a dated snapshot before it can support exchange-session aggregation.
+- Files. `src/aurum/exchange_calendar.py`, `src/aurum/cli.py`, `tests/test_exchange_calendar.py`, `tests/test_data_pipeline.py`.

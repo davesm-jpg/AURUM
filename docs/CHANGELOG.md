@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Exchange trading dates
+
+- Added versioned MGC schedules with explicit exchange trade dates, full session boundaries and split windows for halts.
+- Preserved legacy dataset IDs and replay output. Dated snapshots now add the trade date to candle-close replay.
+- Verified coverage clipping, regular session boundaries, DST, synthetic exceptions and compatibility against a database created by the previous checkpoint.
+
 ## 2026-11-08 — Historical data foundation
 
 - Initialized Git, the Python package and persistent project operating documents.
