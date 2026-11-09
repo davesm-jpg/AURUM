@@ -5,7 +5,7 @@
 - Current phase — Phase 2 market structure. D01–D03 and S01 are complete. D04 authorized source reconciliation remains blocked.
 - Current milestone — S01 confirmed pivots, BOS/MSS and persisted structure evidence.
 - Current branch — `main`.
-- Last verified commit — the S01 implementation commit containing this handoff.
+- Last verified commit — `26e2ac9ea8639e88eeae1c99ad6cb671a293c948`.
 
 ## Current Objective
 
