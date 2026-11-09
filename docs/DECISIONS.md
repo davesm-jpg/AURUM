@@ -157,3 +157,12 @@
 - Decision — Capture the applied cursor and read immutable pages. Stage deterministic replay evidence in a bounded private spool before publishing the run and events atomically.
 - Consequences — Calculation can overlap writes. Final writes remain serialized. The installed SQLite 3.45.3 falls in the documented WAL-reset bug range, so this change preserves the existing journal mode. [SQLite WAL documentation](https://sqlite.org/wal.html#the_wal_reset_bug)
 - Files — `src/aurum/api.py`, `src/aurum/monitoring.py`, `src/aurum/storage.py`.
+
+## ADR-017 — Journal observed market evidence separately from setup alerts
+
+- Date — 2026-11-09.
+- Context — The monitor calculated market evidence but persisted setup transitions only.
+- Alternatives — Reconstruct historical market structure at chart time or record evidence while applying each minute.
+- Decision — Persist the strategy step's evidence and context atomically with its applied minute. Keep existing monitor IDs and setup journal sequences.
+- Consequences — Charts can separate source confirmation from observation during gap recovery. Schema v6 leaves legacy applied observation times unset.
+- Files — `src/aurum/storage.py`, `src/aurum/strategy.py`, `src/aurum/monitoring.py`, `src/aurum/api.py`.

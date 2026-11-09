@@ -27,7 +27,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
-The dashboard reads immutable dataset candles, paginated evidence, saved reports and monitor health from SQLite through the API. Price charts use UTC candle closes and map events at or after their availability. The chart projector folds the selected run's causal prefix and ends each overlay at recorded retirement. Strategy-only plans appear as point references. The API supplies source and terminal event sequences. An optional bearer stays in the server-side proxy. The source selector keeps imported history separate from the monitor journal. The monitor chart captures applied and pending status in one short snapshot and reads immutable pages bounded by the captured checkpoint and preserves source counts per aggregate. A dedicated monitor audit lists actual observation times and alerts.
+The dashboard reads immutable dataset candles, paginated evidence, saved reports and monitor health from SQLite through the API. Price charts use UTC candle closes and map events at or after their availability. The chart projector folds the selected run's causal prefix and ends each overlay at recorded retirement. Strategy-only plans appear as point references. The API supplies source and terminal event sequences. An optional bearer stays in the server-side proxy. The source selector keeps imported history separate from the monitor journal. The monitor chart captures applied and pending status in one short snapshot and reads immutable pages bounded by the captured checkpoint and preserves source counts per aggregate. The monitor audit lists actual observation times and alerts. Market evidence and setup streams have independent sequences. Monitor overlays use the later of source confirmation and durable observation.
 
 ## Flow and invariants
 
@@ -56,13 +56,13 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `candles` uses `(dataset_id, opened_at)` as its primary time-series index. OHLC values are integer ticks. Contract identity is inherited from the dataset.
 - `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together. Replay and canonical serialization happen in a bounded private spool outside the write transaction.
 - `analysis_reports` stores content-addressed report definitions and results. Validation and resampled reports reference immutable backtest IDs. Assumed scenarios are reproducible without a dataset.
-- `monitor_runs`, `monitor_minutes`, `monitor_events` and `monitor_alerts` keep source definition, durable cursor, pending frames, transition audit and deduplicated in-app alerts. Advance of the cursor, applied minute and resulting events commit together.
+- `monitor_runs`, `monitor_minutes`, `monitor_events` and `monitor_alerts` keep source definition, durable cursor, pending frames, transition audit and deduplicated in-app alerts. Advance of the cursor, applied minute and resulting events commit together. Schema v6 adds `monitor_market_events` and nullable observed timestamps on applied minutes. Previous rows keep unknown observation times.
 - `notification_deliveries`, `notification_attempts` and `notification_cancellations` track claims, provider results, retries, expiry and queued cancellation. Destination keys are hashes. Tokens and webhook URLs remain in environment-managed configuration.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)
 
 ## Next boundaries
 
-Add a local API and dashboard for research and monitor state. Verify the normalized connector and delivery against authorized production configuration when available.
+Expand dashboard analytics and settings. Verify the normalized connector and delivery against authorized production configuration when available.
 
-Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.
+Forward paper outcome tracking and production validation remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

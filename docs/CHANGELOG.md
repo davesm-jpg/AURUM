@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Observed monitor evidence
+
+- Added atomic market evidence and context journaling with distinct source and observation times.
+- Added monitor overlays and higher-timeframe context based on recorded availability.
+
 ## 2026-11-09 — Shorter SQLite transactions
 
 - Released chart readers between bounded immutable pages and staged replay evidence before atomic publication.

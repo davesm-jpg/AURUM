@@ -3,12 +3,14 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 139 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
+- `.venv/bin/python -m pytest -q` passed 142 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
 - `.venv/bin/mypy .` passed across 54 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
+
+Monitor v6 tests verified prior identity, null legacy observation times, atomic market-evidence rollback and parity with historical detection. A recovered synthetic FVG confirmed at 13:15 appeared on the chart at its 13:17 observation, and the 13:15 context view remained unchanged.
 
 Synthetic contention tests paused chart aggregation during three monitor writes and verified the older snapshot remained fixed. Two concurrent replays published a single run, with a separate report write succeeding while they computed. Existing mid-write rollback tests passed.
 

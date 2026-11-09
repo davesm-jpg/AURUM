@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — U01 local research workspace, in progress.
 - Current branch — `main`.
-- Last verified commit — `b9791b9e861adc554ef00b52f349c66fada2875b`.
+- Last verified commit — `c0f862ae8226e1711e0417331e8593a205d5c9dd`.
 
 ## Current Objective
 
@@ -24,18 +24,19 @@
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
-- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance and independent selection. Verified using labeled synthetic fixtures.
+- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Verified using labeled synthetic fixtures.
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store remains at schema v5.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v6.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Persist monitor market evidence for chart overlays, expand analytics and versioned settings, and verify their mobile interactions. Forward paper reporting and production checks remain separate.
+- Remaining portions — Expand analytics and versioned settings, then verify the new views at desktop and mobile widths. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
 - ADR-004–009 — Use reviewed dates, completed bars, actual evidence availability and conservative paper fills.
 - ADR-010–012 — Keep holdout and assumptions separate, use an independent account ledger and preserve original dated prices.
+- ADR-017 — Market evidence records source close and observed time separately. Legacy applied minutes retain unknown observation times.
 - ADR-016 — Dashboard reads use bounded immutable pages. Replay computes before atomic publication so monitor writes can proceed.
 - ADR-013 — Journal raw data, process only the known chronological prefix, hold gaps across restart and latch conflicting duplicates. Gate in-app alerts to fresh eligible real-time observations.
 - Safety — Store only authorized market-data and channel credentials in environment variables. Never handle actual order execution or live brokerage accounts.
@@ -50,7 +51,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (139), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (142), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -64,9 +65,9 @@
 
 ## Immediate Next Actions
 
-1. Journal new monitor market evidence with original observed time and applied minute identity while preserving v5 monitor IDs. Leave unknown legacy observation times unset.
-2. Expose the observed prefix on the monitor chart and verify that gap recovery never backdates evidence.
-3. Expand versioned analytics and settings or begin forward paper reporting while production access remains pending.
+1. Review the immutable backtest trade and setup payloads and add net analytics and score calibration views with explicit sample counts.
+2. Expand versioned settings and test the resulting immutable backtest manifests.
+3. Implement forward paper outcomes and reports from the durable monitor journal, with a separate execution and evidence policy for late observations.
 
 ## Do Not Repeat
 
