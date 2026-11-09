@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Research analytics and reports
+
+- Added net backtest curves, rolling diagnostics, grouped outcomes, score bands, setup frequency and fixed-fill cost sensitivity.
+- Added dedicated chronological validation, Monte Carlo and paper account report views.
+
 ## 2026-11-09 — Observed monitor evidence
 
 - Added atomic market evidence and context journaling with distinct source and observation times.

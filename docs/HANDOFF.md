@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — U01 local research workspace, in progress.
 - Current branch — `main`.
-- Last verified commit — `c0f862ae8226e1711e0417331e8593a205d5c9dd`.
+- Last verified commit — `ef808c98aa57120ddccb49683b55c37e59405e63`.
 
 ## Current Objective
 
@@ -24,13 +24,13 @@
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
-- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Verified using labeled synthetic fixtures.
+- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Research analytics show closed-trade equity, drawdown, rolling diagnostics, groups, costs and experimental score bands. Saved validation, Monte Carlo and account results have dedicated views. Verified using labeled synthetic fixtures.
 
 ## Work In Progress
 
 - Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v6.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Expand analytics and versioned settings, then verify the new views at desktop and mobile widths. Forward paper reporting and production checks remain separate.
+- Remaining portions — Expand versioned experiment settings and report creation. Provider/channel runtime configuration stays in the CLI. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -51,7 +51,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (142), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (143), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls and three saved report views passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -65,8 +65,8 @@
 
 ## Immediate Next Actions
 
-1. Review the immutable backtest trade and setup payloads and add net analytics and score calibration views with explicit sample counts.
-2. Expand versioned settings and test the resulting immutable backtest manifests.
+1. Expand versioned experiment settings and test the resulting immutable backtest manifests. Keep existing API defaults and IDs reproducible.
+2. Add report creation for validation and assumed or resampled Monte Carlo using the existing report functions.
 3. Implement forward paper outcomes and reports from the durable monitor journal, with a separate execution and evidence policy for late observations.
 
 ## Do Not Repeat
