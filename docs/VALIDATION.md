@@ -3,12 +3,14 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 143 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
+- `.venv/bin/python -m pytest -q` passed 144 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
-- `.venv/bin/mypy .` passed across 55 source/test files.
+- `.venv/bin/mypy .` passed across 56 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
+
+Report API tests verified authorized creation, deterministic assumed scenarios, explicit synthetic account marks and validation with zero eligible candidates. The browser reopened a saved profile and created a distinct assumed Monte Carlo report with zero market observations.
 
 The API profile integration test reproduced the existing flat-request run ID, created a separate run for a changed gap rule, preserved the original response and rejected mixed or inconsistent settings. Frontend tests, typecheck and build passed.
 

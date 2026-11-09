@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Report creation
+
+- Added local creation forms and API endpoints for chronological validation, Monte Carlo and paper account ledgers.
+
 ## 2026-11-09 — Versioned experiment profiles
 
 - Added server-provided defaults, structured settings, full profile editing and reload of immutable run configurations.

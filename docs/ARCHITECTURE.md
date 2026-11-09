@@ -63,6 +63,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Expand versioned dashboard settings and report creation. Verify the normalized connector and delivery against authorized production configuration when available.
+Add forward paper outcomes and reports from the observed monitor journal. Verify the normalized connector and delivery against authorized production configuration when available.
 
 Forward paper outcome tracking and production validation remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

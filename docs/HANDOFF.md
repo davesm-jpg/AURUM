@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — U01 local research workspace, in progress.
+- Current milestone — F01 forward paper outcomes is next. U01 runtime settings remain in progress.
 - Current branch — `main`.
-- Last verified commit — `4ce03982718fcb9a27a5a86e1d47b9caa49bdf24`.
+- Last verified commit — `c111a6846f3ee6f7473dd718a061b379d5399cdd`.
 
 ## Current Objective
 
-- Task ID — U01.
-- Objective — Expose persisted research and monitor evidence through a local REST API and a React/Next.js dashboard.
-- Acceptance criteria — Market, candle, setup, run and report data are traceable to source and assumptions. Test the local API and dashboard with labeled fixtures and preserve data access boundaries.
+- Task ID — F01.
+- Objective — Track forward paper orders and outcomes from the observed monitor journal.
+- Acceptance criteria — Earliest fill follows actual observation, recovery cannot create a retroactive entry, replay is deterministic across restarts, and reports stay separate from historical backtests.
 
 ## Completed Work
 
@@ -24,13 +24,13 @@
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
-- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Research analytics show closed-trade equity, drawdown, rolling diagnostics, groups, costs and experimental score bands. Saved validation, Monte Carlo and account results have dedicated views. The paper form uses typed server defaults and can reload an immutable run profile. Verified using labeled synthetic fixtures.
+- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Research analytics show closed-trade equity, drawdown, rolling diagnostics, groups, costs and experimental score bands. Saved validation, Monte Carlo and account results have dedicated views. The paper form uses typed server defaults and can reload an immutable run profile. The dashboard creates validation, Monte Carlo and explicit paper ledger reports. Verified using labeled synthetic fixtures.
 
 ## Work In Progress
 
 - Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v6.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Add dashboard report creation and verify the saved-profile workflow in a browser. Provider/channel runtime configuration stays in the CLI. Forward paper reporting and production checks remain separate.
+- Remaining portions — Implement the forward paper consumer, outcome ledger and time-window reports. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -51,7 +51,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (143), Ruff lint/format, mypy (55 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls and three saved report views passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (144), Ruff lint/format, mypy (56 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls and three saved report views passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -65,9 +65,9 @@
 
 ## Immediate Next Actions
 
-1. Add local report creation for validation, Monte Carlo and a paper account ledger using the existing report functions.
-2. Verify the experiment editor and report creation in a browser using labeled fixtures.
-3. Implement forward paper outcomes and reports from the durable monitor journal, with a separate execution and evidence policy for late observations.
+1. Extend paper execution with an explicit observation-time eligibility boundary while preserving historical defaults. Test second-level arrival, costs and clock ordering.
+2. Persist and resume forward paper from applied monitor minutes. Define conservative interruption handling and separate synthetic verification.
+3. Add daily, weekly and monthly forward reports with drift and score diagnostics.
 
 ## Do Not Repeat
 
