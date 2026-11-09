@@ -21,9 +21,18 @@ from aurum.market_structure import (
     PivotRule,
     StructureConfig,
 )
+from aurum.monte_carlo import (
+    REFERENCE_WIN_RATES_BPS,
+    MonteCarloConfig,
+    SamplingMode,
+    WinRateScenario,
+)
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
+from aurum.research_reports import simulate_report, validate_runs
+from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
+from aurum.timestamps import minute_timestamp
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -90,6 +99,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         "backtest-summary", help="read a persisted paper backtest summary"
     )
     backtest_summary.add_argument("run_id")
+    validation = commands.add_parser("validate", help="compare chronological backtest samples")
+    validation.add_argument("run_ids", nargs="+")
+    validation.add_argument("--validation-start", type=minute_timestamp, required=True)
+    validation.add_argument("--holdout-start", type=minute_timestamp, required=True)
+    validation.add_argument("--embargo-minutes", type=int, default=0)
+    validation.add_argument("--minimum-selection-trades", type=int, default=20)
+    validation.add_argument("--bootstrap-draws", type=int, default=2_000)
+    validation.add_argument("--block-length", type=int, default=5)
+    validation.add_argument("--seed", type=int, default=42)
+    validation.add_argument("--walk-train-days", type=int, default=90)
+    validation.add_argument("--walk-test-days", type=int, default=30)
+    validation.add_argument("--extra-cost-cents", type=int, action="append")
+    monte_carlo = commands.add_parser("monte-carlo", help="simulate conditional equity paths")
+    monte_carlo.add_argument(
+        "--mode", type=SamplingMode, choices=SamplingMode, default=SamplingMode.SCENARIO
+    )
+    monte_carlo.add_argument("--backtest")
+    monte_carlo.add_argument("--paths", type=int, default=1_000)
+    monte_carlo.add_argument("--trades", type=int, default=1_000)
+    monte_carlo.add_argument("--seed", type=int, default=42)
+    monte_carlo.add_argument("--block-length", type=int, default=5)
+    monte_carlo.add_argument("--initial-equity-cents", type=int, default=2_500_000)
+    monte_carlo.add_argument("--loss-allowance-cents", type=int, default=100_000)
+    monte_carlo.add_argument("--win-rate-bps", type=int, action="append")
+    monte_carlo.add_argument("--gross-win-cents", type=int)
+    monte_carlo.add_argument("--gross-loss-cents", type=int)
+    monte_carlo.add_argument("--minimum-cost-cents", type=int)
+    monte_carlo.add_argument("--maximum-cost-cents", type=int)
+    report = commands.add_parser("report", help="read a persisted analysis report")
+    report.add_argument("report_id")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -130,6 +169,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe_backtest(_strategy_run(store, args, execution))))
         elif args.command == "backtest-summary":
             print(canonical_json(store.describe_backtest(args.run_id)))
+        elif args.command == "validate":
+            validation_config = ValidationConfig(
+                validation_start=args.validation_start,
+                holdout_start=args.holdout_start,
+                embargo_minutes=args.embargo_minutes,
+                minimum_selection_trades=args.minimum_selection_trades,
+                bootstrap_draws=args.bootstrap_draws,
+                block_length=args.block_length,
+                seed=args.seed,
+                walk_train_days=args.walk_train_days,
+                walk_test_days=args.walk_test_days,
+                extra_cost_per_contract_cents=tuple(args.extra_cost_cents or (0, 50, 100, 200)),
+            )
+            report_id = validate_runs(store, tuple(args.run_ids), validation_config)
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "monte-carlo":
+            print(canonical_json(store.describe_analysis(_monte_carlo(store, args))))
+        elif args.command == "report":
+            print(canonical_json(store.describe_analysis(args.report_id)))
         elif args.command in ("structure-events", "strategy-events", "backtest-events"):
             if (
                 args.command == "backtest-events"
@@ -318,3 +376,32 @@ def _strategy_run(
         economic=economic,
         execution=execution,
     )
+
+
+def _monte_carlo(store: DatasetStore, args: Namespace) -> str:
+    config = MonteCarloConfig(
+        paths=args.paths,
+        trades=args.trades,
+        seed=args.seed,
+        block_length=args.block_length,
+        initial_equity_cents=args.initial_equity_cents,
+        loss_allowance_cents=args.loss_allowance_cents,
+    )
+    payouts = {
+        name: value
+        for name, value in (
+            ("gross_win_cents", args.gross_win_cents),
+            ("gross_loss_cents", args.gross_loss_cents),
+            ("minimum_cost_cents", args.minimum_cost_cents),
+            ("maximum_cost_cents", args.maximum_cost_cents),
+        )
+        if value is not None
+    }
+    if args.mode is SamplingMode.SCENARIO:
+        rates = args.win_rate_bps or REFERENCE_WIN_RATES_BPS
+        scenarios = tuple(WinRateScenario(rate, **payouts) for rate in rates)
+    elif payouts or args.win_rate_bps:
+        raise ValueError("assumed payouts and win rates require scenario mode")
+    else:
+        scenarios = ()
+    return simulate_report(store, config, args.mode, scenarios, args.backtest)

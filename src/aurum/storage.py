@@ -22,7 +22,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -68,6 +68,14 @@ SCHEMA_V2 = (
         PRIMARY KEY (run_id, sequence)
     ) STRICT, WITHOUT ROWID""",
 )
+
+SCHEMA_V3 = """CREATE TABLE analysis_reports (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL,
+    definition TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL
+) STRICT"""
 
 
 class DatasetDescription(TypedDict):
@@ -332,6 +340,41 @@ class DatasetStore:
                     "structure_version": definition["structure_version"],
                 }
 
+    def save_analysis(
+        self, kind: str, definition: dict[str, object], result: dict[str, object]
+    ) -> str:
+        identity = canonical_json({"kind": kind, "definition": definition})
+        report_id = sha256(identity.encode()).hexdigest()
+        with self._connection(write=True) as db:
+            db.execute(
+                """INSERT INTO analysis_reports VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT (id) DO NOTHING""",
+                (
+                    report_id,
+                    kind,
+                    canonical_json(definition),
+                    canonical_json(result),
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+        return report_id
+
+    def describe_analysis(self, report_id: str) -> dict[str, object]:
+        with self._connection() as db:
+            if db.execute("PRAGMA user_version").fetchone()[0] >= 3:
+                row = db.execute(
+                    "SELECT * FROM analysis_reports WHERE id = ?", (report_id,)
+                ).fetchone()
+                if row is not None:
+                    return {
+                        "report_id": report_id,
+                        "kind": row["kind"],
+                        "definition": json.loads(row["definition"]),
+                        "result": json.loads(row["result"]),
+                        "created_at": row["created_at"],
+                    }
+        raise ValueError(f"unknown analysis report: {report_id}")
+
     @staticmethod
     def _structure_run(db: sqlite3.Connection, run_id: str) -> sqlite3.Row:
         if db.execute("PRAGMA user_version").fetchone()[0] >= 2:
@@ -410,4 +453,6 @@ class DatasetStore:
         if write and version < 2:
             for statement in SCHEMA_V2:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 2")
+        if write and version < 3:
+            db.execute(SCHEMA_V3)
+            db.execute("PRAGMA user_version = 3")

@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Chronological validation and simulations
+
+- Added purged chronological validation, embargo, pre-holdout walk-forward and independent selected holdout reporting.
+- Added fixed-seed block-bootstrap uncertainty, clustering and cost diagnostics, and conditional Monte Carlo paths.
+- Added SQLite v3 report persistence and repeatable analysis commands.
+
 ## 2026-11-09 — Auditable paper backtesting
 
 - Added next-eligible-minute fills, structural bracket and size rechecks, conservative ambiguity handling and explicit modeled costs.

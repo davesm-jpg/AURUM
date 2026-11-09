@@ -89,3 +89,13 @@
 - Rationale. This exposes eligibility, costs, realized slippage from gaps and intrabar uncertainty in the audit.
 - Consequences. Entry uses the next minute's open, which can share a UTC boundary with signal confirmation. Excursions on an intrabar exit omit the remainder of the exit minute. Gap losses can exceed the planned risk. Drawdown in B01 is closed-trade equity. Account simulations need separate intraday equity modeling.
 - Files. `src/aurum/execution.py`, `src/aurum/backtesting.py`, `src/aurum/performance.py`.
+
+## ADR-010 — Chronological selection and conditional simulations
+
+- Date 2026-11-09.
+- Context. Trade outcomes can cross sample boundaries and exhibit dependence. A scenario's assumed win rate is different from an observed strategy result.
+- Alternatives. Randomly split trades, compare all candidates on the final holdout, or separate chronological selection from final evaluation.
+- Decision. Purge observations whose outcome becomes available at or after the next split and embargo early decisions in the later split. Select by net validation expectancy with a configured minimum count and deterministic ties. Evaluate only the selected holdout. Limit walk-forward windows to pre-holdout data. Use circular moving-block bootstrap and Holm adjustment on candidate validation p-values. Expose fixed-fill cost sensitivity and separate seeded shuffle, block and assumed Monte Carlo modes.
+- Rationale. Split rules prevent automatic selection on the final holdout. Dependence diagnostics and explicit source labels make conditional outputs interpretable.
+- Consequences. The caller controls preregistration and can still reuse a holdout outside the tool. Cost sensitivity adjusts returns without rerunning fills. Bootstrap uncertainty depends on the sample and chosen block. Monte Carlo survival models a generic fixed floor at trade closes. SQLite v3 persists report definitions and results.
+- Files. `src/aurum/statistics.py`, `src/aurum/monte_carlo.py`, `src/aurum/research_reports.py`.

@@ -28,7 +28,7 @@ from aurum.market_structure import (
     Trend,
     TrendChange,
 )
-from aurum.storage import DatasetStore
+from aurum.storage import SCHEMA_VERSION, DatasetStore
 from aurum.strategy import SetupState, StrategyReplay
 from aurum.timestamps import MINUTE, minute_timestamp
 
@@ -343,6 +343,7 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         # Remove only the empty v2 tables in this synthetic test database.
         db.execute("DROP TABLE structure_events")
         db.execute("DROP TABLE structure_runs")
+        db.execute("DROP TABLE analysis_reports")
         db.execute("PRAGMA user_version = 1")
     assert list(store.replay(dataset_id)) == bars
     with sqlite3.connect(store.path) as db:
@@ -353,7 +354,7 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
     assert list(store.replay(dataset_id)) == bars
     assert store.describe(dataset_id) == metadata
     with sqlite3.connect(store.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone() == (2,)
+        assert db.execute("PRAGMA user_version").fetchone() == (SCHEMA_VERSION,)
 
 
 def test_structure_run_rollback_on_missing_data_or_mid_event_failure(tmp_path: Path) -> None:
@@ -510,3 +511,26 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert trade["gross_cents"] == -3300
     repeated = subprocess.run(args, check=True, capture_output=True, text=True)
     assert repeated.stdout == output.stdout
+    report = subprocess.run(
+        [
+            *aurum,
+            "validate",
+            run["run_id"],
+            "--validation-start",
+            "2025-03-10T13:30Z",
+            "--holdout-start",
+            "2025-03-10T14:07Z",
+            "--minimum-selection-trades",
+            "1",
+            "--bootstrap-draws",
+            "10",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    validation = json.loads(report.stdout)
+    assert validation["result"]["data_kind"] == "synthetic"
+    assert validation["result"]["selected_run_id"] == run["run_id"]
+    assert validation["result"]["candidates"][run["run_id"]]["validation"]["net_cents"] == -3560
+    assert validation["result"]["holdout"]["summary"]["trades"] == 0

@@ -18,6 +18,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `market_context.py`, `economic_events.py` | Completed higher-timeframe structure, regime, session and point-in-time event context |
 | `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
 | `execution.py`, `backtesting.py`, `performance.py` | Minute paper fill model, strategy replay orchestration and trade-level performance summaries |
+| `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
 ## Flow and invariants
@@ -32,20 +33,22 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 8. An evidence run also observes completed named-session minutes and daily bars. On an analysis close it evaluates previously mapped levels, structure and imbalances, links strictly earlier eligible sweeps to MSS, and then releases newly known price proxies. Full daily, weekly and named-period coverage is checked before publication. A gap or proxy is never retested by its confirming bar.
 9. Strategy replay advances the same evidence stream and completed 15m/1h/4h context before each setup decision. It writes state transitions with source evidence, explicit filters, costs and contextual uncertainty. Setup IDs are stable inside the versioned run. Historical restart recovery can reconstruct active state by replaying the input prefix. Rebuilding a completed definition returns its existing events.
 10. Backtest replay processes queued orders and existing positions against each minute before asking the strategy about that minute's close. Entry orders become eligible only after the signal, at the next eligible open under configured latency. The run stores setup transitions, order audit, completed trades and a terminal summary. The manifest records execution, cost and performance versions.
+11. Research reports join completed trades to their setup timestamps and scores. Split eligibility uses both decision and observed outcome times. Candidate ranking and walk-forward use pre-holdout data. Scenario simulations have their own assumed label, and resampling retains the original backtest provenance.
 
 ## Current database
 
-SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and v1 input data remains readable. The first write migrates v1 to v2 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
+SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and earlier input schemas remain readable. The first write applies pending migrations through v3 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
 
 - `source_blobs` keys raw CSV bytes by SHA-256 and deduplicates repeated source content.
 - `datasets` keys records by dataset ID and references the source blob. It stores versioned provenance with the normalized schedule, actual range, import time, count, quality issues and replay eligibility. The calendar format has its own independent version in provenance JSON.
 - `candles` uses `(dataset_id, opened_at)` as its primary time-series index. OHLC values are integer ticks. Contract identity is inherited from the dataset.
 - `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together.
+- `analysis_reports` stores content-addressed report definitions and results. Validation and resampled reports reference immutable backtest IDs. Assumed scenarios are reproducible without a dataset.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)
 
 ## Next boundaries
 
-Evaluate completed backtests with chronological selection and independent holdouts. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Model provider-specific paper-account rules separately from generic statistical paths. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.
