@@ -13,6 +13,8 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `storage.py` | Versioned transactional SQLite schema, immutable dataset records and chronological candle iterator |
 | `candles.py` | Incremental aggregation of chronological minute closes into exchange-aligned intraday and daily bars |
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |
+| `liquidity.py`, `liquidity_map.py`, `sessions.py` | Price-derived proxies, elapsed-window reclaims and timezone-aware source periods |
+| `imbalances.py`, `evidence.py` | FVG and IFVG lifecycle and shared causal structure/evidence replay |
 | `cli.py` | Import, inspection, replay, aggregation and persisted structure runs |
 
 ## Flow and invariants
@@ -24,6 +26,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 5. The repository reads a dataset in open-time order via an iterator. The CLI emits one stable ID per candle-close event. `available_at` is the historical candle close and models logical availability at close. Actual vendor delivery latency is a future input. Events keep their dated contract and historical/synthetic label. For dated schedules, the CLI resolves the exchange date at the candle open using the stored snapshot.
 6. The same incremental aggregator accepts each completed minute from replay or another chronological caller. It holds one running OHLCV bucket per selected timeframe. Intraday buckets restart at each full open window and daily bars combine all expected open windows for a trade date. A bucket publishes at its scheduled close only when every expected minute was observed. The CLI derives aggregate IDs from the dataset, aggregation version, timeframe and bucket open.
 7. Structure analysis consumes completed aggregates for one timeframe and contract. It processes breaks against previously confirmed levels before confirming new swings, then updates the classifications. Each event's UTC source opens can be joined to the input dataset's aggregate events for the run timeframe and version. The engine holds bounded pivot and ATR windows and the latest levels per scope.
+8. An evidence run also observes completed named-session minutes and daily bars. On an analysis close it evaluates previously mapped levels, structure and imbalances, links strictly earlier eligible sweeps to MSS, and then releases newly known price proxies. Full daily, weekly and named-period coverage is checked before publication. A gap or proxy is never retested by its confirming bar.
 
 ## Current database
 
@@ -38,6 +41,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Add liquidity proxies, sweeps and imbalance lifecycle events on the same aggregate-close path. Keep raw adapter events separate from normalized candles. A future streaming caller must handle data freshness, ordering and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Build the strategy and context engine on the typed evidence close path. Keep raw adapter events separate from normalized candles. A future streaming caller must handle data freshness, ordering and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

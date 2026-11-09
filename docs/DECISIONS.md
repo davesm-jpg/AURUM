@@ -59,3 +59,13 @@
 - Rationale. Event timestamps, strict ordering and exact integer thresholds make outputs reconstructable and avoid future data and same-candle eligibility. A candle crossing both directions can report two BOS events without guessing their order.
 - Consequences. This is rule version 1. Latest confirmed levels supersede older levels, and completed shortened bars count in the pivot and ATR windows. SQLite v2 adds atomic, idempotent structure-run persistence. The CLI defaults to close-based breaks and exposes each rule's thresholds.
 - Files. `src/aurum/market_structure.py`, `src/aurum/storage.py`, `src/aurum/cli.py`, `tests/test_market_structure.py`.
+
+## ADR-007 — Price-derived levels and explicit imbalance lifecycles
+
+- Date 2026-11-09.
+- Context. Sweeps and gaps are defined from observable bars. OHLCV cannot resolve intrabar trade order or the precise time a price spent beyond a level.
+- Alternatives. Infer event order or liquidity from wicks, publish on arbitrary price proximity, or record distinct causal lifecycle facts.
+- Decision. Register confirmed swings, equal and repeated pivots, rolling range edges and completed day/week/Asia/London extremes after the selected close. Use Chicago Sunday-to-Sunday coverage for complete weeks, Tokyo 09:00–15:00 for Asia and London 08:00–12:00 local for the London proxy. Require an actual penetration and configured closing reclaim. Separate timed-out breaks and unconfirmed reclaims. Keep strict adjacent three-candle FVGs, track first touch and maximum mitigation, and invert on the configured consecutive closes beyond the far edge. Only subsequent candles can retest the inverted zone.
+- Rationale. All decisions can be replayed from known completed candles. The rules keep observation duration distinct from actual intrabar duration. The latest valid earlier sweep can be linked to MSS without assuming same-bar order.
+- Consequences. Parameters and regional hours are research assumptions captured in the run. Pending session proxies publish at the next analysis close. A sweep can be linked to more than one structure scope. Range edges refresh on price changes. Level lifetimes are configurable in analysis bars. Under a coarse analysis timeframe only the latest rolling proxy per kind since the prior analysis close is published.
+- Files. `src/aurum/liquidity.py`, `src/aurum/liquidity_map.py`, `src/aurum/sessions.py`, `src/aurum/imbalances.py`, `src/aurum/evidence.py`.

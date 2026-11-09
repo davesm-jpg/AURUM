@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Liquidity and imbalance evidence
+
+- Added confirmed price proxies, mirrored penetration and reclaim events, and causal sweep-to-MSS links.
+- Added FVG and IFVG formation, mitigation, inversion, retest, reaction and expiration.
+- Added versioned evidence runs to the existing structure replay CLI and store.
+
 ## 2026-11-09 — Causal structure replay
 
 - Added independent internal and external confirmed pivots, structural classifications and versioned BOS/MSS rules.

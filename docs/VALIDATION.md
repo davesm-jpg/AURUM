@@ -3,11 +3,11 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 66 cases. Structure tests cover strict pivot confirmation and ties, independent scopes, mirrored MSS, all four break rules, prior ATR warmup, ambiguous wick breaks, historical prefix stability, run persistence and rollback. Calendar, data and aggregate tests cover source validation, exchange boundaries, DST, missing inputs and parity between CLI and incremental synthetic input.
+- `.venv/bin/python -m pytest -q` passed 82 cases. Evidence tests cover mirrored FVG/IFVG and sweep lifecycles, boundaries, regional DST, complete named periods, full-week eligibility, first-use ordering, prior sweep linkage and repeatable CLI runs. Earlier tests cover causal structure, transactional persistence, calendar, source validation, aggregation and synthetic replay parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
-- `.venv/bin/mypy .` passed across thirteen source/test files.
+- `.venv/bin/mypy .` passed across twenty-one source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
 All fixtures are explicitly synthetic. No authorized market dataset or production-reviewed schedule was used. The code trusts the stated provider, price basis, contract mapping and schedule coverage. Validation of real exchange-export semantics is D04. See [README](../README.md) for the format.

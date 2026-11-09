@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from aurum.candles import AggregateCandle, Timeframe
 from aurum.instruments import MgcContract
+from aurum.volatility import TrueRangeWindow
 
 STRUCTURE_VERSION = 1
 BASIS_POINTS = 10_000
@@ -337,8 +338,7 @@ class StructureEngine:
             _Structure(Scope.EXTERNAL, config.external),
         )
         self._previous: AggregateCandle | None = None
-        self._true_ranges: deque[int] = deque(maxlen=config.breaks.atr_period)
-        self._range_sum = 0
+        self._true_ranges = TrueRangeWindow(config.breaks.atr_period)
 
     def push(self, bar: AggregateCandle) -> tuple[StructureEvent, ...]:
         if bar.contract != self.contract or bar.timeframe is not self.timeframe:
@@ -346,29 +346,18 @@ class StructureEngine:
         if self._previous is not None and bar.opened_at < self._previous.available_at:
             raise ValueError("structure requires chronological, non-overlapping candle closes")
 
-        atr_period = self.config.breaks.atr_period
-        candle_range = bar.high_ticks - bar.low_ticks
         evidence = Displacement(
             bar.close_ticks - bar.open_ticks,
-            candle_range,
-            self._range_sum if len(self._true_ranges) == atr_period else None,
-            atr_period,
+            bar.high_ticks - bar.low_ticks,
+            self._true_ranges.ready_sum,
+            self._true_ranges.period,
         )
         events = tuple(
             event
             for scope in self._scopes
             for event in scope.push(bar, self.config.breaks, evidence)
         )
-        true_range = candle_range
-        if self._previous is not None:
-            last_close = self._previous.close_ticks
-            true_range = max(
-                candle_range, abs(bar.high_ticks - last_close), abs(bar.low_ticks - last_close)
-            )
-        if len(self._true_ranges) == atr_period:
-            self._range_sum -= self._true_ranges[0]
-        self._true_ranges.append(true_range)
-        self._range_sum += true_range
+        self._true_ranges.push(bar.high_ticks, bar.low_ticks, bar.close_ticks)
         self._previous = bar
         return events
 

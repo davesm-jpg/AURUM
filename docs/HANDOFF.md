@@ -2,69 +2,70 @@
 
 ## Project Status
 
-- Current phase — Phase 2 market structure. D01–D03 and S01 are complete. D04 authorized source reconciliation remains blocked.
-- Current milestone — S01 confirmed pivots, BOS/MSS and persisted structure evidence.
+- Current phase — Phase 2 market evidence is implemented. Phase 3 paper strategy S03 is the highest-priority unblocked research slice. D04 still needs an authorized source.
+- Current milestone — S02 causal liquidity, sweep, FVG and IFVG replay.
 - Current branch — `main`.
-- Last verified commit — `26e2ac9ea8639e88eeae1c99ad6cb671a293c948`.
+- Last verified commit — the S02 implementation commit containing this handoff.
 
 ## Current Objective
 
-- Task ID — S02.
-- Objective — Add causal liquidity proxies, sweeps, FVGs and IFVGs on the same aggregate-close path.
-- Acceptance criteria — Versioned detectors preserve source evidence, emit only at actual confirmation, and record state changes without rewriting past events. Tests cover mirrored definitions, ties and boundaries, intrabar ambiguity, chronology, expiry and replay. Required mapping and lifecycle requirements are in sections VI and VII of the specification.
+- Task ID — S03.
+- Objective — Build the versioned paper setup engine on completed bars and typed evidence. Include contextual features, mirrored state transitions, risk feasibility, scoring and persistence.
+- Acceptance criteria — All conditions are evaluated at their actual availability. The initial sweep → MSS → IFVG → reaction chain is mirrored and explainable, and experiment variants run independently. The strategy stores expiry, invalidation, state and configuration. Risk uses exact tick sizing and whole contracts. Context and score explain unknown inputs. Persist setup evidence with restart and replay tests.
 
 ## Completed Work
 
-- D01–D02 — The CLI validates, stores and replays dated unadjusted MGC 1m data with source bytes, immutable provenance, quality gates and full dated session windows. The older undated input and replay remain supported.
-- D03 — The shared `CandleAggregator` produces completed 5m, 15m, 1h, 4h and daily bars on dated exchange boundaries. It flags scheduled shortened intraday bars and omits incomplete buckets.
-- S01 — `src/aurum/market_structure.py` implements strict confirmed pivots, independent internal/external states, wick/close/ATR-buffered/displacement breaks and opposite-context MSS. It records pivot and confirmation times, source prices, prior ATR and body evidence, and the invalidation pivot for MSS.
-- S01 persistence — `structure` builds an immutable run, `structure-events` reads ordered evidence. SQLite v2 migrates on write and retains existing read paths. The exact rule configuration, source dataset and implementation versions determine run identity. Writes are atomic and repeatable.
-- S01 verification — `tests/test_market_structure.py` tests causal ordering, future mutations, both directions, ambiguous two-way wick breaks, prior ATR warmup, real CLI integration, migration and persistence rollback. A database from the original implementation retained identical replay and provenance after migration.
+- D01–D03 — Local CSV import and replay, explicit dated exchange windows and incremental completed 5m/15m/1h/4h/daily OHLCV. Raw data and versioned provenance are immutable. Missing expected minutes block replay. Older undated replay retains its event shape.
+- S01 — Causal confirmed pivots, internal/external structure, four BOS variants and qualifying MSS. The CLI builds deterministic, atomic SQLite runs. Prior schema migration preserves source datasets.
+- S02 — `EvidenceEngine` combines structure, price-derived liquidity and gaps on the same completed-bar stream. Mapping covers confirmed swings, equal/repeated levels, rolling boundaries, completed day/week and Asia/London extremes. The lifecycle distinguishes touch, penetration, reclaim, timeout, follow-through, invalidation and expiry. An earlier valid sweep can link to an MSS with elapsed bars and time.
+- S02 gaps — `ImbalanceEngine` detects strict adjacent three-candle FVGs and records formation, availability, depth, inversion, retest, reaction and expiry. It keeps original zone evidence. Consecutive closing invalidation and width thresholds are configurable.
+- S02 persistence — `aurum structure DATASET_ID --evidence` stores extra versioned evidence in existing run tables. `structure-events` reads chronological events. The source is labeled synthetic or historical throughout.
 
 ## Work In Progress
 
-- Current files — S02 implementation is pending. Reuse `src/aurum/market_structure.py`, `src/aurum/candles.py` and `src/aurum/storage.py`. Do not alter recorded S01 event semantics.
-- Implemented foundations — `StructureEngine.push` returns typed swing, trend and break events at aggregate closes. `CandleAggregator.consume` yields completed bars at requested intervals. Structure scope and pivot origin can feed a liquidity mapper after the confirming candle has been processed.
-- Remaining portions — Implement imbalance definitions and lifecycle, then confirmed liquidity mapping and sweeps. Integrate replay and versioning. S03 follows with contextual filters, strategy state, sizing and scoring.
+- Current files for S03 — `src/aurum/evidence.py`, `candles.py`, `market_structure.py`, `sessions.py` and `storage.py`. Strategy and context modules are pending.
+- Implemented portions — `EvidenceEngine.push` emits typed events at analysis closes. It owns selected and daily aggregators. `SweepStructureLink` includes the earlier eligible sweep and causal MSS. Gap and liquidity events carry stable IDs, source boundaries and availability.
+- Remaining portions — Expose the analysis bar and event batch without changing current outputs. Build point-in-time higher-timeframe, premium/discount, regime, session and event-risk context, then implement strategy states, score, sizing and persisted paper research. No live account work is in scope.
 
 ## Important Decisions
 
-- ADR-004/005 — Use explicit exchange dates and full open windows. Clip only input coverage, restart intraday buckets at open-window boundaries and label scheduled shortened bars. Daily bars span every open window.
-- ADR-006 — Strict pivots require every right bar, breaks use previously available pivots, and an MSS requires an opposing trend, a single direction and a valid structural invalidation. Do not assume intrabar order. Current defaults are internal 3/3, external 5/5 and close breaks.
-- Database — SQLite is local. Runs and events are persisted in one transaction. Older datasets remain readable and migrate on the next write. Source timestamps, run dataset and timeframe identify aggregates without storing copies.
+- ADR-004/005 — Full dated windows control boundaries. Intraday aggregation restarts after closures and labels scheduled shortened buckets. Daily aggregation requires all open windows.
+- ADR-006 — Breaks precede new pivots on each close. Structure version 1 uses strict extrema and prior ATR for volatility filters. Two-way wick breaks have no inferred intrabar order.
+- ADR-007 — Price proxies publish after the selected close, require complete source windows and cannot be swept by their confirming bar. Gap tests are adjacent. An inverse zone starts only when the original invalidates. OHLCV measures sweep observation time, with no knowledge of exact time beyond the level.
+- S02 parameters — Initial regional windows use Tokyo 09:00–15:00 and London 08:00–12:00 local. Full weeks need Chicago Sunday-to-Sunday coverage. They are explicit research assumptions.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized MGC export and reviewed schedule were supplied for real-data checks.
-- CAL-002 — Medium, open. The caller supplies exchange windows and confirms their effective coverage.
-- DATA-002/DATA-003 — Medium, open. Sparse no-trade exports block replay and imports buffer the source and normalized bars.
-- Live monitoring and execution modeling have yet to be implemented. The code is for paper research.
+- DATA-001 — High, blocked. No authorized MGC sample and applicable production-reviewed schedule were supplied.
+- CAL-002 — Medium, open. Effective exchange windows and dates are caller-reviewed inputs.
+- DATA-002/DATA-003 — Medium, open. Sparse minute exports fail the gap gate. Import buffers the source and bars.
+- No economic calendar provider, live market feed, paper execution or measured strategy performance exists.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (66), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (13 files), dependency checks and Git diff checks. Old SQLite migration passed byte comparisons and the SQLite integrity check.
+- Passed — `.venv/bin/python -m pytest -q` (82), Ruff lint and format, mypy (21 files), dependency and Git whitespace checks. Tests include evidence replay through the CLI and earlier SQLite migration.
 - Failed — None outstanding.
-- Not run — Authorized real-data reconciliation, production schedule validation, live provider parity and later strategy/backtest/simulation checks.
-- Limitations — All test observations are synthetic. No trading performance has been measured.
+- Not run — Real-data reconciliation, live parity, strategy backtest or account simulation.
+- Limitations — Every market test and exception fixture is synthetic. No empirical trading conclusion follows.
 
 ## Environment
 
 - Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. Requires SQLite 3.37+.
-- Setup — `python3.12 -m venv .venv` and `.venv/bin/python -m pip install -e '.[dev]'`.
-- Required services — None. Keep source files in ignored `data/`.
-- Missing configuration — Authorized historical export and applicable reviewed schedule for D04.
+- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev]'`.
+- Services — None for the CLI. Store authorized source files under ignored `data/`.
+- Missing configuration — Authorized market history, reviewed production schedule and reputable scheduled economic feed. S03 can proceed with synthetic and explicitly unknown context.
 
 ## Immediate Next Actions
 
-1. Rerun the checkpoint suite and read specification sections VI and VII. Start with the three-candle FVG rule, confirmation at candle C's close and mirrored inversion. Decide how to handle intervals separated by an exchange closure.
-2. Add imbalance lifecycle events with first touch, partial/full fill, inversion, retest and reaction. Implement causal liquidity levels and reclaim detection. Newly confirmed levels cannot be swept by the bar that confirms them.
-3. Add evidence replay and versioned persistence, exercise mirrored and anti-look-ahead fixtures, then update the handoff before starting S03.
+1. Rerun the suite and read specification sections VIII–X. Add the evidence frame interface with the completed analysis bar and batched events. Preserve `EvidenceEngine.push` output for existing consumers.
+2. Implement exact tick-based sizing and point-in-time context. Define mirrored setup transitions and choose expiration, invalidation and retest timing rules. Preserve variant selection and versioned assumptions.
+3. Exercise synthetic setups with matched and failed conditions, risk and chronology, then persist versioned strategy runs. Update the handoff with what was actually verified.
 
 ## Do Not Repeat
 
-- D01–D03 and S01 are verified. Keep the existing replay, aggregate and structure modes stable.
-- Do not use synthetic data as historical evidence or make profitability claims.
-- Do not infer hidden orders, holiday schedules or unavailable event order from candle data.
+- D01–D03 and S01–S02 are implemented and verified. Reuse existing data, time, volatility and evidence paths.
+- Do not infer hidden liquidity, intrabar trade order, holiday schedules or future event data.
+- Keep research alerts and hypothetical sizing separate from actual order execution.
 
 ## Continuation Instruction
 

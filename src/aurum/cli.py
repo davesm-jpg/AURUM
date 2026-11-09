@@ -3,9 +3,11 @@ import sqlite3
 import sys
 from argparse import ArgumentParser
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
+from aurum.evidence import DEFAULT_EVIDENCE_CONFIG
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, canonical_json, prepare_csv
@@ -67,6 +69,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--break-mode", type=BreakMode, choices=BreakMode, default=defaults.breaks.mode
     )
     structure.add_argument("--atr-period", type=int, default=defaults.breaks.atr_period)
+    structure.add_argument(
+        "--evidence", action="store_true", help="include liquidity and gap events"
+    )
+    structure.add_argument("--min-gap-ticks", type=int)
+    structure.add_argument("--inversion-closes", type=int)
     structure.add_argument("--atr-buffer-bps", type=int, default=defaults.breaks.atr_buffer_bps)
     structure.add_argument(
         "--min-body-atr-bps", type=int, default=defaults.breaks.minimum_body_atr_bps
@@ -107,7 +114,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.min_body_range_bps,
                 ),
             )
-            run = store.build_structure_run(args.dataset_id, args.timeframe, structure_config)
+            evidence = None
+            overrides = {
+                name: value
+                for name, value in (
+                    ("min_width_ticks", args.min_gap_ticks),
+                    ("inversion_closes", args.inversion_closes),
+                )
+                if value is not None
+            }
+            if args.evidence:
+                evidence = replace(
+                    DEFAULT_EVIDENCE_CONFIG,
+                    imbalances=replace(DEFAULT_EVIDENCE_CONFIG.imbalances, **overrides),
+                )
+            elif overrides:
+                raise ValueError("gap settings require --evidence")
+            run = store.build_structure_run(
+                args.dataset_id, args.timeframe, structure_config, evidence=evidence
+            )
             print(canonical_json(store.describe_structure_run(run)))
         elif args.command == "structure-events":
             for event in store.structure_events(args.run_id):

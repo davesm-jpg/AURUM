@@ -368,3 +368,26 @@ def test_structure_run_rollback_on_missing_data_or_mid_event_failure(tmp_path: P
     with sqlite3.connect(store.path) as db:
         assert db.execute("SELECT count(*) FROM structure_runs").fetchone() == (0,)
         assert db.execute("SELECT count(*) FROM structure_events").fetchone() == (0,)
+
+
+def test_evidence_replay_links_only_an_earlier_sweep_to_mss(tmp_path: Path) -> None:
+    store, dataset_id = prepare_synthetic_replay(tmp_path)
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    args = [*aurum, "structure", dataset_id, "--internal-pivot", "1", "1", "--evidence"]
+    run = subprocess.run(args, check=True, capture_output=True, text=True)
+    manifest = json.loads(run.stdout)
+    run_id = manifest["run_id"]
+    assert manifest["evidence_version"] == 1
+    assert manifest["evidence_config"]["imbalances"]["min_width_ticks"] == 1
+    events = list(store.structure_events(run_id))
+    assert any(event["event"] == "liquidity_level_mapped" for event in events)
+    (link,) = [event for event in events if event["event"] == "liquidity_sweep_mss_linked"]
+    assert link["elapsed_bars"] == 3
+    assert link["elapsed_seconds"] == 900
+    assert link["confirmed_at"] == (START + 50 * MINUTE).isoformat()
+    alternate = subprocess.run(
+        [*args, "--min-gap-ticks", "3"], check=True, capture_output=True, text=True
+    )
+    assert json.loads(alternate.stdout)["run_id"] != run_id
+    same = subprocess.run(args, check=True, capture_output=True, text=True)
+    assert same.stdout == run.stdout
