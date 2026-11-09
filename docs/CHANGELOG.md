@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Completed candle aggregation
+
+- Added incremental 5m, 15m, 1h, 4h and daily OHLCV from dated one-minute data.
+- Added the `aggregate` command with versioned event IDs, exchange trade dates, source-minute counts and shortened-bucket flags.
+- Verified coverage, closures, gaps and replay parity using synthetic inputs.
+
 ## 2026-11-09 — Exchange trading dates
 
 - Added versioned MGC schedules with explicit exchange trade dates, full session boundaries and split windows for halts.

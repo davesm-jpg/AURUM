@@ -39,3 +39,13 @@
 - Rationale. An authoritative schedule can assign holiday trade dates and exceptions. Full windows retain the information needed to distinguish partial coverage from a shortened exchange session.
 - Consequences. The caller supplies and reviews the schedule. Dated snapshots add the trade date at replay from provenance without a database migration. A legacy dataset needs a dated snapshot before it can support exchange-session aggregation.
 - Files. `src/aurum/exchange_calendar.py`, `src/aurum/cli.py`, `tests/test_exchange_calendar.py`, `tests/test_data_pipeline.py`.
+
+## ADR-005 — Anchor aggregates to open windows and session close
+
+- Date 2026-11-09.
+- Context. Import coverage, early closes and halts can cut through nominal candle intervals.
+- Alternatives. Use UTC clock buckets, use one clock anchored to the full session across a halt, or anchor intraday buckets to the open windows.
+- Decision. Start 5m, 15m, 1h and 4h buckets at the full open-window start and reset at the next window. Publish the shortened final bucket at the window close when all of its expected minutes exist and flag it as shortened. Combine all open windows for daily bars. Require the scheduled closing minute and every expected open minute, independent of export coverage.
+- Rationale. Bucket boundaries are reproducible across imports and intraday bars do not bridge a closure. The shortened flag lets downstream research select which bars qualify.
+- Consequences. Chart boundaries may differ from vendor clock buckets, especially after a halt. Historical replay rejects a dataset with gaps. The incremental consumer rejects disordered input and suppresses any bucket missing an expected minute.
+- Files. `src/aurum/candles.py`, `src/aurum/cli.py`, `tests/test_candles.py`.

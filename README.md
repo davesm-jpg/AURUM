@@ -47,8 +47,11 @@ This **synthetic schema example** covers two minutes of a full session.
   --data-kind historical --price-basis unadjusted
 .venv/bin/aurum --db data/aurum.sqlite inspect DATASET_ID
 .venv/bin/aurum --db data/aurum.sqlite replay DATASET_ID
+.venv/bin/aurum --db data/aurum.sqlite aggregate DATASET_ID --timeframe 5m --timeframe 1d
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
+
+Aggregation requires a dated calendar. Omit `--timeframe` to emit all supported intervals (5m, 15m, 1h, 4h and 1d). Intraday buckets start at each open window and restart after closures. When an open window ends inside a bucket, a complete shorter bar is emitted with `shortened: true`. Daily bars combine all open windows on the trade date. Every published aggregate contains all expected source minutes and is emitted at its scheduled close. Export boundaries do not shorten a bucket.
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.

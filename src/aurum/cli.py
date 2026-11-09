@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from pathlib import Path
 
+from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, canonical_json, prepare_csv
@@ -32,6 +33,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     inspect.add_argument("dataset_id")
     replay = commands.add_parser("replay", help="emit chronological candle-close events as JSONL")
     replay.add_argument("dataset_id")
+    aggregate = commands.add_parser("aggregate", help="emit completed higher-timeframe candles")
+    aggregate.add_argument("dataset_id")
+    aggregate.add_argument("--timeframe", type=Timeframe, choices=Timeframe, action="append")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -52,6 +56,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             metadata = store.describe(args.dataset_id)
             calendar = SessionCalendar.from_dict(metadata["provenance"]["calendar"])
+            if args.command == "aggregate":
+                contract = MgcContract(str(metadata["provenance"]["contract"]))
+                timeframes = tuple(args.timeframe or Timeframe)
+                aggregator = CandleAggregator(calendar, contract, timeframes)
+                for candle in store.replay(args.dataset_id):
+                    for bar in aggregator.push(candle):
+                        print(
+                            canonical_json(
+                                {
+                                    "event": "aggregate_closed",
+                                    "dataset_id": args.dataset_id,
+                                    "event_id": (
+                                        f"{args.dataset_id}/aggregate-v{AGGREGATION_VERSION}"
+                                        f"/{bar.timeframe}/{bar.opened_at.isoformat()}"
+                                    ),
+                                    "data_kind": metadata["provenance"]["data_kind"],
+                                    **bar.as_dict(),
+                                }
+                            )
+                        )
+                return 0
             for candle in store.replay(args.dataset_id):
                 event = {
                     "event": "candle_closed",
