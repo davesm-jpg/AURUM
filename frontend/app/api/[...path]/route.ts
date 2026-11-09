@@ -27,6 +27,9 @@ async function proxy(request: Request, { params }: Params) {
   const headers = new Headers();
   const token = process.env.AURUM_API_TOKEN;
   if (token) headers.set("Authorization", "Bearer " + token);
+  const lastEvent = request.headers.get("last-event-id");
+  if (lastEvent && /^\d+$/.test(lastEvent))
+    headers.set("Last-Event-ID", lastEvent);
   if (request.method === "POST")
     headers.set("Content-Type", "application/json");
   try {

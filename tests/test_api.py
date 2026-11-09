@@ -360,6 +360,8 @@ def test_recovered_synthetic_monitor_evidence_uses_observed_time_on_chart(tmp_pa
     send(10, 17)
     with http.TestClient(api.create_app(store)) as client:
         root = f"/api/monitors/{monitor.monitor_id}"
+        assert client.get(root + "/stream", headers={"Last-Event-ID": "-1"}).status_code == 422
+        assert client.get(root + "/stream", params={"mode": "unknown"}).status_code == 422
         source_close = (start + 15 * MINUTE).isoformat()
         observed = (start + 17 * MINUTE).isoformat()
         (gap,) = [

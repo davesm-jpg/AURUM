@@ -49,7 +49,15 @@ export function useMonitorChart(
     const controller = new AbortController();
     const init = { signal: controller.signal };
     let timer: ReturnType<typeof setTimeout>;
+    let loading = false;
+    let queued = false;
     async function load() {
+      if (loading) {
+        queued = true;
+        return;
+      }
+      loading = true;
+      clearTimeout(timer);
       try {
         const [chart, journal, market, alerts] = await Promise.all([
           api<MonitorChart>(chartKey, init),
@@ -68,12 +76,22 @@ export function useMonitorChart(
       } catch (error) {
         if (controller.signal.aborted) return;
         setFailure({ key: chartKey, message: (error as Error).message });
+      } finally {
+        loading = false;
       }
-      timer = setTimeout(() => void load(), 15000);
+      if (queued) {
+        queued = false;
+        void load();
+      } else {
+        timer = setTimeout(() => void load(), 15000);
+      }
     }
     void load();
+    const stream = new EventSource("/api/" + key + "/stream?mode=checkpoint");
+    stream.addEventListener("checkpoint", () => void load());
     return () => {
       controller.abort();
+      stream.close();
       clearTimeout(timer);
     };
   }, [chartKey, key, refresh]);

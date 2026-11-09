@@ -36,7 +36,7 @@ from aurum.forward import (
     list_forward_runs,
     register_forward,
 )
-from aurum.instruments import MGC, MgcContract
+from aurum.instruments import MAX_SQLITE_INTEGER, MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.monitoring import (
     applied_minute_batches,
@@ -379,13 +379,37 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     async def stream(
         request: Request,
         monitor_id: RecordId,
-        after: Annotated[int, Query(ge=0)] = 0,
+        after: Annotated[int, Query(ge=0, le=MAX_SQLITE_INTEGER)] = 0,
+        last_event_id: Annotated[
+            int | None, Header(alias="Last-Event-ID", ge=0, le=MAX_SQLITE_INTEGER)
+        ] = None,
+        mode: Literal["events", "checkpoint"] = "events",
     ) -> StreamingResponse:
         await asyncio.to_thread(describe_monitor, store, monitor_id)
 
         async def chunks() -> AsyncIterator[str]:
-            sequence = after
+            sequence = max(after, last_event_id or 0)
+            previous = None
             while not await request.is_disconnected():
+                if mode == "checkpoint":
+                    status = await asyncio.to_thread(describe_monitor, store, monitor_id)
+                    state = {
+                        field: status[field]
+                        for field in (
+                            "last_applied_open",
+                            "state",
+                            "pending_minutes",
+                            "connected",
+                            "fault",
+                        )
+                    }
+                    if state != previous:
+                        yield f"event: checkpoint\ndata: {canonical_json(state)}\n\n"
+                        previous = state
+                    else:
+                        yield ": aurum\n\n"
+                    await asyncio.sleep(1)
+                    continue
                 batch = await asyncio.to_thread(
                     _events, store, monitor_id, sequence, 100, monitor=True
                 )
