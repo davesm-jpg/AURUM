@@ -68,6 +68,10 @@ This **synthetic schema example** covers two minutes of a full session.
   --as-of 2025-03-10T13:00Z --current MGC-2025-04
 .venv/bin/aurum --db data/aurum.sqlite continuous data/series-plan.json
 .venv/bin/aurum --db data/aurum.sqlite continuous-bars REPORT_ID
+.venv/bin/aurum --db data/aurum.sqlite monitor-replay DATASET_ID
+.venv/bin/aurum --db data/aurum.sqlite monitor-status MONITOR_ID
+.venv/bin/aurum --db data/aurum.sqlite monitor-events MONITOR_ID
+.venv/bin/aurum --db data/aurum.sqlite monitor-alerts MONITOR_ID
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
@@ -95,5 +99,9 @@ Use `--consistency-bps 5000` for the evaluation add-on profile and supply an exp
 The contract catalog JSON contains `source`, `version`, `data_kind`, `listings` and optional `activity`. A listing uses `contract`, `first_trade_at`, `last_trade_at` and `known_at`. An activity row uses `contract`, `period_start`, `period_end`, `available_at` and volume or open interest. Roll decisions use only comparable periods available at `--as-of`. Supply independently reviewed listing and expiry timestamps. [CME expiration calendar](https://www.cmegroup.com/tools-information/calendars/expiration-calendar.html)
 
 A continuous plan contains `basis` (`unadjusted` or `forward_adjusted`) and ordered `segments` with `dataset_id`, `start` and `end`. Forward adjustment requires `reference_open` for each successor, identifying a completed overlapping minute before the switch. Source calendars and provenance must be compatible. Output separates research OHLC from the dated unadjusted source candle.
+
+Install `.[stream]` for `monitor WSS_URL --calendar SCHEDULE --contract MGC-YYYY-MM --source NAME --feed-status real_time`. Use the status supplied by the authorized provider. The normalized JSON frame has `event: candle_closed`, `contract`, `opened_at`, integer OHLC fields with the `_ticks` suffix and integer `volume`. An optional `source_status` must match the feed configuration. Pass a token variable name with `--token-env` when needed. The reviewed coverage determines the first expected open minute.
+
+The monitor retains pending and applied minutes and reconstructs its research state from durable data on restart. A gap can be filled by ordered arrivals or by an optional `--backfill-url` returning the normalized CSV schema for the requested `contract`, `start` and `end`. Recovered, delayed and simulated setups remain in the event journal. The in-app alert queue requires a fresh real-time close outside a known gap. A conflicting duplicate latches an integrity fault for the monitor run.
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.

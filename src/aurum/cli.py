@@ -1,9 +1,11 @@
 import csv
+import signal
 import sqlite3
 import sys
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import asdict, replace
+from datetime import datetime
 from pathlib import Path
 
 from aurum.account_reports import simulate_account_ledger
@@ -13,8 +15,9 @@ from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
-from aurum.exchange_calendar import SessionCalendar
+from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
+from aurum.feed_frames import FeedFrame
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import (
@@ -31,6 +34,13 @@ from aurum.market_structure import (
     PivotRule,
     StructureConfig,
 )
+from aurum.monitoring import (
+    MarketMonitor,
+    MonitorConfig,
+    describe_monitor,
+    monitor_alerts,
+    monitor_events,
+)
 from aurum.monte_carlo import (
     REFERENCE_WIN_RATES_BPS,
     MonteCarloConfig,
@@ -39,11 +49,12 @@ from aurum.monte_carlo import (
     WinRateScenario,
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
-from aurum.providers import FileHistorySource, HttpsHistorySource, SourceFormat
+from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, SourceFormat
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
+from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
 from aurum.timestamps import minute_timestamp
 
 
@@ -174,6 +185,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     account.add_argument("--daily-loss-cents", type=int)
     account.add_argument("--allow-intraday-payouts", action="store_true")
 
+    monitor = commands.add_parser("monitor", help="consume an authorized normalized WebSocket feed")
+    _research_options(monitor, dataset_argument=False)
+    monitor.add_argument("endpoint")
+    monitor.add_argument("--calendar", type=Path, required=True)
+    monitor.add_argument("--contract", type=MgcContract, required=True)
+    monitor.add_argument("--source", required=True)
+    monitor.add_argument(
+        "--feed-status",
+        type=FeedStatus,
+        choices=(FeedStatus.REAL_TIME, FeedStatus.DELAYED, FeedStatus.SIMULATED),
+        required=True,
+    )
+    monitor.add_argument("--token-env")
+    monitor.add_argument("--backfill-url")
+    monitor.add_argument("--backfill-token-env")
+    monitor.add_argument("--stale-seconds", type=int, default=90)
+    monitor.add_argument("--max-frames", type=int)
+    monitor.add_argument(
+        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
+    )
+    monitor_replay = commands.add_parser(
+        "monitor-replay", help="exercise the monitor with a saved dataset"
+    )
+    _research_options(monitor_replay)
+    monitor_replay.add_argument(
+        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
+    )
+    for name in ("monitor-status", "monitor-events", "monitor-alerts"):
+        command = commands.add_parser(name)
+        command.add_argument("monitor_id")
+
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
     try:
@@ -202,6 +244,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe_analysis(save_series(store, plan))))
         elif args.command == "continuous-bars":
             for event in replay_series(store, args.report_id):
+                print(canonical_json(event))
+        elif args.command == "monitor":
+            print(canonical_json(_monitor_live(store, args)))
+        elif args.command == "monitor-replay":
+            print(canonical_json(_monitor_replay(store, args)))
+        elif args.command == "monitor-status":
+            print(canonical_json(describe_monitor(store, args.monitor_id)))
+        elif args.command in ("monitor-events", "monitor-alerts"):
+            reader = monitor_events if args.command == "monitor-events" else monitor_alerts
+            for event in reader(store, args.monitor_id):
                 print(canonical_json(event))
         elif args.command == "inspect":
             print(canonical_json(store.describe(args.dataset_id)))
@@ -316,8 +368,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _research_options(parser: ArgumentParser) -> None:
-    parser.add_argument("dataset_id")
+def _research_options(parser: ArgumentParser, *, dataset_argument: bool = True) -> None:
+    if dataset_argument:
+        parser.add_argument("dataset_id")
     parser.add_argument(
         "--timeframe", type=Timeframe, choices=Timeframe, default=Timeframe.FIVE_MINUTES
     )
@@ -513,3 +566,69 @@ def _import_history(store: DatasetStore, args: Namespace) -> str:
     else:
         source = HttpsHistorySource(args.url, args.format, args.token_env)
     return store.save(prepare_history(source, config, calendar))
+
+
+def _monitor_live(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
+    source = WebSocketSource(args.endpoint, args.feed_status, args.token_env)
+    config = MonitorConfig(
+        args.source,
+        args.feed_status,
+        stale_seconds=args.stale_seconds,
+        timeframe=args.timeframe,
+        source_origin=source.origin,
+        source_fingerprint=source.fingerprint,
+    )
+    instance = MarketMonitor(
+        store,
+        calendar,
+        args.contract,
+        config,
+        _structure_config(args),
+        replace(DEFAULT_STRATEGY_CONFIG, variant=args.variant),
+        _evidence_config(args),
+    )
+    backfill = (
+        HttpsGapBackfill(args.backfill_url, args.backfill_token_env) if args.backfill_url else None
+    )
+    print(f"aurum: paper monitor {instance.monitor_id}", file=sys.stderr)
+    previous = signal.signal(signal.SIGTERM, _stop_monitor)
+    try:
+        return run_stream(instance, source, backfill=backfill, max_frames=args.max_frames)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _stop_monitor(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
+
+
+def _monitor_replay(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    dataset = store.describe(args.dataset_id)
+    if not dataset["replayable"]:
+        raise ValueError("replay blocked because expected candles are missing")
+    provenance = dataset["provenance"]
+    calendar = SessionCalendar.from_dict(provenance["calendar"])
+    mode = FeedStatus.SIMULATED if provenance["data_kind"] == "synthetic" else FeedStatus.HISTORICAL
+    contract = MgcContract(str(provenance["contract"]))
+    config = MonitorConfig(f"replay:{args.dataset_id}", mode, timeframe=args.timeframe)
+    instance = MarketMonitor(
+        store,
+        calendar,
+        contract,
+        config,
+        _structure_config(args),
+        replace(DEFAULT_STRATEGY_CONFIG, variant=args.variant),
+        _evidence_config(args),
+    )
+    existing = describe_monitor(store, instance.monitor_id)
+    expected = existing["next_expected_open"]
+    if expected is None:
+        return existing
+    start = datetime.fromisoformat(str(expected))
+    end = datetime.fromisoformat(dataset["last_close"])
+    instance.set_connection(True, start)
+    for batch in store.replay_batches(args.dataset_id, TradingWindow(start, end)):
+        for candle in batch:
+            instance.ingest(FeedFrame.from_replay(candle, mode, candle.available_at))
+    return instance.set_connection(False, end)

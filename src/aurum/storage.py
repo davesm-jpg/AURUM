@@ -22,7 +22,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -77,6 +77,44 @@ SCHEMA_V3 = """CREATE TABLE analysis_reports (
     created_at TEXT NOT NULL
 ) STRICT"""
 
+SCHEMA_V4 = (
+    """CREATE TABLE monitor_runs (
+        id TEXT PRIMARY KEY NOT NULL,
+        definition TEXT NOT NULL,
+        state TEXT NOT NULL,
+        connected INTEGER NOT NULL CHECK (connected IN (0, 1)),
+        next_open TEXT,
+        last_applied TEXT,
+        last_received TEXT,
+        checked_at TEXT,
+        fault TEXT
+    ) STRICT""",
+    """CREATE TABLE monitor_minutes (
+        run_id TEXT NOT NULL REFERENCES monitor_runs(id),
+        opened_at TEXT NOT NULL,
+        candle TEXT NOT NULL,
+        raw BLOB NOT NULL,
+        received_at TEXT NOT NULL,
+        source_status TEXT NOT NULL,
+        applied INTEGER NOT NULL CHECK (applied IN (0, 1)),
+        PRIMARY KEY (run_id, opened_at)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE INDEX monitor_pending ON monitor_minutes(run_id, opened_at) WHERE applied = 0""",
+    """CREATE TABLE monitor_events (
+        run_id TEXT NOT NULL REFERENCES monitor_runs(id),
+        sequence INTEGER NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (run_id, sequence)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE TABLE monitor_alerts (
+        run_id TEXT NOT NULL REFERENCES monitor_runs(id),
+        alert_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (run_id, alert_id)
+    ) STRICT, WITHOUT ROWID""",
+)
+
 
 class DatasetDescription(TypedDict):
     dataset_id: str
@@ -98,7 +136,7 @@ class DatasetStore:
         self.path = path
 
     def save(self, dataset: PreparedDataset) -> str:
-        with self._connection(write=True) as db:
+        with self.connection(write=True) as db:
             exists = db.execute("SELECT 1 FROM datasets WHERE id = ?", (dataset.dataset_id,))
             if exists.fetchone() is not None:
                 return dataset.dataset_id
@@ -143,7 +181,7 @@ class DatasetStore:
         return dataset.dataset_id
 
     def describe(self, dataset_id: str) -> DatasetDescription:
-        with self._connection() as db:
+        with self.connection() as db:
             row = self._dataset(db, dataset_id)
             return {
                 "dataset_id": row["id"],
@@ -157,7 +195,7 @@ class DatasetStore:
             }
 
     def source_bytes(self, dataset_id: str) -> bytes:
-        with self._connection() as db:
+        with self.connection() as db:
             row = self._dataset(db, dataset_id)
             source = db.execute(
                 "SELECT raw FROM source_blobs WHERE sha256 = ?", (row["source_sha256"],)
@@ -165,8 +203,32 @@ class DatasetStore:
             return bytes(source["raw"])
 
     def replay(self, dataset_id: str, *, span: TradingWindow | None = None) -> Iterator[Candle]:
-        with self._connection() as db:
+        with self.connection() as db:
             yield from self._replay(db, self._dataset(db, dataset_id), span=span)
+
+    def replay_batches(
+        self, dataset_id: str, span: TradingWindow, batch_size: int = 1_000
+    ) -> Iterator[tuple[Candle, ...]]:
+        """Read immutable batches without holding a reader open during consumer writes."""
+        if batch_size < 1:
+            raise ValueError("replay batch size must be positive")
+        start = span.start
+        while start < span.end:
+            with self.connection() as db:
+                batch = tuple(
+                    self._replay(
+                        db,
+                        self._dataset(db, dataset_id),
+                        span=TradingWindow(start, span.end),
+                        limit=batch_size,
+                    )
+                )
+            if not batch:
+                break
+            yield batch
+            if len(batch) < batch_size:
+                break
+            start = batch[-1].available_at
 
     def build_structure_run(
         self,
@@ -265,7 +327,7 @@ class DatasetStore:
     ) -> str:
         definition = canonical_json(manifest)
         run_id = sha256(definition.encode()).hexdigest()
-        with self._connection(write=True) as db:
+        with self.connection(write=True) as db:
             if db.execute("SELECT 1 FROM structure_runs WHERE id = ?", (run_id,)).fetchone():
                 return run_id
             dataset = self._dataset(db, dataset_id)
@@ -287,7 +349,7 @@ class DatasetStore:
         return run_id
 
     def describe_structure_run(self, run_id: str) -> dict[str, object]:
-        with self._connection() as db:
+        with self.connection() as db:
             run = self._structure_run(db, run_id)
             count = db.execute(
                 "SELECT max(sequence) FROM structure_events WHERE run_id = ?", (run_id,)
@@ -306,7 +368,7 @@ class DatasetStore:
         description = self.describe_structure_run(run_id)
         if "backtest_version" not in description:
             raise ValueError("run does not contain a paper backtest")
-        with self._connection() as db:
+        with self.connection() as db:
             summary = db.execute(
                 """SELECT payload FROM structure_events
                    WHERE run_id = ? ORDER BY sequence DESC LIMIT 1""",
@@ -320,7 +382,7 @@ class DatasetStore:
             return {**description, "summary": payload}
 
     def structure_events(self, run_id: str) -> Iterator[dict[str, object]]:
-        with self._connection() as db:
+        with self.connection() as db:
             run = self._structure_run(db, run_id)
             definition = json.loads(run["definition"])
             provenance = json.loads(run["dataset_provenance"])
@@ -345,7 +407,7 @@ class DatasetStore:
     ) -> str:
         identity = canonical_json({"kind": kind, "definition": definition})
         report_id = sha256(identity.encode()).hexdigest()
-        with self._connection(write=True) as db:
+        with self.connection(write=True) as db:
             db.execute(
                 """INSERT INTO analysis_reports VALUES (?, ?, ?, ?, ?)
                    ON CONFLICT (id) DO NOTHING""",
@@ -360,7 +422,7 @@ class DatasetStore:
         return report_id
 
     def describe_analysis(self, report_id: str) -> dict[str, object]:
-        with self._connection() as db:
+        with self.connection() as db:
             if db.execute("PRAGMA user_version").fetchone()[0] >= 3:
                 row = db.execute(
                     "SELECT * FROM analysis_reports WHERE id = ?", (report_id,)
@@ -390,7 +452,11 @@ class DatasetStore:
 
     @staticmethod
     def _replay(
-        db: sqlite3.Connection, dataset: sqlite3.Row, *, span: TradingWindow | None = None
+        db: sqlite3.Connection,
+        dataset: sqlite3.Row,
+        *,
+        span: TradingWindow | None = None,
+        limit: int | None = None,
     ) -> Iterator[Candle]:
         if not dataset["replayable"]:
             raise ValueError("replay blocked because expected candles are missing")
@@ -401,7 +467,11 @@ class DatasetStore:
         if span is not None:
             query += " AND opened_at >= ? AND opened_at < ?"
             parameters += (span.start.isoformat(), span.end.isoformat())
-        rows = db.execute(query + " ORDER BY opened_at", parameters)
+        query += " ORDER BY opened_at"
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters += (limit,)
+        rows = db.execute(query, parameters)
         for candle in rows:
             yield Candle(
                 contract,
@@ -421,7 +491,7 @@ class DatasetStore:
         return row
 
     @contextmanager
-    def _connection(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
+    def connection(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(
             f"{self.path.resolve().as_uri()}?mode={'rwc' if write else 'ro'}", uri=True
         )
@@ -459,4 +529,7 @@ class DatasetStore:
                 db.execute(statement)
         if write and version < 3:
             db.execute(SCHEMA_V3)
-            db.execute("PRAGMA user_version = 3")
+        if write and version < 4:
+            for statement in SCHEMA_V4:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 4")

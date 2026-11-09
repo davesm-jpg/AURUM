@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Persistent paper monitoring
+
+- Added normalized WebSocket ingestion, durable minute continuity and restart recovery.
+- Added explicit feed health, optional HTTPS gap backfill and a deduplicated in-app research alert journal.
+- Verified local synthetic transport and matching replay strategy evidence.
+
 ## 2026-11-09 — Historical adapters and contract mapping
 
 - Added Parquet and normalized HTTPS historical adapters with the same checks as CSV.

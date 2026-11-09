@@ -119,3 +119,13 @@
 - Rationale. Market assumptions and roll inputs remain inspectable without rewriting older research values. Contract selection does not hardcode expiry or vendor rules.
 - Consequences. Actual source formats may need a normalization gateway. Compatibility checks require matching source provider, basis, data kind, tick settings and overlapping session dates/windows. Continuous series are separate research reports. Current backtests use a single dated contract per run.
 - Files. `src/aurum/providers.py`, `src/aurum/parquet_rows.py`, `src/aurum/contracts.py`, `src/aurum/continuous.py`.
+
+## ADR-013 — Journal minute continuity before publishing alerts
+
+- Date 2026-11-09.
+- Context. A live transport can drop, duplicate or reorder minute frames. Strategy state must match replay after recovery.
+- Alternatives. Continue processing through gaps, drop pending frames on restart, or journal validated input and apply only the known prefix.
+- Decision. Store raw and normalized frames, enforce the reviewed minute schedule and append research events atomically with cursor updates. Hold future frames during a gap. Resume from ordered frames or authorized HTTPS backfill. Rebuild strategy state by replaying the applied prefix. Gate alerts to fresh real-time closes and suppress them during catch-up.
+- Rationale. Durable chronology preserves the same evidence path through restart, duplicate and late delivery. A conflicting duplicate is recorded and latches the run for investigation.
+- Consequences. Calendar coverage and source status are explicit caller inputs. Startup expects the first covered minute. Restart rebuild cost grows with applied history. Existing SQLite readers are released between replay batches before monitor writes.
+- Files. `src/aurum/monitoring.py`, `src/aurum/streaming.py`, `src/aurum/feed_frames.py`, `src/aurum/storage.py`.

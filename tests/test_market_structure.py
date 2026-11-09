@@ -344,6 +344,10 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         db.execute("DROP TABLE structure_events")
         db.execute("DROP TABLE structure_runs")
         db.execute("DROP TABLE analysis_reports")
+        db.execute("DROP TABLE monitor_events")
+        db.execute("DROP TABLE monitor_alerts")
+        db.execute("DROP TABLE monitor_minutes")
+        db.execute("DROP TABLE monitor_runs")
         db.execute("PRAGMA user_version = 1")
     assert list(store.replay(dataset_id)) == bars
     with sqlite3.connect(store.path) as db:
@@ -534,3 +538,62 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert validation["result"]["selected_run_id"] == run["run_id"]
     assert validation["result"]["candidates"][run["run_id"]]["validation"]["net_cents"] == -3560
     assert validation["result"]["holdout"]["summary"]["trades"] == 0
+
+
+def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(
+    tmp_path: Path,
+) -> None:
+    from aurum.feed_frames import FeedFrame
+    from aurum.monitoring import MarketMonitor, MonitorConfig, monitor_alerts, monitor_events
+    from aurum.providers import FeedStatus
+    from aurum.strategy import DEFAULT_STRATEGY_CONFIG
+
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 103, 120, 111),
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    args = [*aurum, "monitor-replay", dataset, "--internal-pivot", "1", "1"]
+    result = subprocess.run(args, check=True, capture_output=True, text=True)
+    monitor_id = json.loads(result.stdout)["monitor_id"]
+    observed = [
+        item
+        for item in monitor_events(store, monitor_id)
+        if item["event"] == "paper_setup_transition"
+    ]
+    structure = StructureConfig(PivotRule(1, 1))
+    calendar = SessionCalendar.from_dict(store.describe(dataset)["provenance"]["calendar"])
+    replay = StrategyReplay(calendar, CONTRACT, TIMEFRAME, structure)
+    expected = [
+        json.loads(json.dumps(event.as_dict())) for event in replay.consume(store.replay(dataset))
+    ]
+    assert len(observed) == len(expected)
+    for item, event in zip(observed, expected, strict=True):
+        assert {key: item[key] for key in event} == event
+        assert item["source_status"] == "simulated"
+        assert item["alert_eligible"] is False
+    assert list(monitor_alerts(store, monitor_id)) == []
+    assert subprocess.run(args, check=True, capture_output=True, text=True).stdout == result.stdout
+
+    live_config = MonitorConfig(
+        "synthetic fixture classified real-time to test alert gate", FeedStatus.REAL_TIME
+    )
+    instance = MarketMonitor(
+        store, calendar, CONTRACT, live_config, structure, DEFAULT_STRATEGY_CONFIG
+    )
+    instance.set_connection(True, bars[0].opened_at)
+    minutes = list(store.replay(dataset))
+    for minute in minutes:
+        instance.ingest(FeedFrame.from_replay(minute, FeedStatus.REAL_TIME, minute.available_at))
+    (alert,) = list(monitor_alerts(store, instance.monitor_id))
+    assert alert["execution_mode"] == "paper_research"
+    assert alert["data_status"] == "real_time"
+    assert alert["feed_age_seconds"] == 0
+    last = minutes[-1]
+    instance.ingest(FeedFrame.from_replay(last, FeedStatus.REAL_TIME, last.available_at))
+    assert len(list(monitor_alerts(store, instance.monitor_id))) == 1
