@@ -107,3 +107,19 @@ The monitor retains pending and applied minutes and reconstructs its research st
 An explicitly started `deliver MONITOR_ID --channel telegram --destination-env AURUM_TELEGRAM_CHAT_ID --token-env AURUM_TELEGRAM_TOKEN` worker consumes eligible alerts. For Discord use `--channel discord --destination-env AURUM_DISCORD_WEBHOOK`. Add `--watch` for polling and `--quiet 22:00 07:00 --timezone Europe/Prague` for local quiet hours. Filters include score, session and severity. `delivery-status` reads attempts, and `cancel-delivery MONITOR_ID ALERT_ID` cancels queued or retrying deliveries.
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.
+
+## Local research dashboard
+
+Install the API extra, then start the API and frontend in separate terminals.
+
+```sh
+.venv/bin/python -m pip install -e '.[dev,parquet,stream,api]'
+.venv/bin/aurum --db data/aurum.sqlite serve
+```
+
+```sh
+npm --prefix frontend ci
+npm --prefix frontend run dev
+```
+
+Open [the local workspace](http://127.0.0.1:3000) or [the API schema](http://127.0.0.1:8765/docs). Import a dataset into the same database to populate the chart. Set the server-side `AURUM_API_BASE` if the API uses a different loopback port. For bearer authentication, pass `--token-env AURUM_API_TOKEN` to the API and set the same environment variable for both processes.

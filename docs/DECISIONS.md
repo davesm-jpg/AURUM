@@ -139,3 +139,12 @@
 - Rationale. The worker is safe under concurrent claims and avoids automatic retransmission when receipt is unknown.
 - Consequences. Queued cancellation applies before sending. External provider responses, production limits and real channel behavior remain unverified. Tests use fake transport.
 - Files. `src/aurum/notifications.py`, `src/aurum/notification_transport.py`, `src/aurum/storage.py`.
+
+## ADR-015 — Loopback research workspace
+
+- Date — 2026-11-09.
+- Context — Chart evidence and paper reports need an interactive interface over the existing store.
+- Alternatives — Local frontend proxy or a separately deployed public API.
+- Decision — Use local FastAPI and a Next.js server-side proxy with optional bearer forwarding. Reuse persisted candles and research runs.
+- Consequences — The workspace operates without a market feed. Public deployment and applied monitor chart data require separate work.
+- Files — `src/aurum/api.py`, `src/aurum/cli.py`, `frontend/`.

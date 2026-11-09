@@ -2,10 +2,10 @@
 
 ## Project Status
 
-- Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. U01 local API/dashboard is next. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — L03 durable optional Telegram and Discord paper delivery.
+- Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
+- Current milestone — U01 local research workspace, in progress.
 - Current branch — `main`.
-- Last verified commit — `5f73ae9a517db9e075fa0e0d13532719acc0ce73`.
+- Last verified commit — `2c3e9f7d8f85d4aed1952552afd2fb8ee0941f9e`.
 
 ## Current Objective
 
@@ -24,11 +24,13 @@
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
+- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. Verified using a synthetic local fixture.
+
 ## Work In Progress
 
-- Current files — U01 is pending. Reuse `storage.py`, `monitoring.py`, `candles.py` and persisted run events. The store is at schema v5.
+- Current files — `src/aurum/api.py`, `tests/test_api.py`, `frontend/`. The store remains at schema v5.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Build a local API and interactive dashboard. Forward paper reports and production checks remain separate.
+- Remaining portions — Chart applied monitor candles separately, honor overlay lifecycles, expand analytics and versioned settings, and verify mobile interactions. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -47,23 +49,23 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (134), Ruff lint/format, mypy (50 files), dependency checks and Git whitespace checks.
+- Passed — `.venv/bin/python -m pytest -q` (135), Ruff lint/format, mypy (52 files), dependency and Git whitespace checks. Frontend typecheck, production build, local HTTP and the three desktop browser views passed.
 - Failed — None outstanding.
-- Not run — Authorized real-data reconciliation, production feed verification and actual external delivery.
+- Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and mobile browser workflows.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
 
 ## Environment
 
 - Runtime — Python 3.12.7, macOS arm64, SQLite 3.45.3. SQLite 3.37+ required.
-- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev,parquet,stream]'`.
+- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev,parquet,stream,api]'`.
 - Services — No external services for tests. Keep market-data files and local SQLite under ignored `data/`.
 - Missing configuration — Authorized production source, matching reviewed calendar, external channel destinations and authorized credentials.
 
 ## Immediate Next Actions
 
-1. Rerun the suite and review specification XVI and XVIII. Build paginated local API reads for datasets, candles, runs, reports and monitors with input validation.
-2. Build the Next.js interface with source status, candle overlays, audit and metrics. Verify with a synthetic dataset and local preview.
-3. Record precise UI coverage and update the handoff. Continue forward paper reporting or missing UI functionality while production access remains pending.
+1. Review specification XVI and inspect the chart evidence mapping in `frontend/app/page.tsx`. Add bounded overlays that respect persisted lifecycle events and test their availability timestamps.
+2. Add applied monitor candle reads with an explicit source distinction. Verify desktop and mobile with a labeled fixture using the README commands.
+3. Expand versioned analytics and settings or begin forward paper reporting while production access remains pending.
 
 ## Do Not Repeat
 

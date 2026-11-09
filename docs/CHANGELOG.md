@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Local research dashboard
+
+- Added loopback FastAPI endpoints and a Next.js workspace for provenance, candle charts, evidence, paper backtests and saved reports.
+- Verified against a synthetic SQLite fixture. See [validation](VALIDATION.md).
+
 ## 2026-11-09 — Optional paper-alert delivery
 
 - Added health warnings, optional Telegram/Discord workers, filters and quiet hours.

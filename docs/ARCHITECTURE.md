@@ -2,7 +2,7 @@
 
 ## Running components
 
-A Python 3.12+ modular monolith currently runs as a local CLI and requires no server. The editable package exposes the `aurum` executable.
+The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a loopback FastAPI process and a local Next.js server. The editable package exposes the `aurum` executable.
 
 | Module | Current responsibility |
 | --- | --- |
@@ -24,7 +24,10 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `account_simulation.py`, `account_reports.py` | Independent versioned paper account ledger, loss trail, phase rules and persisted reports |
 | `feed_frames.py`, `monitoring.py`, `streaming.py` | Normalized WebSocket, reviewed continuity, restart recovery, HTTPS backfill and in-app alert journal |
 | `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
+| `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
+
+The dashboard reads immutable dataset candles, paginated evidence, saved reports and monitor health from SQLite through the API. Price charts use UTC candle closes and map events at or after their availability. An optional bearer stays in the server-side proxy. The chart currently reads imported datasets while live monitoring supplies status separately.
 
 ## Flow and invariants
 
