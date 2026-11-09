@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Forward research periods
+
+- Added exchange-date period reports, prior-period drift diagnostics and compatible independent historical comparison.
+- Added a Forward dashboard workspace for registration, journal inspection and saved reports.
+
 ## 2026-11-09 — Forward paper ledger
 
 - Added registration, atomic replay of observed monitor minutes and separate forward audit with conservative interruption handling.

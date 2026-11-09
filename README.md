@@ -135,3 +135,11 @@ Register a run against a configured monitor, then advance its applied journal. T
 ```
 
 Use `forward-sync --watch` for a foreground paper consumer. A simulated monitor requires `forward-start --synthetic` and produces a labeled synthetic verification ledger.
+
+Save a frozen period report from the processed journal. An optional
+`--baseline-validation` must reference a compatible independent holdout saved
+before registration.
+
+```sh
+.venv/bin/aurum --db data/aurum.sqlite forward-report FORWARD_ID --period weekly --trade-date 2025-03-10
+```
