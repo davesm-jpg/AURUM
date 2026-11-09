@@ -75,6 +75,21 @@ def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> Non
     assert diagnostics["rolling_outcomes"] == []
     assert diagnostics["signal_count"] == diagnostics["completed_trades"] == 0
     assert client.get(analytics_route, params={"window": 1}).status_code == 422
+    defaults = client.get("/api/configuration/backtest").json()
+    assert defaults["execution_mode"] == "paper_research"
+    profile = defaults["profile"]
+    profile["strategy_config"]["variant"] = "mss"
+    request = {"dataset_id": dataset, "timeframe": "5m", "profile": profile}
+    assert client.post("/api/backtests", json=request).json()["run_id"] == run["run_id"]
+    profile["evidence_config"]["imbalances"]["min_width_ticks"] = 3
+    changed = client.post("/api/backtests", json=request)
+    assert changed.status_code == 201
+    assert changed.json()["run_id"] != run["run_id"]
+    assert changed.json()["evidence_config"]["imbalances"]["min_width_ticks"] == 3
+    assert client.get(f"/api/backtests/{run['run_id']}").json() == run
+    assert client.post("/api/backtests", json={**request, "pivot_left": 4}).status_code == 422
+    profile["execution_config"]["latency_minutes"] = 6
+    assert client.post("/api/backtests", json=request).status_code == 422
 
 
 def test_api_monitor_chart_excludes_pending_minutes_and_preserves_mixed_sources(

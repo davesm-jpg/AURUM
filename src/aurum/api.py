@@ -3,33 +3,29 @@ import json
 import sqlite3
 from collections import Counter, deque
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from secrets import compare_digest
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
+from aurum.api_config import BacktestRequest, backtest_configuration
 from aurum.candles import CandleAggregator, Timeframe
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
-from aurum.execution import ExecutionConfig
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import canonical_json
-from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG, BreakMode, PivotRule
 from aurum.monitoring import (
     applied_minute_batches,
     describe_monitor,
     market_events_page,
     market_evidence_started_at,
 )
-from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics
 from aurum.storage import DatasetStore
-from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.timestamps import MINUTE, minute_timestamp
 
 RecordId = Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")]
@@ -78,20 +74,6 @@ class MonitorChart(BaseModel):
     market_evidence: ChartEvidence
     paper_evidence: ChartEvidence
     context_event: dict[str, object] | None
-
-
-class BacktestRequest(BaseModel):
-    dataset_id: str = Field(pattern=r"^[a-f0-9]{64}$")
-    timeframe: Timeframe = Timeframe.FIVE_MINUTES
-    variant: Variant = Variant.SWEEP_MSS_IFVG
-    break_mode: BreakMode = BreakMode.CLOSE
-    pivot_left: int = Field(default=3, ge=1, le=50)
-    pivot_right: int = Field(default=3, ge=1, le=50)
-    gross_risk_cents: int = Field(default=5_000, ge=1, le=1_000_000)
-    commission_cents: int = Field(default=160, ge=0, le=100_000)
-    slippage_ticks: int = Field(default=1, ge=0, le=1_000)
-    latency_minutes: int = Field(default=0, ge=0, le=60)
-    target_mode: TargetMode = TargetMode.FIXED
 
 
 def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
@@ -220,27 +202,22 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     ) -> dict[str, object]:
         return backtest_analytics(store, run_id, window)
 
+    @router.get("/configuration/backtest")
+    def default_backtest_configuration() -> dict[str, object]:
+        return backtest_configuration()
+
     @router.post("/backtests", status_code=201)
     def build_backtest(request: BacktestRequest) -> dict[str, object]:
-        structure = replace(
-            DEFAULT_STRUCTURE_CONFIG,
-            internal=PivotRule(request.pivot_left, request.pivot_right),
-            breaks=replace(DEFAULT_STRUCTURE_CONFIG.breaks, mode=request.break_mode),
-        )
-        risk = replace(
-            DEFAULT_RISK_CONFIG,
-            gross_allowance_cents=request.gross_risk_cents,
-            commission_round_trip_cents=request.commission_cents,
-            slippage_round_trip_ticks=request.slippage_ticks,
-            target_mode=request.target_mode,
-        )
-        strategy = replace(DEFAULT_STRATEGY_CONFIG, variant=request.variant, risk=risk)
-        execution = ExecutionConfig(
-            latency_minutes=request.latency_minutes,
-            entry_timeout_minutes=max(5, request.latency_minutes),
-        )
+        profile = request.resolved()
         run_id = store.build_strategy_run(
-            request.dataset_id, request.timeframe, structure, strategy, execution=execution
+            request.dataset_id,
+            request.timeframe,
+            profile.config,
+            profile.strategy_config,
+            evidence=profile.evidence_config,
+            context=profile.context_config,
+            economic=profile.economic_events(),
+            execution=profile.execution_config,
         )
         return store.describe_backtest(run_id)
 

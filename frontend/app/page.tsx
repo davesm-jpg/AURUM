@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   EMPTY_EVIDENCE,
   OVERLAYS,
@@ -22,6 +15,7 @@ import { PriceChart } from "./price-chart";
 import { label, price, record, rows, stamp } from "./format";
 import { Metric } from "./metric";
 import { BacktestAnalytics } from "./backtest-analytics";
+import { BacktestForm } from "./backtest-form";
 import { ReportSummary } from "./report-summary";
 type Dataset = {
   dataset_id: string;
@@ -54,15 +48,6 @@ type Tab = "Market" | "Research" | "Reports";
 
 const FRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const EMPTY_BARS: Candle[] = [];
-const VARIANTS = [
-  "mss",
-  "sweep_mss",
-  "mss_fvg",
-  "mss_ifvg",
-  "sweep_mss_fvg",
-  "sweep_mss_ifvg",
-  "sweep_mss_ifvg_htf",
-];
 function eventGroup(event: RecordData): string | null {
   const kind = String(event.event);
   if (kind === "swing_confirmed") return "Swings";
@@ -112,8 +97,6 @@ export default function Dashboard() {
     key: string;
     data: RecordData;
   }>();
-  const [variant, setVariant] = useState("sweep_mss_ifvg");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [chartError, setChartError] = useState("");
   const [chartEvidence, setChartEvidence] = useState<{
@@ -318,36 +301,9 @@ export default function Dashboard() {
     });
   }
 
-  async function runBacktest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!datasetId) return;
-    setBusy(true);
-    setError("");
-    const fields = new FormData(event.currentTarget);
-    try {
-      const result = await api<RecordData>("backtests", {
-        method: "POST",
-        body: JSON.stringify({
-          dataset_id: datasetId,
-          variant,
-          timeframe: frame === "1m" ? "5m" : frame,
-          gross_risk_cents: Number(fields.get("risk")),
-          commission_cents: Number(fields.get("commission")),
-          slippage_ticks: Number(fields.get("slippage")),
-          pivot_left: Number(fields.get("left")),
-          pivot_right: Number(fields.get("right")),
-          break_mode: fields.get("break"),
-          target_mode: fields.get("target"),
-        }),
-      });
-      await refresh();
-      setRunId(String(result.run_id));
-      setTab("Research");
-    } catch (failure) {
-      setError((failure as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  async function selectCompletedBacktest(id: string) {
+    await refresh();
+    setRunId(id);
   }
 
   return (
@@ -776,101 +732,12 @@ export default function Dashboard() {
               </div>
             )}
           </section>
-          <section className="panel sidebar-panel">
-            <p className="eyebrow">Experiment settings</p>
-            <h2>Paper backtest</h2>
-            <form onSubmit={runBacktest}>
-              <label>
-                Strategy variant
-                <select
-                  value={variant}
-                  onChange={(event) => setVariant(event.target.value)}
-                >
-                  {VARIANTS.map((item) => (
-                    <option key={item} value={item}>
-                      {label(item)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="form-grid">
-                <label>
-                  Left pivots
-                  <input
-                    name="left"
-                    type="number"
-                    min="1"
-                    max="50"
-                    defaultValue="3"
-                    required
-                  />
-                </label>
-                <label>
-                  Right pivots
-                  <input
-                    name="right"
-                    type="number"
-                    min="1"
-                    max="50"
-                    defaultValue="3"
-                    required
-                  />
-                </label>
-                <label>
-                  Risk (cents)
-                  <input
-                    name="risk"
-                    type="number"
-                    min="1"
-                    defaultValue="5000"
-                    required
-                  />
-                </label>
-                <label>
-                  Commission (cents)
-                  <input
-                    name="commission"
-                    type="number"
-                    min="0"
-                    defaultValue="160"
-                    required
-                  />
-                </label>
-                <label>
-                  Slippage (ticks)
-                  <input
-                    name="slippage"
-                    type="number"
-                    min="0"
-                    defaultValue="1"
-                    required
-                  />
-                </label>
-                <label>
-                  Target
-                  <select name="target">
-                    <option value="fixed">Fixed R</option>
-                    <option value="structural">Structural</option>
-                  </select>
-                </label>
-              </div>
-              <label>
-                Break mode
-                <select name="break">
-                  <option value="close">Close</option>
-                  <option value="wick">Wick</option>
-                  <option value="buffered_close">Buffered close</option>
-                  <option value="displacement_close">Displacement close</option>
-                </select>
-              </label>
-              <button
-                className="primary"
-                disabled={busy || !dataset?.replayable}
-              >
-                {busy ? "Replaying dataset…" : "Run paper backtest"}
-              </button>
-            </form>
-          </section>
+          <BacktestForm
+            datasetId={datasetId}
+            replayable={dataset?.replayable === true}
+            selectedRun={activeRun?.kind === "backtest" ? summary : undefined}
+            onComplete={selectCompletedBacktest}
+          />
           <section className="panel lower wide">
             <div className="panel-top">
               <h2>Setup history</h2>
