@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. U01 local API/dashboard is next. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — L03 durable optional Telegram and Discord paper delivery.
 - Current branch — `main`.
-- Last verified commit — the L03 implementation commit containing this handoff.
+- Last verified commit — `5f73ae9a517db9e075fa0e0d13532719acc0ce73`.
 
 ## Current Objective
 
