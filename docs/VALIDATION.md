@@ -10,6 +10,8 @@
 - `.venv/bin/mypy .` passed across 60 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
+The local synthetic monitor stream resumed at sequence 2 with Last-Event-ID 1 through the frontend proxy. Checkpoint mode emitted a named SSE event. The final suite passed 151 Python and five TypeScript tests, static checks and the production build.
+
 Runtime profile tests verified stable IDs, worker resolution by environment name and redaction of rejected values. The browser saved a synthetic provider profile through the bearer proxy at local width and fit at 390px. Local HTTP tests returned 403 for cross-origin mutations and an untrusted Host. Five TypeScript tests passed.
 
 The completed-period CLI test verified no early publication, a daily and weekly report at the reviewed close, deduplication after restart and stable Friday IDs after Monday ingestion.

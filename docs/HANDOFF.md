@@ -5,13 +5,13 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — F01 forward research and U01 local workspace are verified on synthetic input. Runtime profiles and browser origin controls are in place.
 - Current branch — `main`.
-- Last verified commit — `7073720811f9955f0eed53be2ba5de523a36c9d2`.
+- Last verified commit — `efaf64a5ed86984309de746408baf02efc7493c1`.
 
 ## Current Objective
 
-- Task ID — U01.
-- Objective — Harden resumable monitor event delivery and preserve the verified local workspace.
-- Acceptance criteria — Reconnecting clients resume after their last event and receive stable sequences.
+- Task ID — O01.
+- Objective — Measure local chart and replay bottlenecks and improve only those justified by evidence.
+- Acceptance criteria — Record repeatable workloads, validate output parity and preserve source provenance.
 
 ## Completed Work
 
@@ -32,7 +32,7 @@
 
 - Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v9. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Monitor event streaming supports a cursor parameter. Verify native reconnect cursor forwarding. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
+- Remaining portions — Monitor streams support native reconnect cursors and checkpoint-triggered chart refresh. Production feed and delivery remain unverified. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -67,8 +67,8 @@
 
 ## Immediate Next Actions
 
-1. Honor monitor stream reconnect cursors in the proxy and API. Verify using a bounded local synthetic stream.
-2. Profile the verified workspace with representative authorized data once D04 is unblocked.
+1. Profile replay, chart projection and monitor restart using labeled synthetic workloads and record baseline timings.
+2. Repeat with representative authorized data once D04 is unblocked.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat

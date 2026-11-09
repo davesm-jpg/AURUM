@@ -67,6 +67,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Harden event stream reconnects and profile representative verified inputs when available. Verify the normalized connector and delivery against authorized production configuration when available.
+Monitor SSE accepts native reconnect cursors. Applied checkpoints trigger dashboard refresh with timed polling as fallback. Profile representative verified inputs when available. Verify the normalized connector and delivery against authorized production configuration when available.
 
 Forward paper outcome tracking and production validation remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.
