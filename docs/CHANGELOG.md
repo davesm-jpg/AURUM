@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Causal structure replay
+
+- Added independent internal and external confirmed pivots, structural classifications and versioned BOS/MSS rules.
+- Added versioned structure runs and replayable evidence. SQLite v2 preserves existing datasets and migrates on write.
+- Verified mirrored breaks, future-data isolation, rule thresholds, persistence and rollback on synthetic inputs.
+
 ## 2026-11-09 — Completed candle aggregation
 
 - Added incremental 5m, 15m, 1h, 4h and daily OHLCV from dated one-minute data.

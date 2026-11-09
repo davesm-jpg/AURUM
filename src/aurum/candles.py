@@ -1,3 +1,4 @@
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
@@ -116,6 +117,10 @@ class CandleAggregator:
         self._timeframes = timeframes
         self._last_open: datetime | None = None
         self._buckets: dict[Timeframe, _Bucket] = {}
+
+    def consume(self, candles: Iterable[Candle]) -> Iterator[AggregateCandle]:
+        for candle in candles:
+            yield from self.push(candle)
 
     def push(self, candle: Candle) -> tuple[AggregateCandle, ...]:
         if candle.contract != self._contract:

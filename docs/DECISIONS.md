@@ -49,3 +49,13 @@
 - Rationale. Bucket boundaries are reproducible across imports and intraday bars do not bridge a closure. The shortened flag lets downstream research select which bars qualify.
 - Consequences. Chart boundaries may differ from vendor clock buckets, especially after a halt. Historical replay rejects a dataset with gaps. The incremental consumer rejects disordered input and suppresses any bucket missing an expected minute.
 - Files. `src/aurum/candles.py`, `src/aurum/cli.py`, `tests/test_candles.py`.
+
+## ADR-006 — Point-in-time pivots and structure breaks
+
+- Date 2026-11-09.
+- Context. Plausible pivot, break and MSS definitions can produce different histories. Research needs to reproduce each rule.
+- Alternatives. Mark pivots retrospectively, use unconfirmed levels, or evaluate only completed candles against previously confirmed levels.
+- Decision. Use strict local pivots with 3/3 internal and 5/5 external defaults. Equality inside a pivot window rejects a candidate. Separately confirmed pivots at equal prices receive equal labels. Compare the latest pair of highs and lows per scope. Before confirming new pivots, evaluate and consume previously confirmed levels once per rule. Buffered and displacement rules use a simple mean of the full prior true-range window. Label a qualifying single-direction break as MSS only with opposite prior structure and a close on the valid side of the latest opposing pivot. After MSS, keep the transition state until a high and low are confirmed strictly later.
+- Rationale. Event timestamps, strict ordering and exact integer thresholds make outputs reconstructable and avoid future data and same-candle eligibility. A candle crossing both directions can report two BOS events without guessing their order.
+- Consequences. This is rule version 1. Latest confirmed levels supersede older levels, and completed shortened bars count in the pivot and ATR windows. SQLite v2 adds atomic, idempotent structure-run persistence. The CLI defaults to close-based breaks and exposes each rule's thresholds.
+- Files. `src/aurum/market_structure.py`, `src/aurum/storage.py`, `src/aurum/cli.py`, `tests/test_market_structure.py`.

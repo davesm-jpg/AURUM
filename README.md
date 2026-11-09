@@ -48,10 +48,14 @@ This **synthetic schema example** covers two minutes of a full session.
 .venv/bin/aurum --db data/aurum.sqlite inspect DATASET_ID
 .venv/bin/aurum --db data/aurum.sqlite replay DATASET_ID
 .venv/bin/aurum --db data/aurum.sqlite aggregate DATASET_ID --timeframe 5m --timeframe 1d
+.venv/bin/aurum --db data/aurum.sqlite structure DATASET_ID --break-mode close
+.venv/bin/aurum --db data/aurum.sqlite structure-events RUN_ID
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
 
 Aggregation requires a dated calendar. Omit `--timeframe` to emit all supported intervals (5m, 15m, 1h, 4h and 1d). Intraday buckets start at each open window and restart after closures. When an open window ends inside a bucket, a complete shorter bar is emitted with `shortened: true`. Daily bars combine all open windows on the trade date. Every published aggregate contains all expected source minutes and is emitted at its scheduled close. Export boundaries do not shorten a bucket.
+
+Structure replay defaults to 5m candles, 3-left/3-right internal pivots, 5-left/5-right external pivots and close-based breaks. Strict local extrema reject ties inside the pivot window. Use `--internal-pivot LEFT RIGHT`, `--external-pivot LEFT RIGHT` and `--break-mode` to run separate configurations. Break modes are `wick`, `close`, `buffered_close` and `displacement_close`. Volatility filters use the full window of earlier true ranges. The manifest records the exact configuration, versions and event count. Each event identifies its source and confirmation candles.
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.
