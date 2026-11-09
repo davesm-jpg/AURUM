@@ -79,3 +79,13 @@
 - Rationale. The ordering avoids assumed intrabar chronology. Separating qualification from simulated fills keeps historical entry timing auditable. Economic coverage and higher-timeframe availability are explicit, and scores are experimental.
 - Consequences. The reference USD 50 cap is gross and an optional net cap includes modeled costs. Context periods and filters are persisted. Regional New York hours are 08:30–16:00 local for this research version. Calendar snapshots use publication and actual-known timestamps. Completed run persistence is atomic, and recovery of an unfinished historical run recomputes from its source. Live checkpointing is future work.
 - Files. `src/aurum/strategy.py`, `src/aurum/paper_risk.py`, `src/aurum/market_context.py`, `src/aurum/economic_events.py`.
+
+## ADR-009 — Paper fills from eligible minute opens and conservative brackets
+
+- Date 2026-11-09.
+- Context. Candle-close setup information and opening, intrabar and closing execution have distinct availability.
+- Alternatives. Fill at the confirming close, assume favorable same-minute ordering, or simulate eligible future opens with conservative bracket rules.
+- Decision. Process existing orders and positions before observing each minute's setup results. At entry, preserve the signal stop and target and recheck size against the new open and costs. Hold at most one position. Treat opening stop gaps at the adverse open and target gaps at the target. Use stop-first for ambiguous range touches. Flatten at scheduled window close by default and separately flag forced terminal closes. Record costs as explicit cents and delay intrabar outcomes to candle close.
+- Rationale. This exposes eligibility, costs, realized slippage from gaps and intrabar uncertainty in the audit.
+- Consequences. Entry uses the next minute's open, which can share a UTC boundary with signal confirmation. Excursions on an intrabar exit omit the remainder of the exit minute. Gap losses can exceed the planned risk. Drawdown in B01 is closed-trade equity. Account simulations need separate intraday equity modeling.
+- Files. `src/aurum/execution.py`, `src/aurum/backtesting.py`, `src/aurum/performance.py`.

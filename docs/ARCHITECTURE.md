@@ -17,7 +17,8 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `imbalances.py`, `evidence.py` | FVG and IFVG lifecycle and shared causal structure/evidence replay |
 | `market_context.py`, `economic_events.py` | Completed higher-timeframe structure, regime, session and point-in-time event context |
 | `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
-| `cli.py` | Import, inspection, replay, aggregation and persisted structure and strategy runs |
+| `execution.py`, `backtesting.py`, `performance.py` | Minute paper fill model, strategy replay orchestration and trade-level performance summaries |
+| `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
 ## Flow and invariants
 
@@ -30,6 +31,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 7. Structure analysis consumes completed aggregates for one timeframe and contract. It processes breaks against previously confirmed levels before confirming new swings, then updates the classifications. Each event's UTC source opens can be joined to the input dataset's aggregate events for the run timeframe and version. The engine holds bounded pivot and ATR windows and the latest levels per scope.
 8. An evidence run also observes completed named-session minutes and daily bars. On an analysis close it evaluates previously mapped levels, structure and imbalances, links strictly earlier eligible sweeps to MSS, and then releases newly known price proxies. Full daily, weekly and named-period coverage is checked before publication. A gap or proxy is never retested by its confirming bar.
 9. Strategy replay advances the same evidence stream and completed 15m/1h/4h context before each setup decision. It writes state transitions with source evidence, explicit filters, costs and contextual uncertainty. Setup IDs are stable inside the versioned run. Historical restart recovery can reconstruct active state by replaying the input prefix. Rebuilding a completed definition returns its existing events.
+10. Backtest replay processes queued orders and existing positions against each minute before asking the strategy about that minute's close. Entry orders become eligible only after the signal, at the next eligible open under configured latency. The run stores setup transitions, order audit, completed trades and a terminal summary. The manifest records execution, cost and performance versions.
 
 ## Current database
 
@@ -44,6 +46,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Use paper setup signals to drive a minute-level simulated fill and outcome engine. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Evaluate completed backtests with chronological selection and independent holdouts. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

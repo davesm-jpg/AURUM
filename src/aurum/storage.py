@@ -8,14 +8,17 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Protocol, TypedDict
 
+from aurum.backtesting import BACKTEST_VERSION, BacktestReplay
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
 from aurum.exchange_calendar import SessionCalendar
+from aurum.execution import EXECUTION_VERSION, ExecutionConfig
 from aurum.instruments import MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
 from aurum.market_data import Candle, PreparedDataset, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig, StructureEngine
+from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
@@ -200,8 +203,9 @@ class DatasetStore:
         evidence: EvidenceConfig = DEFAULT_EVIDENCE_CONFIG,
         context: ContextConfig = DEFAULT_CONTEXT_CONFIG,
         economic: EconomicCalendar | None = None,
+        execution: ExecutionConfig | None = None,
     ) -> str:
-        manifest = {
+        manifest: dict[str, object] = {
             "dataset_id": dataset_id,
             "timeframe": timeframe,
             "aggregation_version": AGGREGATION_VERSION,
@@ -216,10 +220,29 @@ class DatasetStore:
             "economic_calendar": economic.as_dict() if economic else None,
             "execution_mode": "paper_research",
         }
+        if execution is not None:
+            manifest.update(
+                backtest_version=BACKTEST_VERSION,
+                execution_version=EXECUTION_VERSION,
+                performance_version=PERFORMANCE_VERSION,
+                execution_config=asdict(execution),
+            )
 
         def run(
             calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
         ) -> Iterator[_RecordedEvent]:
+            if execution is not None:
+                return BacktestReplay(
+                    calendar,
+                    contract,
+                    timeframe,
+                    structure,
+                    strategy,
+                    execution,
+                    evidence,
+                    context,
+                    economic,
+                ).consume(minutes)
             return StrategyReplay(
                 calendar, contract, timeframe, structure, strategy, evidence, context, economic
             ).consume(minutes)
@@ -270,6 +293,23 @@ class DatasetStore:
                 "created_at": run["created_at"],
                 "event_count": count or 0,
             }
+
+    def describe_backtest(self, run_id: str) -> dict[str, object]:
+        description = self.describe_structure_run(run_id)
+        if "backtest_version" not in description:
+            raise ValueError("run does not contain a paper backtest")
+        with self._connection() as db:
+            summary = db.execute(
+                """SELECT payload FROM structure_events
+                   WHERE run_id = ? ORDER BY sequence DESC LIMIT 1""",
+                (run_id,),
+            ).fetchone()
+            if summary is None:
+                raise ValueError("backtest has no persisted summary")
+            payload = json.loads(summary["payload"])
+            if payload["event"] != "paper_backtest_summary":
+                raise ValueError("invalid persisted backtest summary")
+            return {**description, "summary": payload}
 
     def structure_events(self, run_id: str) -> Iterator[dict[str, object]]:
         with self._connection() as db:

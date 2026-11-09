@@ -10,6 +10,7 @@ from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar
+from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, canonical_json, prepare_csv
@@ -55,31 +56,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--evidence", action="store_true", help="include liquidity and gap events"
     )
     strategy = commands.add_parser("strategy", help="persist paper setup transitions")
-    _research_options(strategy)
-    strategy.add_argument(
-        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
+    _strategy_options(strategy)
+    backtest = commands.add_parser("backtest", help="run a minute-level paper simulation")
+    _strategy_options(backtest)
+    backtest.add_argument(
+        "--latency-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.latency_minutes
     )
-    strategy.add_argument(
-        "--session", type=ResearchSession, choices=ResearchSession, action="append"
+    backtest.add_argument(
+        "--entry-timeout-minutes", type=int, default=DEFAULT_EXECUTION_CONFIG.entry_timeout_minutes
     )
-    strategy.add_argument("--regime", type=Regime, choices=Regime, action="append")
-    strategy.add_argument("--min-volatility-bps", type=int)
-    strategy.add_argument("--max-volatility-bps", type=int)
-    strategy.add_argument(
-        "--minimum-score", type=int, default=DEFAULT_STRATEGY_CONFIG.minimum_score
+    backtest.add_argument(
+        "--round-trip-spread-ticks",
+        type=int,
+        default=DEFAULT_EXECUTION_CONFIG.round_trip_spread_ticks,
     )
-    strategy.add_argument(
-        "--gross-risk-cents", type=int, default=DEFAULT_RISK_CONFIG.gross_allowance_cents
+    backtest.add_argument("--carry-across-closures", action="store_true")
+    backtest.add_argument(
+        "--initial-equity-cents", type=int, default=DEFAULT_EXECUTION_CONFIG.initial_equity_cents
     )
-    strategy.add_argument("--net-risk-cents", type=int)
-    strategy.add_argument(
-        "--target-mode",
-        type=TargetMode,
-        choices=TargetMode,
-        default=DEFAULT_RISK_CONFIG.target_mode,
-    )
-    strategy.add_argument("--economic-calendar", type=Path)
-    strategy.add_argument("--require-clear-event-risk", action="store_true")
     structure_events = commands.add_parser(
         "structure-events", help="read persisted events as JSONL"
     )
@@ -88,6 +82,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "strategy-events", help="read persisted paper transitions"
     )
     strategy_events.add_argument("run_id")
+    backtest_events = commands.add_parser(
+        "backtest-events", help="read simulated fills and audit events"
+    )
+    backtest_events.add_argument("run_id")
+    backtest_summary = commands.add_parser(
+        "backtest-summary", help="read a persisted paper backtest summary"
+    )
+    backtest_summary.add_argument("run_id")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -117,7 +119,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe_structure_run(run)))
         elif args.command == "strategy":
             print(canonical_json(store.describe_structure_run(_strategy_run(store, args))))
-        elif args.command in ("structure-events", "strategy-events"):
+        elif args.command == "backtest":
+            execution = ExecutionConfig(
+                latency_minutes=args.latency_minutes,
+                entry_timeout_minutes=args.entry_timeout_minutes,
+                round_trip_spread_ticks=args.round_trip_spread_ticks,
+                carry_across_closures=args.carry_across_closures,
+                initial_equity_cents=args.initial_equity_cents,
+            )
+            print(canonical_json(store.describe_backtest(_strategy_run(store, args, execution))))
+        elif args.command == "backtest-summary":
+            print(canonical_json(store.describe_backtest(args.run_id)))
+        elif args.command in ("structure-events", "strategy-events", "backtest-events"):
+            if (
+                args.command == "backtest-events"
+                and "backtest_version" not in store.describe_structure_run(args.run_id)
+            ):
+                raise ValueError("run does not contain a paper backtest")
             if (
                 args.command == "strategy-events"
                 and "strategy_version" not in store.describe_structure_run(args.run_id)
@@ -232,12 +250,48 @@ def _evidence_config(args: Namespace) -> EvidenceConfig:
     )
 
 
-def _strategy_run(store: DatasetStore, args: Namespace) -> str:
+def _strategy_options(parser: ArgumentParser) -> None:
+    _research_options(parser)
+    parser.add_argument(
+        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
+    )
+    parser.add_argument("--session", type=ResearchSession, choices=ResearchSession, action="append")
+    parser.add_argument("--regime", type=Regime, choices=Regime, action="append")
+    parser.add_argument("--min-volatility-bps", type=int)
+    parser.add_argument("--max-volatility-bps", type=int)
+    parser.add_argument("--minimum-score", type=int, default=DEFAULT_STRATEGY_CONFIG.minimum_score)
+    parser.add_argument(
+        "--gross-risk-cents", type=int, default=DEFAULT_RISK_CONFIG.gross_allowance_cents
+    )
+    parser.add_argument("--net-risk-cents", type=int)
+    parser.add_argument(
+        "--target-mode",
+        type=TargetMode,
+        choices=TargetMode,
+        default=DEFAULT_RISK_CONFIG.target_mode,
+    )
+    parser.add_argument("--economic-calendar", type=Path)
+    parser.add_argument("--require-clear-event-risk", action="store_true")
+    parser.add_argument(
+        "--commission-cents", type=int, default=DEFAULT_RISK_CONFIG.commission_round_trip_cents
+    )
+    parser.add_argument(
+        "--slippage-ticks", type=int, default=DEFAULT_RISK_CONFIG.slippage_round_trip_ticks
+    )
+    parser.add_argument("--max-contracts", type=int)
+
+
+def _strategy_run(
+    store: DatasetStore, args: Namespace, execution: ExecutionConfig | None = None
+) -> str:
     risk = replace(
         DEFAULT_RISK_CONFIG,
         gross_allowance_cents=args.gross_risk_cents,
         net_allowance_cents=args.net_risk_cents,
         target_mode=args.target_mode,
+        commission_round_trip_cents=args.commission_cents,
+        slippage_round_trip_ticks=args.slippage_ticks,
+        max_contracts=args.max_contracts,
     )
     config = replace(
         DEFAULT_STRATEGY_CONFIG,
@@ -262,4 +316,5 @@ def _strategy_run(store: DatasetStore, args: Namespace) -> str:
         config,
         evidence=_evidence_config(args),
         economic=economic,
+        execution=execution,
     )

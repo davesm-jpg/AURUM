@@ -2,70 +2,70 @@
 
 ## Project Status
 
-- Current phase — Phase 3 paper setup qualification is implemented. Phase 4 backtest engine B01 is unblocked using synthetic fixtures. D04 and B02 real-data validation need an authorized source.
-- Current milestone — S03 context, exact sizing and versioned paper strategy replay.
+- Current phase — Phase 4 backtest engine is implemented. Q01 statistical tooling is next. D04 and B02 require authorized historical MGC.
+- Current milestone — B01 audited minute-level paper backtesting.
 - Current branch — `main`.
-- Last verified commit — `7ccd77017e532d993398bcc4d73aa5bcb76b61bb`.
+- Last verified commit — the B01 implementation commit containing this handoff.
 
 ## Current Objective
 
-- Task ID — B01.
-- Objective — Simulate minute-level paper fills and outcomes from the same causal strategy replay, with versioned costs, audit evidence and performance statistics.
-- Acceptance criteria — A setup can fill only at a later eligible minute open under the chosen latency rule. Open gaps, stops, targets, ambiguous OHLC ordering, costs, exchange windows and end of data have explicit policies. Fills preserve the structural stop and whole-contract risk constraints. Replays are reproducible and include sample-aware net statistics. No empirical historical conclusions are permitted without B02.
+- Task ID — Q01.
+- Objective — Add chronological validation and held-out evaluation, dependence-aware resampling, walk-forward analysis and Monte Carlo scenarios on persisted backtests.
+- Acceptance criteria — Never use the final holdout to select variants. Purge trades whose label interval crosses a split boundary and support an embargo. Record source, versions, dates, cost assumptions, exact samples and seeds. Report uncertainty and sample limits. Keep synthetic tests, conditional scenarios and historical conclusions distinct.
 
 ## Completed Work
 
-- D01–D03 — Import and replay validated unadjusted MGC 1m CSV, retain exact source and immutable provenance, use reviewed dated exchange sessions and aggregate completed 5m/15m/1h/4h/daily candles. Missing expected candles block replay.
-- S01–S02 — Causal confirmed pivots, BOS/MSS, price proxies, sweeps and FVG/IFVG lifecycle on a shared incremental evidence stream. SQLite retains versioned manifests and ordered events. Existing source databases migrate on write.
-- S03 strategy — `strategy.py` implements seven independent variants, setup expiry/invalidation, strictly earlier sweep, MSS, qualifying zone and later retest/reaction, configurable filters and an experimental 100-point score. Every transition records source evidence and context. It emits hypothetical plans only.
-- S03 risk/context — `paper_risk.py` uses integer ticks/cents, whole contracts, a USD 50 gross cap by default, optional all-in cap, costs and separate structural versus fixed targets. `market_context.py` provides completed 15m/1h/4h context, confirmed structural range, regime features and regional time windows. `economic_events.py` supports point-in-time reviewed snapshots and reports unknown without coverage.
-- S03 persistence — `strategy DATASET_ID` writes atomic versioned transitions, and `strategy-events RUN_ID` reads them. Unfinished historical state can be reconstructed by replaying its input. Live checkpointing is pending.
+- D01–D03 — Authorized-format single-contract MGC CSV import and replay, immutable raw provenance, dated windows and incremental 5m/15m/1h/4h/1d aggregation. Missing expected minutes block replay.
+- S01–S02 — Confirmed pivots, BOS/MSS, liquidity proxies, sweeps and FVG/IFVG lifecycle in the shared causal evidence path. Structure/evidence manifests and ordered audit are stored in SQLite.
+- S03 — Mirrored research variants, contextual measurements, event uncertainty, state transitions, structural paper sizing and experimental scoring. `strategy` and `strategy-events` persist and replay setup history.
+- B01 execution — `execution.py` processes pending entries and existing positions before current close evidence. It rechecks whole-contract sizing at the eligible open, preserves structural brackets, models costs and flags ambiguous exits. Gap stops use the adverse open. Target gaps use the target. Default closure policy flattens at the scheduled window end. Forced end-of-data closes are identified.
+- B01 persistence and metrics — `backtest`, `backtest-summary` and `backtest-events` store/retrieve versioned setup, order, trade and summary evidence. `performance.py` reports exact sample counts, realized net metrics, closed-trade equity/drawdown, excursions and breakdowns. Fixtures include a full synthetic end-to-end strategy and fill.
 
 ## Work In Progress
 
-- Current files — Backtest implementation is pending. Reuse `StrategyReplay.push`, `SetupEvent`, `RiskPlan`, `Candle`, `SessionCalendar` and the existing data store. Start with a pure execution module and synthetic fixtures.
-- Implemented foundations — Each minute can yield paper setup signals after its close. Signals include direction, stop, target, quantity, actual availability, context and score. The store has a shared private `_persist_replay` path for immutable manifests and ordered events.
-- Remaining portions — Define minute fill rules and paper costs, then implement and verify the simulator and metrics. Add CLI integration and persisted audit output. Statistical tools follow B01. D05 adapter/contract work and B02 actual history remain separate.
+- Current files — Q01 has no implementation. Use `src/aurum/performance.py`, `backtesting.py`, `storage.py` and `tests/test_execution.py`.
+- Implemented foundations — `DatasetStore.describe_backtest` returns dataset, strategy, cost and execution versions plus summary. `structure_events` yields ordered audit. `paper_trade_completed` contains entry and exit/recorded times, exchange date, costs, returns, regime and direction. `paper_setup_transition` contains signal time and score.
+- Remaining portions — Extract typed observations, define comparable experiments and chronological boundaries, then implement resampling and scenario reporting. Q02 provider-specific account simulation requires current official verification. D05 adapter and contract work remains pending.
 
 ## Important Decisions
 
-- ADR-004/005 — Exchange trade dates and full windows are distinct from dataset coverage. Intraday buckets restart after closures. Daily bars use every expected open window.
-- ADR-006/007 — Evaluate previously known levels before publishing new pivots or proxies. Preserve gap/sweep confirmation and ordering explicitly. OHLCV cannot show hidden liquidity or intrabar order.
-- ADR-008 — Allow same-close MSS and zone evidence, require a later retest/reaction, and preserve the outermost structural stop with configured tick buffer. Qualification is separate from fills and experimental scores are not probabilities.
-- Costs — Illustrative USD 1.60 commission and one round-trip slippage tick per contract. The optional net cap is separate from the default gross cap.
+- ADR-004 through ADR-008 — Respect dated windows, full completed buckets, actual evidence availability and versioned rule/strategy context. The default USD 50 cap is gross with an optional net cap. Scores are experimental.
+- ADR-009 — Separate chronological signal qualification from paper fills. Conservative OHLC fills do not infer intrabar order. The default is one position at a time. Fees and slippage are illustrative costs.
+- Drawdown — Current performance uses closed-trade equity. The Wilson win-rate interval assumes independent outcomes and is descriptive. Q01 adds dependence-aware estimates. Q02 must separately model intraday breach where required.
+- Reproducibility — Run manifests are content-addressed by input dataset and exact configs. Historical and synthetic labels are carried into each event.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized MGC export and production-reviewed schedule are available.
-- CAL-002, DATA-002 and DATA-003 — Reviewed calendar is caller supplied. Sparse no-trade exports block replay. Imports buffer source bytes and candles.
-- EVENT-001 — Event coverage is unknown without a reviewed snapshot. An authorized production feed is pending.
-- Live market, delivery and actual account execution are absent. Only paper research is within scope.
+- DATA-001 — High, blocked. No authorized historical MGC sample or production-reviewed schedule was supplied. No empirical strategy result exists.
+- CAL-002 and EVENT-001 — Reviewed exchange schedules and economic snapshots are supplied manually. Production feeds remain pending.
+- DATA-002/DATA-003 — Sparse no-trade exports block replay. Import buffers source and normalized bars.
+- Current execution assumes one dated contract, trade OHLCV and configured cash costs. Quote/tick replay and rollover require future adapter work.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (90), Ruff lint and format, mypy (26 files), dependency and Git whitespace checks. The tests include mirrored strategy CLI replay, prefix stability, risk and event-calendar validation.
+- Passed — `.venv/bin/python -m pytest -q` (99), Ruff lint and format, mypy (30 files), dependency checks and Git whitespace checks.
 - Failed — None outstanding.
-- Not run — Authorized historical reconciliation, live feed parity, empirical strategy outcomes, backtests or account simulation.
-- Limitations — All tests use synthetic market data or explicit unknown context.
+- Not run — Real-data reconciliation, production providers, actual strategy performance, statistical validation or account simulation.
+- Limitations — Synthetic input exercises fill and reporting logic only.
 
 ## Environment
 
-- Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. Requires SQLite 3.37+.
-- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev]'`.
-- Required services — None for current CLI. Keep authorized input under ignored `data/`.
-- Missing configuration — Authorized history and reviewed effective exchange schedule for D04/B02. B01 can be developed and tested offline.
+- Runtime — Python 3.12.7 on macOS arm64 and SQLite 3.45.3. Requires SQLite 3.37+.
+- Setup — `python3.12 -m venv .venv` and `.venv/bin/python -m pip install -e '.[dev]'`.
+- Services — None. Keep authorized input in ignored `data/`.
+- Missing configuration — Authorized MGC and reviewed exchange schedule for B02/D04. Q01 can be built and tested with labeled fixtures.
 
 ## Immediate Next Actions
 
-1. Run the checkpoint suite and read specification sections XI–XII. Build a pure execution engine receiving completed minutes and paper signals in chronology. Process any prior orders at the eligible minute open before observing current-minute strategy events.
-2. Test gap entries and exits, both stop and target in a bar, missed entries across scheduled closures, costs, risk caps, marking and terminal outcomes. Document close-based outcome timestamps and excursion assumptions.
-3. Implement sample-aware performance and persistent backtest evidence, then run the CLI end to end on synthetic inputs. Update the roadmap and handoff before moving to statistical validation.
+1. Read specification sections XI–XIII and run the checkpoint tests. Define chronological splits using setup availability and outcome availability. Keep the final holdout completely separate from variant ranking.
+2. Implement typed observation extraction, walk-forward selection, block-bootstrap uncertainty and scenario Monte Carlo. Test boundary leakage, zero trades, determinism and cost sensitivity.
+3. Expose reproducible report commands and update docs. Verify current official Lucid evaluation/funded rules before implementing provider-specific Q02 defaults.
 
 ## Do Not Repeat
 
-- D01–D03 and S01–S03 are verified. Reuse the shared evidence and strategy paths.
-- Keep synthetic replay separate from real performance. Preserve structural stops and apply conservative simulated fills.
-- Do not infer calendar status, unseen data or real provider access from local tests.
+- D01–D03, S01–S03 and B01 are verified. Reuse shared replay, cost and audit logic.
+- Do not optimize on final evaluation data or treat synthetic scenarios as observed wins.
+- Keep real order execution and live brokerage credentials outside AURUM.
 
 ## Continuation Instruction
 

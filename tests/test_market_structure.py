@@ -478,3 +478,35 @@ def test_strategy_cli_replays_complete_mirrored_setup_and_records_filters(
     assert any(
         event["failed"] == ["higher_timeframe_alignment", "event_filter"] for event in transitions
     )
+
+
+def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: Path) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 70, 180, 111, 110),
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    args = [*aurum, "backtest", dataset, "--internal-pivot", "1", "1"]
+    output = subprocess.run(args, check=True, capture_output=True, text=True)
+    run = json.loads(output.stdout)
+    assert run["data_kind"] == "synthetic"
+    assert run["summary"]["signal_count"] == 1
+    assert run["summary"]["performance"]["trades"] == 1
+    assert run["summary"]["performance"]["net_profit_cents"] == -3560
+    assert run["summary"]["performance"]["ambiguous_exits"] == 1
+    events = list(store.structure_events(run["run_id"]))
+    (trade,) = [event for event in events if event["event"] == "paper_trade_completed"]
+    (signal,) = [event for event in events if event.get("state") == "paper_signal"]
+    assert trade["setup_id"] == signal["setup_id"]
+    assert trade["entry_at"] == signal["confirmed_at"] == bars[13].opened_at.isoformat()
+    assert trade["entry_ticks"] == 110
+    assert trade["exit_ticks"] == signal["stop_ticks"] == 77
+    assert trade["recorded_at"] == (bars[13].opened_at + MINUTE).isoformat()
+    assert trade["gross_cents"] == -3300
+    repeated = subprocess.run(args, check=True, capture_output=True, text=True)
+    assert repeated.stdout == output.stdout

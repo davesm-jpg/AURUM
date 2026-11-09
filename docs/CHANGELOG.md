@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Auditable paper backtesting
+
+- Added next-eligible-minute fills, structural bracket and size rechecks, conservative ambiguity handling and explicit modeled costs.
+- Added closed-trade equity, expectancy and sample-aware performance summaries.
+- Added reproducible backtest, summary and audit commands with synthetic integration tests.
+
 ## 2026-11-09 — Paper setup research
 
 - Added versioned strategy variants, causal setup transitions and experimental scoring.
