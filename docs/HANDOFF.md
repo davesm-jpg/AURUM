@@ -5,7 +5,7 @@
 - Current phase — Phase 4 backtest engine is implemented. Q01 statistical tooling is next. D04 and B02 require authorized historical MGC.
 - Current milestone — B01 audited minute-level paper backtesting.
 - Current branch — `main`.
-- Last verified commit — the B01 implementation commit containing this handoff.
+- Last verified commit — `530686126cf5d3daa15b5e56a530516badff8f9a`.
 
 ## Current Objective
 
