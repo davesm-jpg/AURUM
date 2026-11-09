@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — F01 forward research is verified on synthetic input. U01 runtime settings remain in progress.
+- Current milestone — F01 forward research and U01 local workspace are verified on synthetic input. Runtime profiles and browser origin controls are in place.
 - Current branch — `main`.
-- Last verified commit — `fc5039afa66861a0717754bb830d35c0760f95cb`.
+- Last verified commit — `7073720811f9955f0eed53be2ba5de523a36c9d2`.
 
 ## Current Objective
 
 - Task ID — U01.
-- Objective — Expose versioned source and notification settings for local operator use.
-- Acceptance criteria — Saved profiles work through existing CLI transports. Only environment variable names are persisted. Authorized credentials stay outside the API and database.
+- Objective — Harden resumable monitor event delivery and preserve the verified local workspace.
+- Acceptance criteria — Reconnecting clients resume after their last event and receive stable sequences.
 
 ## Completed Work
 
@@ -30,9 +30,9 @@
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v8. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v9. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Expose source and notification runtime profiles. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
+- Remaining portions — Monitor event streaming supports a cursor parameter. Verify native reconnect cursor forwarding. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -53,7 +53,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (150), Ruff lint/format, mypy (59 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (151), Ruff lint/format, mypy (60 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -67,9 +67,9 @@
 
 ## Immediate Next Actions
 
-1. Add versioned source and notification runtime profiles using environment variable names only.
-2. Expose the saved profiles in local settings and run them through existing CLI transports.
-3. Continue reliability checks while authorized inputs remain pending.
+1. Honor monitor stream reconnect cursors in the proxy and API. Verify using a bounded local synthetic stream.
+2. Profile the verified workspace with representative authorized data once D04 is unblocked.
+3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
 

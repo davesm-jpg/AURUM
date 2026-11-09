@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-09 — Runtime profiles and loopback protections
+
+- Added immutable provider and paper-delivery profiles backed by environment variable names.
+- Restricted browser mutations and bearer forwarding to the local workspace.
+
 ## 2026-11-09 — Automatic forward research periods
 
 - Added opt-in completed-period publication and frozen report checkpoints with durable deduplication.

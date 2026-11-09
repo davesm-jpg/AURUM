@@ -147,3 +147,11 @@ before registration.
 Use `forward-sync FORWARD_ID --watch --auto-reports` to save completed reviewed
 daily, weekly and monthly periods from the foreground worker. Weekly and
 monthly publication requires reviewed schedule coverage into the next period.
+
+## Runtime profiles
+
+The **Settings** tab saves provider and notification profiles. Set their
+`AURUM_` environment variable values in the corresponding worker environment.
+Use the command shown with the saved profile, or list profiles with
+`aurum runtime-profiles`. The existing CLI flags remain available for an
+independently supplied reviewed calendar or direct transport configuration.

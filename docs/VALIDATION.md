@@ -3,12 +3,14 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 150 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
+- `.venv/bin/python -m pytest -q` passed 151 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
-- `.venv/bin/mypy .` passed across 59 source/test files.
+- `.venv/bin/mypy .` passed across 60 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
+
+Runtime profile tests verified stable IDs, worker resolution by environment name and redaction of rejected values. The browser saved a synthetic provider profile through the bearer proxy at local width and fit at 390px. Local HTTP tests returned 403 for cross-origin mutations and an untrusted Host. Five TypeScript tests passed.
 
 The completed-period CLI test verified no early publication, a daily and weekly report at the reviewed close, deduplication after restart and stable Friday IDs after Monday ingestion.
 

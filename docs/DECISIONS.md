@@ -175,3 +175,12 @@
 - Decision — Register against the current applied cursor, ceil actual observation to a minute open, then add latency. Use the shared paper fill engine and persist the decision and observation clocks.
 - Consequences — A timely direct observation can qualify. Recovered, stale or otherwise unverified data cancels pending paper entries and leaves open paper outcomes unresolved. Synthetic verification is a separate source class.
 - Files — `forward.py`, `execution.py`, `monitoring.py`, `storage.py`.
+
+## ADR-019 — Runtime profiles reference worker environment names
+
+- Date — 2026-11-09.
+- Context — The dashboard needs reproducible runtime settings without receiving feed or channel credentials.
+- Alternatives — Store credentials, keep settings exclusively in CLI arguments or persist nonsecret profiles.
+- Decision — Save content-addressed profiles with AURUM environment names. Resolve values only in CLI workers. Guard the bearer proxy with loopback host and same-origin mutation checks.
+- Consequences — Profile creation does not launch workers. Production authorization and integration verification remain separate.
+- Files — `runtime_profiles.py`, `api.py`, `cli.py`, `frontend/app/runtime-settings.tsx`.
