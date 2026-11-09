@@ -5,7 +5,7 @@
 - Current phase — Phase 1 data foundation is implemented through D03. Historical source reconciliation D04 is blocked and P0 market structure S01 is next.
 - Current milestone — D03 incremental exchange-aligned candle aggregation.
 - Current branch — `main`.
-- Last verified commit — the D03 implementation commit containing this handoff.
+- Last verified commit — `69ad81a14d02d3c1b24b670508cddf094e707870`.
 
 ## Current Objective
 
