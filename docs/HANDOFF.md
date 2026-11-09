@@ -5,7 +5,7 @@
 - Current phase — Phase 1, repository and data foundation.
 - Current milestone — D01 CSV import/replay and D02 dated exchange calendars are complete. D03 aggregation is next. D04 reconciliation with an authorized export remains blocked.
 - Current branch — `main`.
-- Last verified commit — the D02 implementation commit containing this handoff. A handoff-only update may be ahead of the code checkpoint.
+- Last verified commit — `1eaad0e9c0986f769a40232b20d40af6989765a7`. A handoff-only update may be ahead of the code checkpoint.
 
 ## Current Objective
 
