@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — F01 forward paper execution is verified. Period reporting and compatible holdout comparison are verified. Automatic report cadence is next. U01 runtime settings remain in progress.
+- Current milestone — F01 forward research is verified on synthetic input. U01 runtime settings remain in progress.
 - Current branch — `main`.
-- Last verified commit — `b32b07824357e05b6e6884464f9c77742cd438be`.
+- Last verified commit — `fc5039afa66861a0717754bb830d35c0760f95cb`.
 
 ## Current Objective
 
-- Task ID — F01.
-- Objective — Automatically save completed forward research periods from an explicitly running forward worker.
-- Acceptance criteria — Earliest fill follows actual observation, recovery cannot create a retroactive entry, replay is deterministic across restarts, and reports stay separate from historical backtests.
+- Task ID — U01.
+- Objective — Expose versioned source and notification settings for local operator use.
+- Acceptance criteria — Saved profiles work through existing CLI transports. Only environment variable names are persisted. Authorized credentials stay outside the API and database.
 
 ## Completed Work
 
@@ -26,13 +26,13 @@
 
 - U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Research analytics show closed-trade equity, drawdown, rolling diagnostics, groups, costs and experimental score bands. Saved validation, Monte Carlo and account results have dedicated views. The paper form uses typed server defaults and can reload an immutable run profile. The dashboard creates validation, Monte Carlo and explicit paper ledger reports. Verified using labeled synthetic fixtures.
 
-- F01 — Registered forward runs consume only newly applied observed minutes. The ledger records signal, order, outcome and unresolved events with an atomic cursor. The CLI can synchronize or watch. Synthetic verification is a separate source class. Daily, weekly and monthly reports freeze the applied prefix, separate unresolved outcomes, report prior-period differences and optionally compare an earlier independent compatible holdout.
+- F01 — Registered forward runs consume only newly applied observed minutes. The ledger records signal, order, outcome and unresolved events with an atomic cursor. The CLI can synchronize or watch. Synthetic verification is a separate source class. Daily, weekly and monthly reports freeze the applied prefix, separate unresolved outcomes, report prior-period differences and optionally compare an earlier independent compatible holdout. The foreground worker can save completed reviewed periods once. Later periods preserve earlier IDs.
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v7. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v8. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Automate completed-period publication with idempotent exchange-date boundaries. The Forward workspace already supports local registration, audit and manual reports. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
+- Remaining portions — Expose source and notification runtime profiles. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -53,7 +53,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (149), Ruff lint/format, mypy (59 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (150), Ruff lint/format, mypy (59 files), dependency and Git whitespace checks. Three frontend timeline and histogram tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -67,9 +67,9 @@
 
 ## Immediate Next Actions
 
-1. Pin forward reports to a period-specific immutable checkpoint. Test that later periods cannot change a prior snapshot.
-2. Add opt-in completed-period reporting to the foreground forward worker with durable deduplication.
-3. Continue U01 runtime source and notification controls while authorized feeds remain pending.
+1. Add versioned source and notification runtime profiles using environment variable names only.
+2. Expose the saved profiles in local settings and run them through existing CLI transports.
+3. Continue reliability checks while authorized inputs remain pending.
 
 ## Do Not Repeat
 

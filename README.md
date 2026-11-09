@@ -143,3 +143,7 @@ before registration.
 ```sh
 .venv/bin/aurum --db data/aurum.sqlite forward-report FORWARD_ID --period weekly --trade-date 2025-03-10
 ```
+
+Use `forward-sync FORWARD_ID --watch --auto-reports` to save completed reviewed
+daily, weekly and monthly periods from the foreground worker. Weekly and
+monthly publication requires reviewed schedule coverage into the next period.

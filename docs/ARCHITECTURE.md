@@ -58,7 +58,7 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together. Replay and canonical serialization happen in a bounded private spool outside the write transaction.
 - `analysis_reports` stores content-addressed report definitions and results. Validation and resampled reports reference immutable backtest IDs. Assumed scenarios are reproducible without a dataset.
 - `monitor_runs`, `monitor_minutes`, `monitor_events` and `monitor_alerts` keep source definition, durable cursor, pending frames, transition audit and deduplicated in-app alerts. Advance of the cursor, applied minute and resulting events commit together. Schema v6 adds `monitor_market_events` and nullable observed timestamps on applied minutes. Previous rows keep unknown observation times.
-- `forward_paper_research` reports freeze a forward cursor and event sequence. They attribute events to source-minute exchange trade dates and separate descriptive comparisons, missing coverage and unresolved outcomes. Independent historical baselines must predate registration and match strategy and cost assumptions.
+- `forward_paper_research` reports freeze a forward cursor and event sequence. They attribute events to source-minute exchange trade dates and separate descriptive comparisons, missing coverage and unresolved outcomes. Independent historical baselines must predate registration and match strategy and cost assumptions. Schema v8 records idempotent completed-period publications. Earlier reports are anchored to their own source-minute period end.
 - `forward_runs` and `forward_events` persist the registration boundary, execution settings, cursor and paper audit. Schema v7 stores whether a monitor minute was directly and promptly applied. Forward runs leave interrupted positions unresolved.
 - `notification_deliveries`, `notification_attempts` and `notification_cancellations` track claims, provider results, retries, expiry and queued cancellation. Destination keys are hashes. Tokens and webhook URLs remain in environment-managed configuration.
 
@@ -66,6 +66,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Add forward paper outcomes and reports from the observed monitor journal. Verify the normalized connector and delivery against authorized production configuration when available.
+Expose versioned source and notification profiles for the local workspace. Verify the normalized connector and delivery against authorized production configuration when available.
 
 Forward paper outcome tracking and production validation remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

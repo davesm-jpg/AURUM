@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Automatic forward research periods
+
+- Added opt-in completed-period publication and frozen report checkpoints with durable deduplication.
+
 ## 2026-11-09 — Forward research periods
 
 - Added exchange-date period reports, prior-period drift diagnostics and compatible independent historical comparison.
