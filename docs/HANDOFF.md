@@ -5,7 +5,7 @@
 - Current phase — Phase 5 statistical tooling Q01 is implemented. Q02 paper account rules is next. D04 and B02 empirical work await authorized MGC.
 - Current milestone — Q01 chronological validation and conditional Monte Carlo.
 - Current branch — `main`.
-- Last verified commit — the Q01 implementation commit containing this handoff.
+- Last verified commit — `521456d04ce592ee445e4f47d5bfdda856ae4520`.
 
 ## Current Objective
 
