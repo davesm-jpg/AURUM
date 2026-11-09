@@ -3,12 +3,14 @@
 ## Verified checkpoint — 2026-11-09
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 137 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
+- `.venv/bin/python -m pytest -q` passed 138 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
 - `.venv/bin/mypy .` passed across 54 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
+
+The monitor chart API test held pending minutes outside the chart, released a completed bar after a gap was filled and preserved mixed historical and configured real-time source counts in a synthetic fixture. Desktop preview verified separate overlay controls and source switching. At 390px the chart fit without page-level horizontal overflow.
 
 Overlay tests checked causal prefix equality, bounded zone and level lifetimes and recorded paper event times. Two TypeScript timeline cases verified cross-timeframe mapping and clipping across missing intervals. The chart endpoint was exercised with saved synthetic evidence and backtest runs.
 

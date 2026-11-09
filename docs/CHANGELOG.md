@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Applied monitor chart
+
+- Added an independent monitor source selector, source-minute attribution, gap warnings and current schedule and recorded health status.
+
 ## 2026-11-09 — Causal chart overlays
 
 - Bound historical overlays to persisted level, imbalance and paper-order lifecycles.

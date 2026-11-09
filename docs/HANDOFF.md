@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — U01 local research workspace, in progress.
 - Current branch — `main`.
-- Last verified commit — `fb6af3d47f2d3cd0e7dc34cb6d883df732e801c8`.
+- Last verified commit — `c8c53b850b58749c2fdd97429258b725593a1bb5`.
 
 ## Current Objective
 
@@ -24,13 +24,13 @@
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
-- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. Verified using labeled synthetic fixtures.
+- U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance and independent selection. Verified using labeled synthetic fixtures.
 
 ## Work In Progress
 
 - Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store remains at schema v5.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
-- Remaining portions — Chart applied monitor candles separately, expand analytics and versioned settings, and verify mobile interactions. Forward paper reporting and production checks remain separate.
+- Remaining portions — Persist monitor market evidence for chart overlays, expand analytics and versioned settings, and verify their mobile interactions. Forward paper reporting and production checks remain separate.
 
 ## Important Decisions
 
@@ -49,9 +49,9 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (137), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. The original slice passed local HTTP and desktop browser checks.
+- Passed — `.venv/bin/python -m pytest -q` (138), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
-- Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and mobile browser workflows.
+- Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
 
 ## Environment
@@ -63,8 +63,8 @@
 
 ## Immediate Next Actions
 
-1. Add a chart endpoint that reads the applied monitor prefix and source status within a consistent read snapshot. Keep the historical selection separate.
-2. Verify source switching, continuity gating, desktop and mobile using labeled fixtures and the README commands.
+1. Fix SQLite reader/writer contention for a local monitor and dashboard on the same database. Reproduce with a held read snapshot and assert writers can commit while it stays open.
+2. Decide how to journal monitor market evidence while preserving existing monitor identities and original observed times.
 3. Expand versioned analytics and settings or begin forward paper reporting while production access remains pending.
 
 ## Do Not Repeat
