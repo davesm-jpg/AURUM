@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — U01 local research workspace, in progress.
 - Current branch — `main`.
-- Last verified commit — `c8c53b850b58749c2fdd97429258b725593a1bb5`.
+- Last verified commit — `b9791b9e861adc554ef00b52f349c66fada2875b`.
 
 ## Current Objective
 
@@ -36,6 +36,7 @@
 
 - ADR-004–009 — Use reviewed dates, completed bars, actual evidence availability and conservative paper fills.
 - ADR-010–012 — Keep holdout and assumptions separate, use an independent account ledger and preserve original dated prices.
+- ADR-016 — Dashboard reads use bounded immutable pages. Replay computes before atomic publication so monitor writes can proceed.
 - ADR-013 — Journal raw data, process only the known chronological prefix, hold gaps across restart and latch conflicting duplicates. Gate in-app alerts to fresh eligible real-time observations.
 - Safety — Store only authorized market-data and channel credentials in environment variables. Never handle actual order execution or live brokerage accounts.
 
@@ -49,7 +50,7 @@
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (138), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (139), Ruff lint/format, mypy (54 files), dependency and Git whitespace checks. Two frontend timeline tests, typecheck and production build passed. Desktop overlay toggles and source switching passed. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -63,8 +64,8 @@
 
 ## Immediate Next Actions
 
-1. Fix SQLite reader/writer contention for a local monitor and dashboard on the same database. Reproduce with a held read snapshot and assert writers can commit while it stays open.
-2. Decide how to journal monitor market evidence while preserving existing monitor identities and original observed times.
+1. Journal new monitor market evidence with original observed time and applied minute identity while preserving v5 monitor IDs. Leave unknown legacy observation times unset.
+2. Expose the observed prefix on the monitor chart and verify that gap recovery never backdates evidence.
 3. Expand versioned analytics and settings or begin forward paper reporting while production access remains pending.
 
 ## Do Not Repeat

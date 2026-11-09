@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-09 — Shorter SQLite transactions
+
+- Released chart readers between bounded immutable pages and staged replay evidence before atomic publication.
+
 ## 2026-11-09 — Applied monitor chart
 
 - Added an independent monitor source selector, source-minute attribution, gap warnings and current schedule and recorded health status.

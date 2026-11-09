@@ -148,3 +148,12 @@
 - Decision — Use local FastAPI and a Next.js server-side proxy with optional bearer forwarding. Reuse persisted candles and research runs.
 - Consequences — The workspace operates without a market feed. Public deployment and applied monitor chart data require separate work.
 - Files — `src/aurum/api.py`, `src/aurum/cli.py`, `frontend/`.
+
+## ADR-016 — Keep computation outside SQLite locks
+
+- Date — 2026-11-09.
+- Context — Holding a rollback-journal reader during ingestion blocked the synthetic monitor writer.
+- Alternatives — Use bounded immutable reads or switch the store to WAL.
+- Decision — Capture the applied cursor and read immutable pages. Stage deterministic replay evidence in a bounded private spool before publishing the run and events atomically.
+- Consequences — Calculation can overlap writes. Final writes remain serialized. The installed SQLite 3.45.3 falls in the documented WAL-reset bug range, so this change preserves the existing journal mode. [SQLite WAL documentation](https://sqlite.org/wal.html#the_wal_reset_bug)
+- Files — `src/aurum/api.py`, `src/aurum/monitoring.py`, `src/aurum/storage.py`.
