@@ -15,9 +15,9 @@ import {
   type ChartEvidence,
   type Overlay,
 } from "./chart-evidence";
+import { api, type RecordData } from "./client";
+import { useMonitorChart } from "./monitor-chart";
 import { PriceChart } from "./price-chart";
-
-type RecordData = Record<string, unknown>;
 type Dataset = {
   dataset_id: string;
   contract: string;
@@ -48,6 +48,7 @@ type Monitor = {
 type Tab = "Market" | "Research" | "Reports";
 
 const FRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
+const EMPTY_BARS: Candle[] = [];
 const VARIANTS = [
   "mss",
   "sweep_mss",
@@ -83,18 +84,6 @@ const stamp = (value: unknown, zone = "UTC") =>
         hourCycle: "h23",
       }).format(new Date(value))
     : "Unavailable";
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch("/api/" + path, { ...init, cache: "no-store" });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : "The request could not be completed.",
-    );
-  return data as T;
-}
 
 function eventGroup(event: RecordData): string | null {
   const kind = String(event.event);
@@ -166,14 +155,16 @@ export default function Dashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [datasetId, setDatasetId] = useState("");
+  const [monitorId, setMonitorId] = useState("");
+  const [sourceMode, setSourceMode] = useState<"dataset" | "monitor">();
+  const [monitorRefresh, setMonitorRefresh] = useState(0);
   const [runId, setRunId] = useState("");
   const [reportId, setReportId] = useState("");
   const [frame, setFrame] = useState("5m");
-  const [bars, setBars] = useState<Candle[]>([]);
+  const [history, setHistory] = useState<{ key: string; bars: Candle[] }>();
   const [events, setEvents] = useState<RecordData[]>([]);
   const [summary, setSummary] = useState<RecordData>({});
   const [report, setReport] = useState<RecordData>({});
-  const [alerts, setAlerts] = useState<RecordData[]>([]);
   const [variant, setVariant] = useState("sweep_mss_ifvg");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -185,6 +176,25 @@ export default function Dashboard() {
   const [overlayError, setOverlayError] = useState("");
   const [overlays, setOverlays] = useState<Set<Overlay>>(new Set(overlayKeys));
   const dataset = datasets.find((item) => item.dataset_id === datasetId);
+  const selectedMode =
+    sourceMode ?? (datasets.length || !monitors.length ? "dataset" : "monitor");
+  const showMonitor = tab === "Market" && selectedMode === "monitor";
+  const monitor = monitors.find((item) => item.monitor_id === monitorId);
+  const { view: monitorView, error: monitorError } = useMonitorChart(
+    showMonitor ? (monitor?.monitor_id ?? "") : "",
+    frame,
+    monitorRefresh,
+  );
+  const feed = monitorView?.chart;
+  const chartKey = datasetId
+    ? "datasets/" + datasetId + "/candles?limit=240&timeframe=" + frame
+    : "";
+  const bars = showMonitor
+    ? (feed?.candles ?? EMPTY_BARS)
+    : history?.key === chartKey
+      ? history.bars
+      : EMPTY_BARS;
+  const displayedEvents = showMonitor ? (monitorView?.events ?? []) : events;
   const availableRuns = useMemo(
     () => runs.filter((run) => run.dataset_id === datasetId),
     [runs, datasetId],
@@ -197,13 +207,9 @@ export default function Dashboard() {
       })
     : null;
   const evidenceQuery =
-    activeRun && bounds
+    !showMonitor && activeRun && bounds
       ? "runs/" + activeRun.run_id + "/chart-evidence?" + bounds
       : "";
-  const monitor = dataset
-    ? monitors.find((item) => item.contract === dataset.contract)
-    : monitors[0];
-
   const refresh = useCallback(async () => {
     try {
       const [data, audit, analysis, feeds] = await Promise.all([
@@ -217,6 +223,11 @@ export default function Dashboard() {
       setReports(analysis);
       setMonitors(feeds);
       setDatasetId((current) => current || data[0]?.dataset_id || "");
+      setMonitorId((current) =>
+        feeds.some((item) => item.monitor_id === current)
+          ? current
+          : (feeds[0]?.monitor_id ?? ""),
+      );
       setReportId((current) => current || analysis[0]?.report_id || "");
       setError("");
     } catch (failure) {
@@ -241,23 +252,19 @@ export default function Dashboard() {
   }, [availableRuns]);
 
   useEffect(() => {
-    if (!datasetId) return;
-    let ignore = false;
-    setBars([]);
+    if (!chartKey || showMonitor) return;
+    const controller = new AbortController();
     setChartError("");
-    api<Candle[]>(
-      "datasets/" + datasetId + "/candles?limit=240&timeframe=" + frame,
-    )
+    api<Candle[]>(chartKey, { signal: controller.signal })
       .then((result) => {
-        if (!ignore) setBars(result);
+        if (!controller.signal.aborted)
+          setHistory({ key: chartKey, bars: result });
       })
       .catch((failure) => {
-        if (!ignore) setChartError(failure.message);
+        if (!controller.signal.aborted) setChartError(failure.message);
       });
-    return () => {
-      ignore = true;
-    };
-  }, [datasetId, frame]);
+    return () => controller.abort();
+  }, [chartKey, showMonitor]);
 
   useEffect(() => {
     if (!evidenceQuery) return;
@@ -317,41 +324,27 @@ export default function Dashboard() {
     };
   }, [reportId]);
 
-  useEffect(() => {
-    const id = monitor?.monitor_id;
-    if (!id) return;
-    let ignore = false;
-    setAlerts([]);
-    const load = () =>
-      api<RecordData[]>("monitors/" + id + "/alerts?limit=5")
-        .then((result) => {
-          if (!ignore) setAlerts(result);
-        })
-        .catch((failure) => {
-          if (!ignore) setError(failure.message);
-        });
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, 15000);
-    return () => {
-      ignore = true;
-      clearInterval(timer);
-    };
-  }, [monitor?.monitor_id]);
-
   const latest = bars.at(-1);
+  const monitorBar = feed?.candles.at(-1);
+  const actualSources = Object.entries(monitorBar?.source_minutes ?? {})
+    .map(([kind, count]) => `${count} ${label(kind)}`)
+    .join(" · ");
+  const heartbeatOverdue = feed?.checked_at
+    ? Date.now() - Date.parse(feed.checked_at) >
+      Math.max(feed.stale_after_seconds * 2, 30) * 1000
+    : false;
+  const contract = showMonitor ? monitor?.contract : dataset?.contract;
   const performance = record(record(summary.summary).performance);
   const setups = useMemo(() => {
     const unique = new Map<string, RecordData>();
-    for (const event of events)
+    for (const event of displayedEvents)
       if (
         typeof event.setup_id === "string" &&
         event.event === "paper_setup_transition"
       )
         unique.set(event.setup_id, event);
     return Array.from(unique.values()).reverse().slice(0, 8);
-  }, [events]);
+  }, [displayedEvents]);
   const latestSetup =
     setups.find((item) => item.state === "paper_signal") ?? setups[0];
 
@@ -426,36 +419,86 @@ export default function Dashboard() {
       </header>
 
       <section className="selection" aria-label="Active research selection">
-        <label>
-          Dataset
-          <select
-            value={datasetId}
-            onChange={(event) => setDatasetId(event.target.value)}
-          >
-            {!datasets.length && <option value="">No dataset imported</option>}
-            {datasets.map((item) => (
-              <option key={item.dataset_id} value={item.dataset_id}>
-                {item.contract} · {item.data_kind} · {stamp(item.last_close)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Evidence run
-          <select
-            value={runId}
-            onChange={(event) => setRunId(event.target.value)}
-          >
-            {!availableRuns.length && <option value="">No saved runs</option>}
-            {availableRuns.map((run) => (
-              <option key={run.run_id} value={run.run_id}>
-                {run.kind} · {run.variant ?? "market structure"} ·{" "}
-                {run.run_id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="subtle" onClick={() => void refresh()}>
+        {tab === "Market" && (
+          <label>
+            Chart source
+            <select
+              value={selectedMode}
+              onChange={(event) =>
+                setSourceMode(
+                  event.target.value === "monitor" ? "monitor" : "dataset",
+                )
+              }
+            >
+              <option value="dataset">Imported history</option>
+              <option value="monitor">Monitor journal</option>
+            </select>
+          </label>
+        )}
+        {showMonitor ? (
+          <label>
+            Monitor
+            <select
+              value={monitorId}
+              onChange={(event) => setMonitorId(event.target.value)}
+            >
+              {!monitors.length && (
+                <option value="">No monitor configured</option>
+              )}
+              {monitors.map((item) => (
+                <option key={item.monitor_id} value={item.monitor_id}>
+                  {item.contract} · {label(item.source_status)} · {item.source}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          tab !== "Reports" && (
+            <>
+              <label>
+                Dataset
+                <select
+                  value={datasetId}
+                  onChange={(event) => setDatasetId(event.target.value)}
+                >
+                  {!datasets.length && (
+                    <option value="">No dataset imported</option>
+                  )}
+                  {datasets.map((item) => (
+                    <option key={item.dataset_id} value={item.dataset_id}>
+                      {item.contract} · {item.data_kind} ·{" "}
+                      {stamp(item.last_close)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Evidence run
+                <select
+                  value={runId}
+                  onChange={(event) => setRunId(event.target.value)}
+                >
+                  {!availableRuns.length && (
+                    <option value="">No saved runs</option>
+                  )}
+                  {availableRuns.map((run) => (
+                    <option key={run.run_id} value={run.run_id}>
+                      {run.kind} · {run.variant ?? "market structure"} ·{" "}
+                      {run.run_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )
+        )}
+        <button
+          className="subtle"
+          onClick={() => {
+            if (showMonitor) setMonitorRefresh((current) => current + 1);
+            void refresh();
+          }}
+        >
           Refresh
         </button>
       </section>
@@ -470,11 +513,13 @@ export default function Dashboard() {
           <section className="metrics" aria-label="Market overview">
             <Metric
               title="Dated contract"
-              value={dataset?.contract ?? "MGC"}
+              value={contract ?? "MGC"}
               detail={
-                dataset
-                  ? label(dataset.data_kind) + " dataset"
-                  : "No imported dataset"
+                showMonitor
+                  ? "Applied monitor journal"
+                  : dataset
+                    ? label(dataset.data_kind) + " dataset"
+                    : "No imported dataset"
               }
             />
             <Metric
@@ -486,30 +531,60 @@ export default function Dashboard() {
                   : "Awaiting completed bars"
               }
             />
-            <Metric
-              title="Feed health"
-              value={monitor ? label(monitor.state) : "Offline research"}
-              detail={
-                monitor
-                  ? label(monitor.source_status) + " · " + monitor.source
-                  : "No monitor configured"
-              }
-            />
-            <Metric
-              title="Dataset quality"
-              value={
-                dataset
-                  ? dataset.replayable
-                    ? "Replay ready"
-                    : "Replay blocked"
-                  : "—"
-              }
-              detail={
-                dataset
-                  ? dataset.candle_count.toLocaleString() + " source minutes"
-                  : "Reviewed coverage required"
-              }
-            />
+            {showMonitor ? (
+              <>
+                <Metric
+                  title="Feed health"
+                  value={
+                    monitorError
+                      ? "Read unavailable"
+                      : heartbeatOverdue
+                        ? "Status overdue"
+                        : feed
+                          ? label(feed.state)
+                          : "Unavailable"
+                  }
+                  detail={
+                    feed
+                      ? label(feed.configured_status) + " configured"
+                      : "Awaiting monitor status"
+                  }
+                />
+                <Metric
+                  title="Exchange schedule"
+                  value={label(feed?.market_status)}
+                  detail={
+                    feed
+                      ? feed.calendar_source + " · " + feed.calendar_version
+                      : "Reviewed coverage required"
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <Metric
+                  title="Source mode"
+                  value="Offline research"
+                  detail="Imported history"
+                />
+                <Metric
+                  title="Dataset quality"
+                  value={
+                    dataset
+                      ? dataset.replayable
+                        ? "Replay ready"
+                        : "Replay blocked"
+                      : "—"
+                  }
+                  detail={
+                    dataset
+                      ? dataset.candle_count.toLocaleString() +
+                        " source minutes"
+                      : "Reviewed coverage required"
+                  }
+                />
+              </>
+            )}
           </section>
 
           <div className="market-grid">
@@ -517,7 +592,7 @@ export default function Dashboard() {
               <div className="panel-top">
                 <div>
                   <p className="eyebrow">Price & structure</p>
-                  <h2>{dataset?.contract ?? "Micro Gold Futures"}</h2>
+                  <h2>{contract ?? "Micro Gold Futures"}</h2>
                 </div>
                 <div className="frame-picker" aria-label="Candle timeframe">
                   {FRAMES.map((item) => (
@@ -532,12 +607,28 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              {chartError && <p className="notice">{chartError}</p>}
+              {showMonitor && monitorError && (
+                <p className="notice" role="alert">
+                  {monitorError}
+                </p>
+              )}
+              {!showMonitor && chartError && (
+                <p className="notice">{chartError}</p>
+              )}
+              {showMonitor && feed?.fault && (
+                <p className="notice">Feed fault · {label(feed.fault)}</p>
+              )}
+              {showMonitor && !!feed?.pending_minutes && (
+                <p className="notice">
+                  Gap recovery · {feed.pending_minutes} pending source minutes
+                  are held outside the chart.
+                </p>
+              )}
               {evidenceQuery && overlayError && (
                 <p className="notice">{overlayError}</p>
               )}
               <PriceChart
-                key={datasetId + "/" + frame}
+                key={(showMonitor ? monitorId : datasetId) + "/" + frame}
                 bars={bars}
                 evidence={
                   chartEvidence?.key === evidenceQuery
@@ -547,21 +638,27 @@ export default function Dashboard() {
                 overlays={overlays}
               />
               <div className="chart-footer">
-                <div className="overlays">
-                  {overlayKeys.map((item) => (
-                    <button
-                      key={item}
-                      className={overlays.has(item) ? "on" : ""}
-                      aria-pressed={overlays.has(item)}
-                      onClick={() => flipOverlay(item)}
-                    >
-                      {OVERLAYS[item]}
-                    </button>
-                  ))}
-                </div>
+                {!showMonitor && (
+                  <div className="overlays">
+                    {overlayKeys.map((item) => (
+                      <button
+                        key={item}
+                        className={overlays.has(item) ? "on" : ""}
+                        aria-pressed={overlays.has(item)}
+                        onClick={() => flipOverlay(item)}
+                      >
+                        {OVERLAYS[item]}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <span>
                   UTC candle close
-                  {activeRun ? " · " + activeRun.timeframe + " evidence" : ""}
+                  {showMonitor
+                    ? " · applied prefix"
+                    : activeRun
+                      ? " · " + activeRun.timeframe + " evidence"
+                      : ""}
                 </span>
               </div>
             </section>
@@ -572,11 +669,34 @@ export default function Dashboard() {
                 <h2>Source & timing</h2>
                 <dl className="details">
                   <dt>Provider</dt>
-                  <dd>{dataset?.provider ?? "—"}</dd>
-                  <dt>Source class</dt>
-                  <dd>{label(dataset?.data_kind)}</dd>
-                  <dt>Coverage starts</dt>
-                  <dd>{stamp(dataset?.first_open)} UTC</dd>
+                  <dd>
+                    {(showMonitor ? feed?.source : dataset?.provider) ?? "—"}
+                  </dd>
+                  {showMonitor ? (
+                    <>
+                      <dt>Latest bar sources</dt>
+                      <dd>{actualSources || "—"}</dd>
+                      <dt>Last applied close</dt>
+                      <dd>{stamp(feed?.last_applied_close)} UTC</dd>
+                      <dt>Status checked</dt>
+                      <dd>{stamp(feed?.checked_at)} UTC</dd>
+                      <dt>Alerts</dt>
+                      <dd>
+                        {monitorError || heartbeatOverdue || !feed
+                          ? "Status unavailable"
+                          : feed.alerts_suspended
+                            ? "Suspended"
+                            : "Eligible feed"}
+                      </dd>
+                    </>
+                  ) : (
+                    <>
+                      <dt>Source class</dt>
+                      <dd>{label(dataset?.data_kind)}</dd>
+                      <dt>Coverage starts</dt>
+                      <dd>{stamp(dataset?.first_open)} UTC</dd>
+                    </>
+                  )}
                   <dt>New York close</dt>
                   <dd>{stamp(latest?.available_at, "America/New_York")}</dd>
                   <dt>Prague close</dt>
@@ -601,12 +721,19 @@ export default function Dashboard() {
                       <dd>{label(record(latestSetup.context).regime)}</dd>
                       <dt>Confirmed</dt>
                       <dd>{stamp(latestSetup.confirmed_at)} UTC</dd>
+                      {showMonitor && (
+                        <>
+                          <dt>Observed</dt>
+                          <dd>{stamp(latestSetup.observed_at)} UTC</dd>
+                        </>
+                      )}
                     </dl>
                   </>
                 ) : (
                   <p className="muted">
-                    Select a strategy or backtest run to inspect its setup
-                    history.
+                    {showMonitor
+                      ? "No setup has been recorded in the recent monitor journal."
+                      : "Select a strategy or backtest run to inspect its setup history."}
                   </p>
                 )}
               </section>
@@ -620,13 +747,18 @@ export default function Dashboard() {
                 <h2>Recent evidence</h2>
               </div>
               <span className="muted">
-                {activeRun ? activeRun.kind + " run" : "Select a saved run"}
+                {showMonitor
+                  ? "Monitor journal"
+                  : activeRun
+                    ? activeRun.kind + " run"
+                    : "Select a saved run"}
               </span>
             </div>
             <EventTable
-              events={events
+              events={displayedEvents
                 .filter(
                   (item) =>
+                    showMonitor ||
                     eventGroup(item) !== null ||
                     item.event === "paper_setup_transition",
                 )
@@ -634,12 +766,12 @@ export default function Dashboard() {
                 .reverse()}
             />
           </section>
-          {alerts.length > 0 && (
+          {!!monitorView?.alerts.length && (
             <section className="panel lower">
               <div className="panel-top">
                 <h2>In-app feed alerts</h2>
               </div>
-              <EventTable events={alerts} />
+              <EventTable events={monitorView.alerts} />
             </section>
           )}
         </>
@@ -886,7 +1018,11 @@ function EventTable({ events }: { events: RecordData[] }) {
               <td>{label(event.scope ?? event.direction ?? event.state)}</td>
               <td>
                 {stamp(
-                  event.confirmed_at ?? event.created_at ?? event.recorded_at,
+                  event.observed_at ??
+                    event.confirmed_at ??
+                    event.created_at ??
+                    event.recorded_at ??
+                    event.at,
                 )}
               </td>
               <td>

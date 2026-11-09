@@ -414,7 +414,12 @@ class MarketMonitor:
 
 def describe_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
     with store.connection() as db:
-        return _status(_run(db, monitor_id), _pending_count(db, monitor_id))
+        return read_monitor_status(db, monitor_id)
+
+
+def read_monitor_status(db: sqlite3.Connection, monitor_id: str) -> dict[str, object]:
+    """Read status and the pending count from a caller's current database snapshot."""
+    return _status(_run(db, monitor_id), _pending_count(db, monitor_id))
 
 
 def monitor_events(store: DatasetStore, monitor_id: str) -> Iterator[dict[str, object]]:

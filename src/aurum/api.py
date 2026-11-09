@@ -1,10 +1,10 @@
 import asyncio
 import json
 import sqlite3
-from collections import deque
+from collections import Counter, deque
 from collections.abc import AsyncIterator
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from secrets import compare_digest
 from typing import Annotated, Literal
 
@@ -16,11 +16,13 @@ from aurum.candles import CandleAggregator, Timeframe
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import ExecutionConfig
+from aurum.feed_frames import candle_from_dict
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG, BreakMode, PivotRule
-from aurum.monitoring import describe_monitor
+from aurum.monitoring import describe_monitor, read_monitor_status
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
+from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.timestamps import MINUTE, minute_timestamp
@@ -41,6 +43,31 @@ class CandleRecord(BaseModel):
     volume: int
     trade_date: str | None = None
     shortened: bool = False
+
+
+class MonitorCandleRecord(CandleRecord):
+    source_minutes: dict[FeedStatus, int]
+
+
+class MonitorChart(BaseModel):
+    monitor_id: str
+    contract: str
+    source: str
+    configured_status: FeedStatus
+    state: str
+    connected: bool
+    checked_at: str | None
+    last_applied_close: str | None
+    last_received: str | None
+    pending_minutes: int
+    fault: str | None
+    alerts_suspended: bool
+    stale_after_seconds: int
+    market_status: Literal["open", "closed", "unavailable"]
+    calendar_source: str
+    calendar_version: str
+    analysis_timeframe: Timeframe
+    candles: list[MonitorCandleRecord]
 
 
 class BacktestRequest(BaseModel):
@@ -245,6 +272,17 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     def monitor(monitor_id: RecordId) -> dict[str, object]:
         return describe_monitor(store, monitor_id)
 
+    @router.get("/monitors/{monitor_id}/chart")
+    def applied_chart(
+        monitor_id: RecordId,
+        timeframe: ChartTimeframe = "5m",
+        limit: PageLimit = 240,
+        through: Annotated[
+            str | None, Query(description="Inclusive UTC candle close bound")
+        ] = None,
+    ) -> MonitorChart:
+        return _monitor_chart(store, monitor_id, timeframe, limit, through)
+
     @router.get("/monitors/{monitor_id}/alerts")
     def alerts(monitor_id: RecordId, limit: PageLimit = 100) -> list[dict[str, object]]:
         describe_monitor(store, monitor_id)
@@ -263,8 +301,9 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
         monitor_id: RecordId,
         after: Annotated[int, Query(ge=0)] = 0,
         limit: PageLimit = 200,
+        latest: bool = False,
     ) -> list[dict[str, object]]:
-        return _events(store, monitor_id, after, limit, monitor=True)
+        return _events(store, monitor_id, after, limit, monitor=True, latest=latest)
 
     @router.get("/monitors/{monitor_id}/stream")
     async def stream(
@@ -445,3 +484,95 @@ def _chart_start(
             return close - timedelta(minutes=needed)
         needed -= duration
     return earliest
+
+
+def _monitor_chart(
+    store: DatasetStore, monitor_id: str, timeframe: ChartTimeframe, limit: int, through: str | None
+) -> MonitorChart:
+    bound = minute_timestamp(through) if through is not None else None
+    with store.connection() as db:
+        db.execute("BEGIN")
+        status = read_monitor_status(db, monitor_id)
+        definition = status["definition"]
+        assert isinstance(definition, dict)
+        config = definition["monitor_config"]
+        calendar = SessionCalendar.from_dict(definition["calendar"])
+        contract = MgcContract(definition["contract"])
+        last_open = status["last_applied_open"]
+        last_close = (
+            datetime.fromisoformat(last_open) + MINUTE if isinstance(last_open, str) else None
+        )
+        bars: list[MonitorCandleRecord] = []
+        if last_close is not None:
+            end = min(last_close, bound) if bound is not None else last_close
+            frame = Timeframe(timeframe) if timeframe != "1m" else None
+            start = _chart_start(calendar, end, frame.minutes if frame else 1, limit)
+            if start is not None and start < end:
+                bars = _applied_bars(db, monitor_id, calendar, contract, frame, start, end, limit)
+
+    now = datetime.now(UTC)
+    market = "unavailable"
+    if calendar.coverage.start <= now < calendar.coverage.end:
+        market = "open" if calendar.permits(now.replace(second=0, microsecond=0)) else "closed"
+    return MonitorChart.model_validate(
+        {
+            **status,
+            "contract": contract.code,
+            "source": config["source"],
+            "configured_status": config["source_status"],
+            "stale_after_seconds": config["stale_seconds"],
+            "analysis_timeframe": config["timeframe"],
+            "calendar_source": calendar.source,
+            "calendar_version": calendar.version,
+            "last_applied_close": last_close.isoformat() if last_close is not None else None,
+            "market_status": market,
+            "candles": bars,
+        }
+    )
+
+
+def _applied_bars(
+    db: sqlite3.Connection,
+    monitor_id: str,
+    calendar: SessionCalendar,
+    contract: MgcContract,
+    frame: Timeframe | None,
+    start: datetime,
+    end: datetime,
+    limit: int,
+) -> list[MonitorCandleRecord]:
+    records = db.execute(
+        """SELECT candle, source_status FROM monitor_minutes
+           WHERE run_id = ? AND applied = 1 AND opened_at >= ? AND opened_at < ?
+           ORDER BY opened_at""",
+        (monitor_id, start.isoformat(), end.isoformat()),
+    )
+    bars: deque[MonitorCandleRecord] = deque(maxlen=limit)
+    aggregator = CandleAggregator(calendar, contract, (frame,)) if frame else None
+    source: deque[tuple[datetime, FeedStatus]] = deque()
+    for row in records:
+        candle = candle_from_dict(json.loads(row["candle"]))
+        classification = FeedStatus(row["source_status"])
+        if aggregator is None:
+            session = calendar.session_at(candle.opened_at)
+            bars.append(
+                MonitorCandleRecord.model_validate(
+                    {
+                        **candle.as_dict(),
+                        "trade_date": session.trade_date.isoformat() if session else None,
+                        "source_minutes": {classification: 1},
+                    }
+                )
+            )
+            continue
+        source.append((candle.opened_at, classification))
+        for bar in aggregator.push(candle):
+            while source[0][0] < bar.opened_at:
+                source.popleft()
+            bars.append(
+                MonitorCandleRecord.model_validate(
+                    {**bar.as_dict(), "source_minutes": Counter(status for _, status in source)}
+                )
+            )
+            source.clear()
+    return list(bars)
