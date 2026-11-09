@@ -28,7 +28,7 @@ from aurum.forward import (
     list_forward_runs,
     register_forward,
 )
-from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.forward_reports import ForwardPeriod, publish_completed_periods, save_forward_report
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import (
@@ -230,6 +230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     forward_sync.add_argument("forward_id")
     forward_sync.add_argument("--watch", action="store_true")
     forward_sync.add_argument("--poll-seconds", type=float, default=2.0)
+    forward_sync.add_argument("--auto-reports", action="store_true")
+    forward_sync.add_argument("--report-baseline")
     commands.add_parser("forward-runs", help="list forward paper runs")
     for name in ("forward-status", "forward-events"):
         command = commands.add_parser(name)
@@ -669,17 +671,49 @@ def _execution_config(args: Namespace) -> ExecutionConfig:
 def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
     if not 0.25 <= args.poll_seconds <= 60:
         raise ValueError("forward poll interval must be between 0.25 and 60 seconds")
+    if args.report_baseline is not None and not args.auto_reports:
+        raise ValueError("automatic report baseline requires --auto-reports")
     runner = ForwardPaper(store, args.forward_id)
+    reports_pending = args.auto_reports
+    last_publications: list[str] = []
+    retry = args.poll_seconds
     previous = signal.signal(signal.SIGTERM, _stop_monitor)
     try:
         while True:
-            status = runner.sync()
+            try:
+                status = runner.sync()
+                reports_pending |= args.auto_reports and bool(status["processed_minutes"])
+                if status["caught_up"] and reports_pending:
+                    published = publish_completed_periods(
+                        store, args.forward_id, baseline_validation_id=args.report_baseline
+                    )
+                    reports_pending = False
+                    if published:
+                        last_publications = published
+                        for reference in published:
+                            print(f"aurum: saved forward report {reference}", file=sys.stderr)
+            except sqlite3.OperationalError as exc:
+                code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
+                if not args.watch or code not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                    raise
+                if retry == args.poll_seconds:
+                    print(
+                        "aurum: forward store busy, retrying the durable checkpoint",
+                        file=sys.stderr,
+                    )
+                sleep(retry)
+                retry = min(max(args.poll_seconds, 30.0), retry * 2)
+                continue
+            retry = args.poll_seconds
             if status["caught_up"]:
                 if not args.watch:
-                    return status
+                    return {**status, "published_report_ids": last_publications}
                 sleep(args.poll_seconds)
     except KeyboardInterrupt:
-        return describe_forward(store, args.forward_id)
+        return {
+            **describe_forward(store, args.forward_id),
+            "published_report_ids": last_publications,
+        }
     finally:
         signal.signal(signal.SIGTERM, previous)
 

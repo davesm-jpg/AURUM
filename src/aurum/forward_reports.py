@@ -13,7 +13,7 @@ from aurum.statistics import Observation, bootstrap_expectancy, outcome_summary
 from aurum.storage import DatasetStore
 from aurum.timestamps import MINUTE
 
-FORWARD_REPORT_VERSION = 1
+FORWARD_REPORT_VERSION = 2
 
 
 class ForwardPeriod(StrEnum):
@@ -104,15 +104,8 @@ def save_forward_report(
         raise ValueError("invalid forward bootstrap configuration")
     start, end = period_bounds(period, trade_date)
     prior_start, _ = period_bounds(period, start - timedelta(days=1))
-    run = describe_forward(store, forward_id)
-    monitor_id = str(run["monitor_id"])
-    with store.connection() as db:
-        monitor = json.loads(
-            db.execute(
-                "SELECT definition FROM monitor_runs WHERE id = ?", (monitor_id,)
-            ).fetchone()[0]
-        )
-    calendar = SessionCalendar.from_dict(monitor["calendar"])
+    run, monitor, calendar = _source(store, forward_id)
+    run = _freeze_at_period_end(store, run, calendar, end)
     prior, current = _Sample(prior_start, start), _Sample(start, end)
     _record_samples(store, run, calendar, (prior, current))
     current_result, prior_result = current.summary(), prior.summary()
@@ -131,7 +124,7 @@ def save_forward_report(
     definition = {
         "forward_report_version": FORWARD_REPORT_VERSION,
         "forward_id": forward_id,
-        "monitor_id": monitor_id,
+        "monitor_id": run["monitor_id"],
         "period": period,
         "first_trade_date": start.isoformat(),
         "end_trade_date_exclusive": end.isoformat(),
@@ -164,6 +157,106 @@ def save_forward_report(
             "execution_config": run["execution_config"],
         },
     )
+
+
+def _source(
+    store: DatasetStore, forward_id: str
+) -> tuple[dict[str, object], dict[str, Any], SessionCalendar]:
+    run = describe_forward(store, forward_id)
+    with store.connection() as db:
+        row = db.execute(
+            "SELECT definition FROM monitor_runs WHERE id = ?", (run["monitor_id"],)
+        ).fetchone()
+    monitor: dict[str, Any] = json.loads(row["definition"])
+    return run, monitor, SessionCalendar.from_dict(monitor["calendar"])
+
+
+def _freeze_at_period_end(
+    store: DatasetStore, run: dict[str, object], calendar: SessionCalendar, end: date
+) -> dict[str, object]:
+    through = run["cursor"]
+    latest_scheduled = max(
+        (
+            min(session.end, calendar.coverage.end)
+            for session in calendar.sessions or ()
+            if session.trade_date < end
+        ),
+        default=None,
+    )
+    cursor = None
+    sequence = 0
+    if isinstance(through, str) and latest_scheduled is not None:
+        bound = min(through, (latest_scheduled - MINUTE).isoformat())
+        with store.connection() as db:
+            cursor = db.execute(
+                """SELECT max(opened_at) FROM monitor_minutes
+                   WHERE run_id = ? AND applied = 1 AND opened_at <= ?
+                     AND opened_at > ? AND applied_at >= ?""",
+                (run["monitor_id"], bound, run["start_after_open"] or "", run["started_at"]),
+            ).fetchone()[0]
+            if cursor is not None:
+                sequence = db.execute(
+                    """SELECT coalesce(max(sequence), 0) FROM forward_events
+                       WHERE run_id = ? AND minute_open <= ?""",
+                    (run["forward_id"], cursor),
+                ).fetchone()[0]
+    return {**run, "cursor": cursor, "event_count": sequence}
+
+
+def publish_completed_periods(
+    store: DatasetStore,
+    forward_id: str,
+    periods: tuple[ForwardPeriod, ...] = tuple(ForwardPeriod),
+    *,
+    baseline_validation_id: str | None = None,
+) -> list[str]:
+    """Save each completed reviewed period once, including after a worker restart."""
+    run, monitor, calendar = _source(store, forward_id)
+    if baseline_validation_id is not None:
+        _historical_baseline(store, baseline_validation_id, run, monitor)
+    if not isinstance(run["cursor"], str) or not calendar.sessions:
+        return []
+    closed_through = datetime.fromisoformat(run["cursor"]) + MINUTE
+    registered = datetime.fromisoformat(str(run["started_at"]))
+    baseline = baseline_validation_id or ""
+    with store.connection(write=True) as db:
+        saved = {
+            (row["period"], row["first_trade_date"])
+            for row in db.execute(
+                """SELECT period, first_trade_date FROM forward_report_publications
+                   WHERE forward_id = ? AND baseline_key = ?""",
+                (forward_id, baseline),
+            )
+        }
+    reports = []
+    for period in periods:
+        candidates: dict[tuple[date, date], datetime] = {}
+        for session in calendar.sessions:
+            start, end = period_bounds(period, session.trade_date)
+            candidates[(start, end)] = session.end
+        for (start, end), last_close in candidates.items():
+            if (
+                (period, start.isoformat()) in saved
+                or last_close <= registered
+                or last_close > min(closed_through, calendar.coverage.end)
+                or (period is not ForwardPeriod.DAILY and calendar.sessions[-1].trade_date < end)
+            ):
+                continue
+            if not _coverage(store, run, calendar, _Sample(start, end))["applied_forward_minutes"]:
+                continue
+            report_id = save_forward_report(
+                store, forward_id, period, start, baseline_validation_id=baseline_validation_id
+            )
+            with store.connection(write=True) as db:
+                created = db.execute(
+                    """INSERT INTO forward_report_publications VALUES (?, ?, ?, ?, ?)
+                       ON CONFLICT DO NOTHING""",
+                    (forward_id, period, start.isoformat(), baseline, report_id),
+                )
+                if created.rowcount:
+                    reports.append(report_id)
+                    saved.add((period, start.isoformat()))
+    return reports
 
 
 def _record_samples(

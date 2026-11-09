@@ -354,6 +354,7 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         # Remove only the empty v2 tables in this synthetic test database.
         db.execute("DROP TABLE structure_events")
         db.execute("DROP TABLE structure_runs")
+        db.execute("DROP TABLE forward_report_publications")
         db.execute("DROP TABLE analysis_reports")
         db.execute("DROP TABLE notification_attempts")
         db.execute("DROP TABLE notification_deliveries")

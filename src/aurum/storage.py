@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -195,6 +195,18 @@ SCHEMA_V7 = (
         PRIMARY KEY (run_id, sequence)
     ) STRICT, WITHOUT ROWID""",
     """CREATE INDEX forward_event_time ON forward_events(run_id, recorded_at, sequence)""",
+)
+
+SCHEMA_V8 = (
+    """CREATE INDEX forward_event_minute ON forward_events(run_id, minute_open, sequence)""",
+    """CREATE TABLE forward_report_publications (
+        forward_id TEXT NOT NULL REFERENCES forward_runs(id),
+        period TEXT NOT NULL,
+        first_trade_date TEXT NOT NULL,
+        baseline_key TEXT NOT NULL,
+        report_id TEXT NOT NULL REFERENCES analysis_reports(id),
+        PRIMARY KEY (forward_id, period, first_trade_date, baseline_key)
+    ) STRICT, WITHOUT ROWID""",
 )
 
 
@@ -654,4 +666,7 @@ class DatasetStore:
         if write and version < 7:
             for statement in SCHEMA_V7:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 7")
+        if write and version < 8:
+            for statement in SCHEMA_V8:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 8")
