@@ -5,7 +5,7 @@
 - Current phase — Phase 5 statistical tooling and paper account simulation are implemented. D05 data adapters and contract management is next. Real-data tasks D04 and B02 await authorized MGC.
 - Current milestone — Q02 versioned LucidFlex paper ledger and trailing drawdown scenarios.
 - Current branch — `main`.
-- Last verified commit — the Q02 implementation commit containing this handoff.
+- Last verified commit — `2102bf5243aa32e19fe01df755c747b38b388c9f`.
 
 ## Current Objective
 
