@@ -29,6 +29,7 @@ from aurum.market_structure import (
     TrendChange,
 )
 from aurum.storage import DatasetStore
+from aurum.strategy import SetupState, StrategyReplay
 from aurum.timestamps import MINUTE, minute_timestamp
 
 CONTRACT = MgcContract("MGC-2025-04")
@@ -264,11 +265,14 @@ def test_out_of_order_input_is_rejected_before_state_changes() -> None:
     assert swing.price_ticks == 110
 
 
-def prepare_synthetic_replay(tmp_path: Path, *, with_gap: bool = False) -> tuple[DatasetStore, str]:
-    bars = [
-        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
-        synthetic_bar(9, 91, 117, 116),
-    ]
+def prepare_synthetic_replay(
+    tmp_path: Path, *, with_gap: bool = False, bars: list[AggregateCandle] | None = None
+) -> tuple[DatasetStore, str]:
+    if bars is None:
+        bars = [
+            *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+            synthetic_bar(9, 91, 117, 116),
+        ]
     span = TradingWindow(bars[0].opened_at, bars[-1].available_at)
     calendar = SessionCalendar(
         "synthetic market structure fixture",
@@ -391,3 +395,86 @@ def test_evidence_replay_links_only_an_earlier_sweep_to_mss(tmp_path: Path) -> N
     assert json.loads(alternate.stdout)["run_id"] != run_id
     same = subprocess.run(args, check=True, capture_output=True, text=True)
     assert same.stdout == run.stdout
+
+
+@pytest.mark.parametrize("mirror", [False, True])
+def test_strategy_cli_replays_complete_mirrored_setup_and_records_filters(
+    tmp_path: Path, mirror: bool
+) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound, mirror=mirror) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85, mirror=mirror),
+        synthetic_bar(10, 78, 90, 89, mirror=mirror),
+        synthetic_bar(11, 88, 118, 116, mirror=mirror),
+        synthetic_bar(12, 91, 118, 110, mirror=mirror),
+        synthetic_bar(13, 103, 120, 111, mirror=mirror),
+    ]
+    store, dataset_id = prepare_synthetic_replay(tmp_path, bars=bars)
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    args = [*aurum, "strategy", dataset_id, "--internal-pivot", "1", "1"]
+    output = subprocess.run(args, check=True, capture_output=True, text=True)
+    manifest = json.loads(output.stdout)
+    run_id = manifest["run_id"]
+    assert manifest["execution_mode"] == "paper_research"
+    assert manifest["strategy_version"] == 1
+    assert manifest["data_kind"] == "synthetic"
+    assert manifest["economic_calendar"] is None
+
+    observed = subprocess.run(
+        [*aurum, "strategy-events", run_id], check=True, capture_output=True, text=True
+    )
+    events = [json.loads(line) for line in observed.stdout.splitlines()]
+    (signal,) = [event for event in events if event["state"] == "paper_signal"]
+    assert signal["direction"] == ("bearish" if mirror else "bullish")
+    assert signal["confirmed_at"] == bars[12].available_at.isoformat()
+    assert signal["sweep"]["confirmed_at"] == bars[10].available_at.isoformat()
+    assert signal["mss"]["confirmed_at"] == bars[11].available_at.isoformat()
+    assert signal["zone"]["confirmed_at"] == bars[11].available_at.isoformat()
+    assert signal["plan"]["stop_ticks"] == (223 if mirror else 77)
+    assert signal["plan"]["quantity"] == 1
+    assert signal["plan"]["gross_risk_cents"] == 3_300
+    assert signal["plan"]["net_loss_cents"] == 3_560
+    assert signal["context"]["economic"]["risk"] == "unknown"
+    assert signal["score"]["validated_comparable_samples"] == 0
+    assert signal["cautions"] == [
+        "economic_event_risk_unknown",
+        "higher_timeframe_history_incomplete",
+    ]
+    assert [event["state"] for event in events if event["setup_id"] == signal["setup_id"]] == [
+        "context_identified",
+        "liquidity_event",
+        "mss_confirmed",
+        "zone_identified",
+        "retest_pending",
+        "paper_signal",
+    ]
+    repeated = subprocess.run(args, check=True, capture_output=True, text=True)
+    assert repeated.stdout == output.stdout
+
+    provenance = store.describe(dataset_id)["provenance"]
+    replay = StrategyReplay(
+        SessionCalendar.from_dict(provenance["calendar"]),
+        CONTRACT,
+        TIMEFRAME,
+        StructureConfig(PivotRule(1, 1)),
+    )
+    minutes = list(store.replay(dataset_id))
+    prefix = list(replay.consume(minutes[:60]))
+    assert not any(event.state is SetupState.PAPER_SIGNAL for event in prefix)
+    suffix = list(replay.consume(minutes[60:]))
+    resumed = [event for event in suffix if event.state is SetupState.PAPER_SIGNAL]
+    assert [event.setup_id for event in resumed] == [signal["setup_id"]]
+
+    filtered = subprocess.run(
+        [*args, "--variant", "sweep_mss_ifvg_htf", "--require-clear-event-risk"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    alternative = json.loads(filtered.stdout)["run_id"]
+    assert alternative != run_id
+    transitions = list(store.structure_events(alternative))
+    assert not any(event["state"] == "paper_signal" for event in transitions)
+    assert any(
+        event["failed"] == ["higher_timeframe_alignment", "event_filter"] for event in transitions
+    )

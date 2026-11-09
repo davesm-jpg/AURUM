@@ -51,6 +51,8 @@ This **synthetic schema example** covers two minutes of a full session.
 .venv/bin/aurum --db data/aurum.sqlite structure DATASET_ID --break-mode close
 .venv/bin/aurum --db data/aurum.sqlite structure DATASET_ID --evidence --min-gap-ticks 2
 .venv/bin/aurum --db data/aurum.sqlite structure-events RUN_ID
+.venv/bin/aurum --db data/aurum.sqlite strategy DATASET_ID --variant sweep_mss_ifvg
+.venv/bin/aurum --db data/aurum.sqlite strategy-events RUN_ID
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
@@ -60,5 +62,9 @@ Aggregation requires a dated calendar. Omit `--timeframe` to emit all supported 
 Structure replay defaults to 5m candles, 3-left/3-right internal pivots, 5-left/5-right external pivots and close-based breaks. Strict local extrema reject ties inside the pivot window. Use `--internal-pivot LEFT RIGHT`, `--external-pivot LEFT RIGHT` and `--break-mode` to run separate configurations. Break modes are `wick`, `close`, `buffered_close` and `displacement_close`. Volatility filters use the full window of earlier true ranges. The manifest records the exact configuration, versions and event count. Each event identifies its source and confirmation candles.
 
 Add `--evidence` to include price-derived liquidity levels, sweeps, FVGs and IFVGs. Use `--min-gap-ticks` and `--inversion-closes` to compare gap definitions. Each event contains its source prices and availability. Liquidity levels are observable price proxies. OHLCV supplies an observation window for a sweep, so the output reports elapsed bars and seconds between observed timestamps.
+
+Strategy replay stores paper setup transitions, contextual measurements, sizing and reasons a setup matched or failed. Variants include `mss`, `sweep_mss`, `mss_fvg`, `mss_ifvg`, `sweep_mss_fvg`, `sweep_mss_ifvg` and `sweep_mss_ifvg_htf`. Use `--session`, `--regime`, volatility bounds and `--minimum-score` for filtered experiments. The default gross cap is USD 50, with optional `--net-risk-cents` for an all-in cap. Choose `--target-mode structural` to use the closest favorable confirmed pivot. The experimental score has no calibrated probability interpretation.
+
+Supply `--economic-calendar` only when you have a reviewed point-in-time snapshot. Its JSON fields are `source`, `version`, `coverage` with `start` and `end`, `coverage_known_at` and `events`. Each event has `event_id`, `title`, `scheduled_at`, `published_at` and optional `actual_at` plus `actual_known_at`. Use offset-bearing ISO timestamps. Without effective coverage, the calendar status is unknown. `--require-clear-event-risk` blocks signals unless the snapshot establishes clear coverage around the decision.
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.

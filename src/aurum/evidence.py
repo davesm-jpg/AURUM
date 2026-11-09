@@ -59,6 +59,13 @@ type EvidenceEvent = StructureEvent | LiquidityEvent | GapEvent | SweepStructure
 DEFAULT_EVIDENCE_CONFIG = EvidenceConfig()
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceStep:
+    bars: tuple[AggregateCandle, ...]
+    analysis: AggregateCandle | None
+    events: tuple[EvidenceEvent, ...]
+
+
 class EvidenceEngine:
     """Emit causal structure, liquidity and imbalance events from the minute stream."""
 
@@ -69,8 +76,10 @@ class EvidenceEngine:
         timeframe: Timeframe,
         structure: StructureConfig,
         config: EvidenceConfig = DEFAULT_EVIDENCE_CONFIG,
+        *,
+        extra_timeframes: tuple[Timeframe, ...] = (),
     ) -> None:
-        frames = (timeframe,) if timeframe is Timeframe.DAILY else (timeframe, Timeframe.DAILY)
+        frames = tuple(dict.fromkeys((timeframe, Timeframe.DAILY, *extra_timeframes)))
         self._aggregator = CandleAggregator(calendar, contract, frames)
         self._timeframe = timeframe
         self._structure = StructureEngine(contract, timeframe, structure)
@@ -85,6 +94,10 @@ class EvidenceEngine:
             yield from self.push(candle)
 
     def push(self, candle: Candle) -> tuple[EvidenceEvent, ...]:
+        step = self.step(candle)
+        return step.events if step is not None else ()
+
+    def step(self, candle: Candle) -> EvidenceStep | None:
         bars = self._aggregator.push(candle)
         self._mapper.push_minute(candle)
         analysis = None
@@ -93,9 +106,9 @@ class EvidenceEngine:
                 self._mapper.push_daily(bar)
             if bar.timeframe is self._timeframe:
                 analysis = bar
-        if analysis is None:
-            return ()
-        return self._analyze(analysis)
+        if not bars:
+            return None
+        return EvidenceStep(bars, analysis, self._analyze(analysis) if analysis else ())
 
     def _analyze(self, bar: AggregateCandle) -> tuple[EvidenceEvent, ...]:
         self._index += 1

@@ -1,19 +1,22 @@
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import TypedDict
+from typing import Protocol, TypedDict
 
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
-from aurum.evidence import EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine, EvidenceEvent
+from aurum.economic_events import EconomicCalendar
+from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
+from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
 from aurum.market_data import Candle, PreparedDataset, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig, StructureEngine
+from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
 SCHEMA_VERSION = 2
@@ -73,6 +76,10 @@ class DatasetDescription(TypedDict):
     replayable: bool
     provenance: dict[str, object]
     issues: list[dict[str, object]]
+
+
+class _RecordedEvent(Protocol):
+    def as_dict(self) -> dict[str, object]: ...
 
 
 class DatasetStore:
@@ -167,6 +174,64 @@ class DatasetStore:
         }
         if evidence is not None:
             manifest.update(evidence_version=EVIDENCE_VERSION, evidence_config=asdict(evidence))
+
+        def run(
+            calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
+        ) -> Iterator[_RecordedEvent]:
+            if evidence is not None:
+                yield from EvidenceEngine(calendar, contract, timeframe, config, evidence).consume(
+                    minutes
+                )
+                return
+            aggregator = CandleAggregator(calendar, contract, (timeframe,))
+            engine = StructureEngine(contract, timeframe, config)
+            for bar in aggregator.consume(minutes):
+                yield from engine.push(bar)
+
+        return self._persist_replay(dataset_id, manifest, run)
+
+    def build_strategy_run(
+        self,
+        dataset_id: str,
+        timeframe: Timeframe,
+        structure: StructureConfig,
+        strategy: StrategyConfig,
+        *,
+        evidence: EvidenceConfig = DEFAULT_EVIDENCE_CONFIG,
+        context: ContextConfig = DEFAULT_CONTEXT_CONFIG,
+        economic: EconomicCalendar | None = None,
+    ) -> str:
+        manifest = {
+            "dataset_id": dataset_id,
+            "timeframe": timeframe,
+            "aggregation_version": AGGREGATION_VERSION,
+            "structure_version": STRUCTURE_VERSION,
+            "config": asdict(structure),
+            "evidence_version": EVIDENCE_VERSION,
+            "evidence_config": asdict(evidence),
+            "context_version": CONTEXT_VERSION,
+            "context_config": asdict(context),
+            "strategy_version": STRATEGY_VERSION,
+            "strategy_config": asdict(strategy),
+            "economic_calendar": economic.as_dict() if economic else None,
+            "execution_mode": "paper_research",
+        }
+
+        def run(
+            calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
+        ) -> Iterator[_RecordedEvent]:
+            return StrategyReplay(
+                calendar, contract, timeframe, structure, strategy, evidence, context, economic
+            ).consume(minutes)
+
+        return self._persist_replay(dataset_id, manifest, run)
+
+    def _persist_replay(
+        self,
+        dataset_id: str,
+        manifest: dict[str, object],
+        run: Callable[[SessionCalendar, MgcContract, Iterator[Candle]], Iterator[_RecordedEvent]],
+    ) -> str:
         definition = canonical_json(manifest)
         run_id = sha256(definition.encode()).hexdigest()
         with self._connection(write=True) as db:
@@ -180,18 +245,7 @@ class DatasetStore:
                 "INSERT INTO structure_runs VALUES (?, ?, ?, ?)",
                 (run_id, dataset_id, definition, datetime.now(UTC).isoformat()),
             )
-            minutes = self._replay(db, dataset)
-            events: Iterator[EvidenceEvent]
-            if evidence is None:
-                aggregator = CandleAggregator(calendar, contract, (timeframe,))
-                engine = StructureEngine(contract, timeframe, config)
-                events = (
-                    event for bar in aggregator.consume(minutes) for event in engine.push(bar)
-                )
-            else:
-                events = EvidenceEngine(calendar, contract, timeframe, config, evidence).consume(
-                    minutes
-                )
+            events = run(calendar, contract, self._replay(db, dataset))
             db.executemany(
                 "INSERT INTO structure_events VALUES (?, ?, ?)",
                 (

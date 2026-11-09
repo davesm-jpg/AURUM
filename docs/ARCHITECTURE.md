@@ -15,7 +15,9 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |
 | `liquidity.py`, `liquidity_map.py`, `sessions.py` | Price-derived proxies, elapsed-window reclaims and timezone-aware source periods |
 | `imbalances.py`, `evidence.py` | FVG and IFVG lifecycle and shared causal structure/evidence replay |
-| `cli.py` | Import, inspection, replay, aggregation and persisted structure runs |
+| `market_context.py`, `economic_events.py` | Completed higher-timeframe structure, regime, session and point-in-time event context |
+| `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
+| `cli.py` | Import, inspection, replay, aggregation and persisted structure and strategy runs |
 
 ## Flow and invariants
 
@@ -27,6 +29,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 6. The same incremental aggregator accepts each completed minute from replay or another chronological caller. It holds one running OHLCV bucket per selected timeframe. Intraday buckets restart at each full open window and daily bars combine all expected open windows for a trade date. A bucket publishes at its scheduled close only when every expected minute was observed. The CLI derives aggregate IDs from the dataset, aggregation version, timeframe and bucket open.
 7. Structure analysis consumes completed aggregates for one timeframe and contract. It processes breaks against previously confirmed levels before confirming new swings, then updates the classifications. Each event's UTC source opens can be joined to the input dataset's aggregate events for the run timeframe and version. The engine holds bounded pivot and ATR windows and the latest levels per scope.
 8. An evidence run also observes completed named-session minutes and daily bars. On an analysis close it evaluates previously mapped levels, structure and imbalances, links strictly earlier eligible sweeps to MSS, and then releases newly known price proxies. Full daily, weekly and named-period coverage is checked before publication. A gap or proxy is never retested by its confirming bar.
+9. Strategy replay advances the same evidence stream and completed 15m/1h/4h context before each setup decision. It writes state transitions with source evidence, explicit filters, costs and contextual uncertainty. Setup IDs are stable inside the versioned run. Historical restart recovery can reconstruct active state by replaying the input prefix. Rebuilding a completed definition returns its existing events.
 
 ## Current database
 
@@ -35,12 +38,12 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `source_blobs` keys raw CSV bytes by SHA-256 and deduplicates repeated source content.
 - `datasets` keys records by dataset ID and references the source blob. It stores versioned provenance with the normalized schedule, actual range, import time, count, quality issues and replay eligibility. The calendar format has its own independent version in provenance JSON.
 - `candles` uses `(dataset_id, opened_at)` as its primary time-series index. OHLC values are integer ticks. Contract identity is inherited from the dataset.
-- `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Run and event writes commit together. The same run definition returns its existing ID and evidence.
+- `structure_runs` records a content-addressed run definition covering dataset, timeframe, exact rule configuration and implementation versions. `structure_events` stores ordered evidence keyed by run and sequence. Strategy transitions reuse the same tables with a versioned strategy manifest. Run and event writes commit together.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)
 
 ## Next boundaries
 
-Build the strategy and context engine on the typed evidence close path. Keep raw adapter events separate from normalized candles. A future streaming caller must handle data freshness, ordering and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Use paper setup signals to drive a minute-level simulated fill and outcome engine. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

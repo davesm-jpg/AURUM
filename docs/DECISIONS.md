@@ -69,3 +69,13 @@
 - Rationale. All decisions can be replayed from known completed candles. The rules keep observation duration distinct from actual intrabar duration. The latest valid earlier sweep can be linked to MSS without assuming same-bar order.
 - Consequences. Parameters and regional hours are research assumptions captured in the run. Pending session proxies publish at the next analysis close. A sweep can be linked to more than one structure scope. Range edges refresh on price changes. Level lifetimes are configurable in analysis bars. Under a coarse analysis timeframe only the latest rolling proxy per kind since the prior analysis close is published.
 - Files. `src/aurum/liquidity.py`, `src/aurum/liquidity_map.py`, `src/aurum/sessions.py`, `src/aurum/imbalances.py`, `src/aurum/evidence.py`.
+
+## ADR-008 — Versioned paper qualification with explicit unknown context
+
+- Date 2026-11-09.
+- Context. Setup variants need shared evidence, traceable sizing and stable replay. Higher-timeframe bars and economic releases may be unavailable.
+- Alternatives. Use implicit defaults and generate a trading instruction, or emit paper state transitions with explicit evidence and rejection reasons.
+- Decision. Keep at most one developing candidate per direction and use the first eligible candidate. If several same-close sweeps qualify, select by penetration then stable ID. Require a strictly earlier sweep for sweep variants. MSS and zone may confirm at the same close, and the reaction must be later. Use the outermost relevant structural pivot or sweep extreme plus a configurable buffer. Size in integer ticks, cents and whole contracts. Evaluate the 2:1 target and nearest structural target as separate rules.
+- Rationale. The ordering avoids assumed intrabar chronology. Separating qualification from simulated fills keeps historical entry timing auditable. Economic coverage and higher-timeframe availability are explicit, and scores are experimental.
+- Consequences. The reference USD 50 cap is gross and an optional net cap includes modeled costs. Context periods and filters are persisted. Regional New York hours are 08:30–16:00 local for this research version. Calendar snapshots use publication and actual-known timestamps. Completed run persistence is atomic, and recovery of an unfinished historical run recomputes from its source. Live checkpointing is future work.
+- Files. `src/aurum/strategy.py`, `src/aurum/paper_risk.py`, `src/aurum/market_context.py`, `src/aurum/economic_events.py`.

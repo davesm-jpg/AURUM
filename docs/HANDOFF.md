@@ -2,70 +2,70 @@
 
 ## Project Status
 
-- Current phase — Phase 2 market evidence is implemented. Phase 3 paper strategy S03 is the highest-priority unblocked research slice. D04 still needs an authorized source.
-- Current milestone — S02 causal liquidity, sweep, FVG and IFVG replay.
+- Current phase — Phase 3 paper setup qualification is implemented. Phase 4 backtest engine B01 is unblocked using synthetic fixtures. D04 and B02 real-data validation need an authorized source.
+- Current milestone — S03 context, exact sizing and versioned paper strategy replay.
 - Current branch — `main`.
-- Last verified commit — `d726e308c354341ebf4d589b3fbe5ce47bf085e6`.
+- Last verified commit — the S03 implementation commit containing this handoff.
 
 ## Current Objective
 
-- Task ID — S03.
-- Objective — Build the versioned paper setup engine on completed bars and typed evidence. Include contextual features, mirrored state transitions, risk feasibility, scoring and persistence.
-- Acceptance criteria — All conditions are evaluated at their actual availability. The initial sweep → MSS → IFVG → reaction chain is mirrored and explainable, and experiment variants run independently. The strategy stores expiry, invalidation, state and configuration. Risk uses exact tick sizing and whole contracts. Context and score explain unknown inputs. Persist setup evidence with restart and replay tests.
+- Task ID — B01.
+- Objective — Simulate minute-level paper fills and outcomes from the same causal strategy replay, with versioned costs, audit evidence and performance statistics.
+- Acceptance criteria — A setup can fill only at a later eligible minute open under the chosen latency rule. Open gaps, stops, targets, ambiguous OHLC ordering, costs, exchange windows and end of data have explicit policies. Fills preserve the structural stop and whole-contract risk constraints. Replays are reproducible and include sample-aware net statistics. No empirical historical conclusions are permitted without B02.
 
 ## Completed Work
 
-- D01–D03 — Local CSV import and replay, explicit dated exchange windows and incremental completed 5m/15m/1h/4h/daily OHLCV. Raw data and versioned provenance are immutable. Missing expected minutes block replay. Older undated replay retains its event shape.
-- S01 — Causal confirmed pivots, internal/external structure, four BOS variants and qualifying MSS. The CLI builds deterministic, atomic SQLite runs. Prior schema migration preserves source datasets.
-- S02 — `EvidenceEngine` combines structure, price-derived liquidity and gaps on the same completed-bar stream. Mapping covers confirmed swings, equal/repeated levels, rolling boundaries, completed day/week and Asia/London extremes. The lifecycle distinguishes touch, penetration, reclaim, timeout, follow-through, invalidation and expiry. An earlier valid sweep can link to an MSS with elapsed bars and time.
-- S02 gaps — `ImbalanceEngine` detects strict adjacent three-candle FVGs and records formation, availability, depth, inversion, retest, reaction and expiry. It keeps original zone evidence. Consecutive closing invalidation and width thresholds are configurable.
-- S02 persistence — `aurum structure DATASET_ID --evidence` stores extra versioned evidence in existing run tables. `structure-events` reads chronological events. The source is labeled synthetic or historical throughout.
+- D01–D03 — Import and replay validated unadjusted MGC 1m CSV, retain exact source and immutable provenance, use reviewed dated exchange sessions and aggregate completed 5m/15m/1h/4h/daily candles. Missing expected candles block replay.
+- S01–S02 — Causal confirmed pivots, BOS/MSS, price proxies, sweeps and FVG/IFVG lifecycle on a shared incremental evidence stream. SQLite retains versioned manifests and ordered events. Existing source databases migrate on write.
+- S03 strategy — `strategy.py` implements seven independent variants, setup expiry/invalidation, strictly earlier sweep, MSS, qualifying zone and later retest/reaction, configurable filters and an experimental 100-point score. Every transition records source evidence and context. It emits hypothetical plans only.
+- S03 risk/context — `paper_risk.py` uses integer ticks/cents, whole contracts, a USD 50 gross cap by default, optional all-in cap, costs and separate structural versus fixed targets. `market_context.py` provides completed 15m/1h/4h context, confirmed structural range, regime features and regional time windows. `economic_events.py` supports point-in-time reviewed snapshots and reports unknown without coverage.
+- S03 persistence — `strategy DATASET_ID` writes atomic versioned transitions, and `strategy-events RUN_ID` reads them. Unfinished historical state can be reconstructed by replaying its input. Live checkpointing is pending.
 
 ## Work In Progress
 
-- Current files for S03 — `src/aurum/evidence.py`, `candles.py`, `market_structure.py`, `sessions.py` and `storage.py`. Strategy and context modules are pending.
-- Implemented portions — `EvidenceEngine.push` emits typed events at analysis closes. It owns selected and daily aggregators. `SweepStructureLink` includes the earlier eligible sweep and causal MSS. Gap and liquidity events carry stable IDs, source boundaries and availability.
-- Remaining portions — Expose the analysis bar and event batch without changing current outputs. Build point-in-time higher-timeframe, premium/discount, regime, session and event-risk context, then implement strategy states, score, sizing and persisted paper research. No live account work is in scope.
+- Current files — Backtest implementation is pending. Reuse `StrategyReplay.push`, `SetupEvent`, `RiskPlan`, `Candle`, `SessionCalendar` and the existing data store. Start with a pure execution module and synthetic fixtures.
+- Implemented foundations — Each minute can yield paper setup signals after its close. Signals include direction, stop, target, quantity, actual availability, context and score. The store has a shared private `_persist_replay` path for immutable manifests and ordered events.
+- Remaining portions — Define minute fill rules and paper costs, then implement and verify the simulator and metrics. Add CLI integration and persisted audit output. Statistical tools follow B01. D05 adapter/contract work and B02 actual history remain separate.
 
 ## Important Decisions
 
-- ADR-004/005 — Full dated windows control boundaries. Intraday aggregation restarts after closures and labels scheduled shortened buckets. Daily aggregation requires all open windows.
-- ADR-006 — Breaks precede new pivots on each close. Structure version 1 uses strict extrema and prior ATR for volatility filters. Two-way wick breaks have no inferred intrabar order.
-- ADR-007 — Price proxies publish after the selected close, require complete source windows and cannot be swept by their confirming bar. Gap tests are adjacent. An inverse zone starts only when the original invalidates. OHLCV measures sweep observation time, with no knowledge of exact time beyond the level.
-- S02 parameters — Initial regional windows use Tokyo 09:00–15:00 and London 08:00–12:00 local. Full weeks need Chicago Sunday-to-Sunday coverage. They are explicit research assumptions.
+- ADR-004/005 — Exchange trade dates and full windows are distinct from dataset coverage. Intraday buckets restart after closures. Daily bars use every expected open window.
+- ADR-006/007 — Evaluate previously known levels before publishing new pivots or proxies. Preserve gap/sweep confirmation and ordering explicitly. OHLCV cannot show hidden liquidity or intrabar order.
+- ADR-008 — Allow same-close MSS and zone evidence, require a later retest/reaction, and preserve the outermost structural stop with configured tick buffer. Qualification is separate from fills and experimental scores are not probabilities.
+- Costs — Illustrative USD 1.60 commission and one round-trip slippage tick per contract. The optional net cap is separate from the default gross cap.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized MGC sample and applicable production-reviewed schedule were supplied.
-- CAL-002 — Medium, open. Effective exchange windows and dates are caller-reviewed inputs.
-- DATA-002/DATA-003 — Medium, open. Sparse minute exports fail the gap gate. Import buffers the source and bars.
-- No economic calendar provider, live market feed, paper execution or measured strategy performance exists.
+- DATA-001 — High, blocked. No authorized MGC export and production-reviewed schedule are available.
+- CAL-002, DATA-002 and DATA-003 — Reviewed calendar is caller supplied. Sparse no-trade exports block replay. Imports buffer source bytes and candles.
+- EVENT-001 — Event coverage is unknown without a reviewed snapshot. An authorized production feed is pending.
+- Live market, delivery and actual account execution are absent. Only paper research is within scope.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (82), Ruff lint and format, mypy (21 files), dependency and Git whitespace checks. Tests include evidence replay through the CLI and earlier SQLite migration.
+- Passed — `.venv/bin/python -m pytest -q` (90), Ruff lint and format, mypy (26 files), dependency and Git whitespace checks. The tests include mirrored strategy CLI replay, prefix stability, risk and event-calendar validation.
 - Failed — None outstanding.
-- Not run — Real-data reconciliation, live parity, strategy backtest or account simulation.
-- Limitations — Every market test and exception fixture is synthetic. No empirical trading conclusion follows.
+- Not run — Authorized historical reconciliation, live feed parity, empirical strategy outcomes, backtests or account simulation.
+- Limitations — All tests use synthetic market data or explicit unknown context.
 
 ## Environment
 
 - Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. Requires SQLite 3.37+.
 - Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev]'`.
-- Services — None for the CLI. Store authorized source files under ignored `data/`.
-- Missing configuration — Authorized market history, reviewed production schedule and reputable scheduled economic feed. S03 can proceed with synthetic and explicitly unknown context.
+- Required services — None for current CLI. Keep authorized input under ignored `data/`.
+- Missing configuration — Authorized history and reviewed effective exchange schedule for D04/B02. B01 can be developed and tested offline.
 
 ## Immediate Next Actions
 
-1. Rerun the suite and read specification sections VIII–X. Add the evidence frame interface with the completed analysis bar and batched events. Preserve `EvidenceEngine.push` output for existing consumers.
-2. Implement exact tick-based sizing and point-in-time context. Define mirrored setup transitions and choose expiration, invalidation and retest timing rules. Preserve variant selection and versioned assumptions.
-3. Exercise synthetic setups with matched and failed conditions, risk and chronology, then persist versioned strategy runs. Update the handoff with what was actually verified.
+1. Run the checkpoint suite and read specification sections XI–XII. Build a pure execution engine receiving completed minutes and paper signals in chronology. Process any prior orders at the eligible minute open before observing current-minute strategy events.
+2. Test gap entries and exits, both stop and target in a bar, missed entries across scheduled closures, costs, risk caps, marking and terminal outcomes. Document close-based outcome timestamps and excursion assumptions.
+3. Implement sample-aware performance and persistent backtest evidence, then run the CLI end to end on synthetic inputs. Update the roadmap and handoff before moving to statistical validation.
 
 ## Do Not Repeat
 
-- D01–D03 and S01–S02 are implemented and verified. Reuse existing data, time, volatility and evidence paths.
-- Do not infer hidden liquidity, intrabar trade order, holiday schedules or future event data.
-- Keep research alerts and hypothetical sizing separate from actual order execution.
+- D01–D03 and S01–S03 are verified. Reuse the shared evidence and strategy paths.
+- Keep synthetic replay separate from real performance. Preserve structural stops and apply conservative simulated fills.
+- Do not infer calendar status, unseen data or real provider access from local tests.
 
 ## Continuation Instruction
 

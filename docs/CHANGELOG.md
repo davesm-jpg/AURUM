@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Paper setup research
+
+- Added versioned strategy variants, causal setup transitions and experimental scoring.
+- Added higher-timeframe, regional-session, structural range, volatility and scheduled-event context.
+- Added exact tick-based risk planning and persistent paper setup replay through the CLI.
+
 ## 2026-11-09 — Liquidity and imbalance evidence
 
 - Added confirmed price proxies, mirrored penetration and reclaim events, and causal sweep-to-MSS links.
