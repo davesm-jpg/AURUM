@@ -7,6 +7,7 @@ from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 from time import sleep
 
@@ -251,10 +252,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     cancel_alert.add_argument("monitor_id")
     cancel_alert.add_argument("alert_id")
 
+    serve = commands.add_parser("serve", help="serve the local AURUM research API")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--token-env")
+
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
     try:
-        if args.command in ("import-csv", "import-parquet", "import-https"):
+        if args.command == "serve":
+            _serve(store, args)
+        elif args.command in ("import-csv", "import-parquet", "import-https"):
             print(canonical_json(store.describe(_import_history(store, args))))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
@@ -680,6 +687,27 @@ def _monitor_replay(store: DatasetStore, args: Namespace) -> dict[str, object]:
 def _clock_minute(value: str) -> int:
     parsed = datetime.strptime(value, "%H:%M")
     return parsed.hour * 60 + parsed.minute
+
+
+def _serve(store: DatasetStore, args: Namespace) -> None:
+    if not 1 <= args.port <= 65535:
+        raise ValueError("API port must be between 1 and 65535")
+    token = os.environ.get(args.token_env) if args.token_env else None
+    if args.token_env and not token:
+        raise ValueError("configured API token variable is unset")
+    try:
+        api = import_module("aurum.api")
+        uvicorn = import_module("uvicorn")
+        hosts = import_module("starlette.middleware.trustedhost")
+    except ModuleNotFoundError as exc:
+        raise ValueError("API support requires the aurum-research[api] extra") from exc
+    with store.connection(write=True):
+        pass
+    app = api.create_app(store, token)
+    app.add_middleware(
+        hosts.TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"]
+    )
+    uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
 
 
 def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:
