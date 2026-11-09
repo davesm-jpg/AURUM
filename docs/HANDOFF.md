@@ -2,70 +2,72 @@
 
 ## Project Status
 
-- Current phase — Phase 5 statistical tooling Q01 is implemented. Q02 paper account rules is next. D04 and B02 empirical work await authorized MGC.
-- Current milestone — Q01 chronological validation and conditional Monte Carlo.
+- Current phase — Phase 5 statistical tooling and paper account simulation are implemented. D05 data adapters and contract management is next. Real-data tasks D04 and B02 await authorized MGC.
+- Current milestone — Q02 versioned LucidFlex paper ledger and trailing drawdown scenarios.
 - Current branch — `main`.
-- Last verified commit — `521456d04ce592ee445e4f47d5bfdda856ae4520`.
+- Last verified commit — the Q02 implementation commit containing this handoff.
 
 ## Current Objective
 
-- Task ID — Q02.
-- Objective — Implement a separate versioned LucidFlex paper account simulator with provider-verified rules, intraday equity breach, EOD trailing floors, funded/evaluation differences and payout effects.
-- Acceptance criteria — Model the documented $25K profile and explicit variations without touching actual accounts. Track balance, equity, eligible EOD high, active/locked floor, remaining allowance, breaches, phase, position limits and relevant payout eligibility. Verify official rules and disclose any ambiguities. Tests cover boundaries and deterministic replay.
+- Task ID — D05.
+- Objective — Add interchangeable historical adapters and reviewed dated contract metadata, with explicit roll rules and research price basis.
+- Acceptance criteria — CSV IDs and original behavior stay stable. Parquet and authorized normalized historical sources share exact timestamp, contract and OHLCV validation and raw provenance. Track listing and expiry from reviewed metadata. Select rolls from time-available observations and preserve dated prices alongside any adjusted series.
 
 ## Completed Work
 
-- D01–D03 — Single-contract unadjusted MGC CSV import and replay, immutable raw provenance, reviewed dated windows and incremental 5m/15m/1h/4h/1d aggregates. Missing expected minutes block historical replay.
-- S01–S03 — Confirmed structure, liquidity and imbalance lifecycle, mirrored paper strategy variants, point-in-time context, experimental scoring, exact sizing and persisted state transitions.
-- B01 — Auditable minute fill model, stop-first ambiguous bars, adverse gap stops, costs, closed-trade equity, group metrics and reproducible persisted backtests. Only synthetic market fixtures have been evaluated.
-- Q01 validation — `statistics.py` purges labels crossing split boundaries, applies embargo, selects on validation expectancy, reports only the selected holdout and limits walk-forward to pre-holdout data. It records block-bootstrap intervals, Holm-adjusted validation p-values, clustering, score strata and fixed-fill cost sensitivity.
-- Q01 scenarios — `monte_carlo.py` implements shuffle, circular block resampling and assumed outcomes with seeded paths, equity/drawdown quantiles, losing streaks and generic fixed-floor survival. `research_reports.py` joins backtest trades to setup decisions and provenance. SQLite v3 persists reports. CLI commands are `validate`, `monte-carlo` and `report`.
+- D01–D03 — Unadjusted MGC CSV import and replay, immutable raw provenance, dated session windows and completed 5m/15m/1h/4h/1d aggregation. Missing expected candles gate replay.
+- S01–S03 — Confirmed pivots, causal structure/evidence, mirrored strategy state, point-in-time context, experimental scoring and paper sizing. Immutable runs are available through CLI.
+- B01 — Audited paper fills from eligible minute opens, costs, conservative OHLC ambiguity, net metrics and closed-trade equity.
+- Q01 — Chronological purging and embargo, validation selection, held-out reporting, walk-forward, block resampling and assumed scenario simulation. SQLite v3 persists analysis definitions and results.
+- Q02 — `account_simulation.py` uses reviewed dated session bounds and explicit marked equity. It supports evaluation/funded phases, EOD loss trail, inclusive hard breach, daily lockout, consistency, scaling, inactivity and hypothetical payout. `account` persists paper ledgers. Monte Carlo can reuse the loss trail with explicit trades per session and trade-close-only assumptions.
+- Q02 verification — Official source links and rule interpretations are in `docs/VALIDATION.md`. The public drawdown page does not resolve unrealized PnL measurement, so the conservative default equity metric is configurable. DLL amount is caller supplied.
 
 ## Work In Progress
 
-- Current files — Q02 implementation is pending. Read specification section XIII and inspect `monte_carlo.py`, `execution.py` and `storage.py` for separable inputs and existing report persistence.
-- Implemented foundations — Trade audit provides realized PnL and limited excursions. Generic Monte Carlo uses trade-close equity and a fixed floor. Neither substitutes for provider-specific intraday equity checks.
-- Remaining portions — Verify official LucidFlex rule pages for effective phase, loss, scaling, consistency, payout, inactivity and session requirements. Implement an independent simulator with an explicit marked-equity timeline and sourced profiles. Add paper-only report and scenario support. D05 data adapters and live provider work follow.
+- Current files — D05 has no implementation. Start with `market_data.py`, `exchange_calendar.py`, `instruments.py` and existing `DatasetStore` tests.
+- Implemented foundations — `prepare_csv` normalizes and validates source bytes. Dataset IDs hash exact source/config/calendar. Storage supports dated unadjusted 1m candles for a single contract. Existing run consumers expect the current normalized type and gate.
+- Remaining portions — Add Parquet and authorized historical adapter boundaries, preserve file format and provenance, then add versioned contract inventory and point-in-time roll planning. Document any connector that requires subscription or credentials. L01 service and U01 interface remain roadmap work.
 
 ## Important Decisions
 
-- ADR-004–009 — Reviewed exchange sessions, actual evidence timestamps, separate qualification and conservative paper fills. Preserve source versions and structural risk.
-- ADR-010 — Candidate comparison holds data and execution/cost assumptions fixed. Separate parameter configurations are disclosed. Only pre-holdout samples can rank a candidate. Cost sensitivity does not rerun fills. Caller controls preregistration.
-- Survival — Q01's fixed floor is generic and uses trade closes. Q02 needs provider-specific EOD updates and observed intraday marks. Do not call an OHLC-only result proof of account compliance.
-- Official Q02 evidence to inspect — Lucid Trading Help Center pages titled LucidFlex Drawdown, Evaluation Account, Funded Account, Customization, Scaling Plan, Payouts, Daily Loss Limit and Allowed Trading Times. Effective documentation can distinguish custom account settings.
+- ADR-004/005 — Preserve full exchange windows, use explicit trade dates and distinguish coverage from session boundaries. Publish only completed aggregates.
+- ADR-006 through ADR-009 — Use shared causal evidence and paper setup logic, exact sizing, actual availability and conservative fill assumptions.
+- ADR-010 — Keep held-out samples out of selection and label conditional paths distinctly.
+- ADR-011 — Separate account marks and hypothetical payouts from strategy and execution. Use explicit session boundaries and disclose uncertainty about provider mark treatment and optional intraday payouts.
+- Data policy — Do not silently splice or substitute contracts. An adjusted value is for research. Execution references use dated unadjusted source ticks.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized MGC history and production-reviewed schedule. No empirical strategy result exists.
-- CAL-002/EVENT-001 — Effective exchange and economic schedules are caller supplied. Production feed integration is pending.
-- DATA-002/DATA-003 — Sparse no-trade exports block replay. Import buffers the CSV and normalized bars.
-- Provider-specific restrictions, streaming and external delivery are not implemented. The system is paper-only.
+- DATA-001 — High, blocked. No authorized historical MGC export and matching production-reviewed schedule were supplied. No empirical strategy result exists.
+- CAL-002/EVENT-001 — Exchange and economic schedule inputs are reviewed and supplied by the caller.
+- DATA-002/DATA-003 — Sparse exports gate replay and imports buffer raw bytes and bars.
+- ACCOUNT-001 — Provider unrealized measurement and optional DLL amount are not fully verified. Use explicit model assumptions.
+- Live feeds, external delivery and dashboards are pending. Real order execution is outside scope.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (105), Ruff lint and format, mypy (34 files), dependency and Git whitespace checks. Tests cover purged boundaries, holdout mutation independence, seed stability and persisted report CLI.
+- Passed — `.venv/bin/python -m pytest -q` (115), Ruff lint and format, mypy (37 files), dependency and Git whitespace checks. Tests exercise account floor, eligibility, phase, payout, survival and CLI.
 - Failed — None outstanding.
-- Not run — Authorized real-data tests, statistical estimation on real trades, provider-specific account checks, live feed parity.
-- Limitations — Tests and Monte Carlo scenarios are synthetic or conditional. The initial backtest metrics use closed-trade equity.
+- Not run — Real-data reconciliation, empirical strategy performance or live provider integration.
+- Limitations — Market inputs, account marks and scenario outcomes in tests are synthetic or hypothetical.
 
 ## Environment
 
-- Runtime — Python 3.12.7, macOS arm64, SQLite 3.45.3. Requires SQLite 3.37+.
+- Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. SQLite 3.37+ is required.
 - Setup — `python3.12 -m venv .venv` then `.venv/bin/python -m pip install -e '.[dev]'`.
-- Services — None. Keep authorized input in ignored `data/`.
-- Missing configuration — Authorized MGC data and production-reviewed schedule for D04/B02.
+- Services — None for CLI. Keep authorized input in ignored `data/`.
+- Missing configuration — Authorized MGC export and matching reviewed schedule. No broker credentials are needed or permitted.
 
 ## Immediate Next Actions
 
-1. Verify the latest LucidFlex $25K official evaluation and funded rules. Save source links and dates and reconcile inconsistent language explicitly.
-2. Implement versioned account profiles and deterministic observed-equity marks. Test inclusive hard breach, EOD updates/lock, phase differences, daily lockout and payout effects before exposing the simulator.
-3. Add a saved paper-account report and documented data assumptions. Update tests and handoff, then advance the next unblocked phase.
+1. Rerun tests and read specification sections III–IV. Refactor the parser boundary so CSV and Parquet use the same validation and preserve the original CSV identity. Verify malformed, mixed and gap cases through both entry points.
+2. Add reviewed contract metadata and causal rollover conditions based on expiration and time-available volume or open interest. Use source versions, explicit dates and deterministic outcomes.
+3. Build an explicit continuous research mapping with independently identifiable dated prices and reproducible adjustment rules. Keep replay behavior stable and checkpoint the next completed slice.
 
 ## Do Not Repeat
 
-- D01–D03, S01–S03, B01 and Q01 are verified. Reuse the existing input and report paths.
-- Preserve the holdout. Keep synthetic and assumed outputs separate from observations.
-- Keep actual orders, live credentials and brokerage-account connections out of AURUM.
+- D01–D03, S01–S03, B01, Q01 and Q02 are verified. Reuse the existing data, evidence, strategy, audit and report paths.
+- Keep synthetic data and survival scenarios separate from observed results. Keep live brokerage credentials and actual order execution outside AURUM.
 
 ## Continuation Instruction
 

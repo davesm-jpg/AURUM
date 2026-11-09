@@ -59,6 +59,8 @@ This **synthetic schema example** covers two minutes of a full session.
 .venv/bin/aurum --db data/aurum.sqlite validate RUN_A RUN_B \
   --validation-start 2025-04-01T00:00Z --holdout-start 2025-07-01T00:00Z
 .venv/bin/aurum --db data/aurum.sqlite monte-carlo --paths 1000 --trades 1000
+.venv/bin/aurum --db data/aurum.sqlite account data/paper-ledger.json \
+  --calendar data/account-schedule.json --phase funded
 .venv/bin/aurum --db data/aurum.sqlite report REPORT_ID
 ```
 
@@ -79,5 +81,9 @@ Backtest replay accepts the strategy options and simulates a single position at 
 Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report.
 
 Monte Carlo defaults to the reference assumed win rates of 30%, 35%, 40%, 45%, 50% and 60%. Set `--mode block_bootstrap --backtest RUN_ID` to resample net backtest outcomes, or use `shuffle` with a trade count at or below the observed sample size. Simulated paths use a generic fixed floor at trade closes. They are conditional on the source and assumptions.
+
+The account command models a separate $25K LucidFlex paper ledger. Supply a dated schedule adjusted for the provider's applicable closing cutoff and holidays. The ledger has `data_kind` (`synthetic` or `paper_marks`), `source`, `started_at` and chronological `actions`. A `mark` action uses `at`, `trade_date`, optional `closed_trade_nets_cents`, `unrealized_cents`, `open_micros` and `end_of_day`. The EOD mark must be flat and match the scheduled final close. `payout` actions use `at` and `gross_cents`. `activate_funded` uses `at` after a simulated pass. All action objects include `kind`.
+
+Use `--consistency-bps 5000` for the evaluation add-on profile and supply an explicit `--daily-loss-cents` for a daily-loss scenario. Default marked-equity checks are a conservative research assumption. Add `--lucidflex-trades-per-session` to Monte Carlo for an EOD-trailing drawdown scenario using trade closes and the specified session grouping. See the [rule sources and assumptions](docs/VALIDATION.md).
 
 See [the roadmap](docs/ROADMAP.md), [the architecture](docs/ARCHITECTURE.md), and [the handoff](docs/HANDOFF.md) for implementation status.

@@ -99,3 +99,13 @@
 - Rationale. Split rules prevent automatic selection on the final holdout. Dependence diagnostics and explicit source labels make conditional outputs interpretable.
 - Consequences. The caller controls preregistration and can still reuse a holdout outside the tool. Cost sensitivity adjusts returns without rerunning fills. Bootstrap uncertainty depends on the sample and chosen block. Monte Carlo survival models a generic fixed floor at trade closes. SQLite v3 persists report definitions and results.
 - Files. `src/aurum/statistics.py`, `src/aurum/monte_carlo.py`, `src/aurum/research_reports.py`.
+
+## ADR-011 — Explicit paper account marks and separate drawdown scenarios
+
+- Date 2026-11-09.
+- Context. Account loss-limit updates, intraday violations, evaluation eligibility and payouts are distinct from a trading strategy and from closed-trade equity metrics.
+- Alternatives. Reuse closed-trade equity as proof of intraday compliance, or drive an independent ledger with reviewed session boundaries and observed marks.
+- Decision. Use the independent ledger. Implement a versioned LucidFlex $25K profile with EOD floor updates, inclusive floor breach, 40% or 50% evaluation consistency, funded scaling, inactivity and hypothetical payout effects. Parameterize balance versus equity and DLL amounts. Support conditional trade-close-only Monte Carlo drawdown through the same loss trail.
+- Rationale. The model can distinguish what observed equity proves from conditional estimates. Payouts and activation remain simulated ledger operations.
+- Consequences. The paper default uses marked equity conservatively. The public drawdown page does not define unrealized treatment. Users supply flat provider-adjusted EOD marks and any DLL amount. Optional intraday payout handling is a research interpretation of the published window with extra conservative eligibility checks. See the provider links in `docs/VALIDATION.md`.
+- Files. `src/aurum/account_simulation.py`, `src/aurum/account_reports.py`, `src/aurum/monte_carlo.py`.

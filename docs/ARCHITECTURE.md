@@ -19,6 +19,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
 | `execution.py`, `backtesting.py`, `performance.py` | Minute paper fill model, strategy replay orchestration and trade-level performance summaries |
 | `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |
+| `account_simulation.py`, `account_reports.py` | Independent versioned paper account ledger, loss trail, phase rules and persisted reports |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
 ## Flow and invariants
@@ -34,6 +35,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 9. Strategy replay advances the same evidence stream and completed 15m/1h/4h context before each setup decision. It writes state transitions with source evidence, explicit filters, costs and contextual uncertainty. Setup IDs are stable inside the versioned run. Historical restart recovery can reconstruct active state by replaying the input prefix. Rebuilding a completed definition returns its existing events.
 10. Backtest replay processes queued orders and existing positions against each minute before asking the strategy about that minute's close. Entry orders become eligible only after the signal, at the next eligible open under configured latency. The run stores setup transitions, order audit, completed trades and a terminal summary. The manifest records execution, cost and performance versions.
 11. Research reports join completed trades to their setup timestamps and scores. Split eligibility uses both decision and observed outcome times. Candidate ranking and walk-forward use pre-holdout data. Scenario simulations have their own assumed label, and resampling retains the original backtest provenance.
+12. The account ledger consumes explicit paper observations, not trade orders. Session close updates the loss trail and funded sizing tier. Intraday checks compare the selected measurement against the current floor. Payout and phase actions are explicit and separately audited. The same loss trail powers an optional trade-close drawdown Monte Carlo model.
 
 ## Current database
 
@@ -49,6 +51,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Model provider-specific paper-account rules separately from generic statistical paths. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Expand historical adapters and reviewed contract metadata while keeping the normalized strategy path stable. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.

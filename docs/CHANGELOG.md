@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Paper account simulation
+
+- Added a versioned independent LucidFlex paper ledger with phase, loss, scaling, inactivity and payout behavior.
+- Added observed mark replay and a conditional trade-close EOD trailing-floor Monte Carlo scenario.
+- Recorded provider sources and explicit assumptions for unsettled rule details.
+
 ## 2026-11-09 — Chronological validation and simulations
 
 - Added purged chronological validation, embargo, pre-holdout walk-forward and independent selected holdout reporting.

@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
+from aurum.account_reports import simulate_account_ledger
+from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, BreachMetric
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
@@ -25,6 +27,7 @@ from aurum.monte_carlo import (
     REFERENCE_WIN_RATES_BPS,
     MonteCarloConfig,
     SamplingMode,
+    TrailingLossScenario,
     WinRateScenario,
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
@@ -127,8 +130,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     monte_carlo.add_argument("--gross-loss-cents", type=int)
     monte_carlo.add_argument("--minimum-cost-cents", type=int)
     monte_carlo.add_argument("--maximum-cost-cents", type=int)
+    monte_carlo.add_argument("--lucidflex-trades-per-session", type=int)
     report = commands.add_parser("report", help="read a persisted analysis report")
     report.add_argument("report_id")
+    account = commands.add_parser("account", help="simulate a LucidFlex paper account ledger")
+    account.add_argument("ledger", type=Path)
+    account.add_argument("--calendar", type=Path, required=True)
+    account.add_argument(
+        "--phase", type=AccountPhase, choices=AccountPhase, default=AccountPhase.EVALUATION
+    )
+    account.add_argument("--consistency-bps", type=int, choices=(4_000, 5_000), default=4_000)
+    account.add_argument(
+        "--breach-metric", type=BreachMetric, choices=BreachMetric, default=BreachMetric.EQUITY
+    )
+    account.add_argument("--daily-loss-cents", type=int)
+    account.add_argument("--allow-intraday-payouts", action="store_true")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -188,6 +204,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe_analysis(_monte_carlo(store, args))))
         elif args.command == "report":
             print(canonical_json(store.describe_analysis(args.report_id)))
+        elif args.command == "account":
+            calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
+            rules = replace(
+                LUCIDFLEX_25K,
+                evaluation_consistency_bps=args.consistency_bps,
+                breach_metric=args.breach_metric,
+                daily_loss_cents=args.daily_loss_cents,
+                allow_intraday_payouts=args.allow_intraday_payouts,
+            )
+            account_report = simulate_account_ledger(
+                store, args.ledger, calendar, args.phase, rules
+            )
+            print(canonical_json(store.describe_analysis(account_report)))
         elif args.command in ("structure-events", "strategy-events", "backtest-events"):
             if (
                 args.command == "backtest-events"
@@ -404,4 +433,9 @@ def _monte_carlo(store: DatasetStore, args: Namespace) -> str:
         raise ValueError("assumed payouts and win rates require scenario mode")
     else:
         scenarios = ()
-    return simulate_report(store, config, args.mode, scenarios, args.backtest)
+    trailing = (
+        TrailingLossScenario(LUCIDFLEX_25K, args.lucidflex_trades_per_session)
+        if args.lucidflex_trades_per_session is not None
+        else None
+    )
+    return simulate_report(store, config, args.mode, scenarios, args.backtest, trailing=trailing)

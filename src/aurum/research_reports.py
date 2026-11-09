@@ -5,6 +5,7 @@ from aurum.monte_carlo import (
     MONTE_CARLO_VERSION,
     MonteCarloConfig,
     SamplingMode,
+    TrailingLossScenario,
     WinRateScenario,
     simulate,
 )
@@ -68,12 +69,16 @@ def simulate_report(
     mode: SamplingMode,
     scenarios: tuple[WinRateScenario, ...] = (),
     run_id: str | None = None,
+    *,
+    trailing: TrailingLossScenario | None = None,
 ) -> str:
     if mode is SamplingMode.SCENARIO:
         if run_id is not None or not scenarios:
             raise ValueError("scenario simulations require assumptions without a backtest run")
         source: dict[str, object] = {"data_kind": "assumed", "observations": 0}
-        results = [simulate(config, mode, scenario=scenario) for scenario in scenarios]
+        results = [
+            simulate(config, mode, scenario=scenario, trailing=trailing) for scenario in scenarios
+        ]
     else:
         if run_id is None or scenarios:
             raise ValueError("resampling requires one backtest run and no assumed payouts")
@@ -86,7 +91,14 @@ def simulate_report(
             "last_close": dataset["last_close"],
         }
         candidate = load_candidate(store, run_id)
-        results = [simulate(config, mode, [item.net_cents for item in candidate.observations])]
+        results = [
+            simulate(
+                config,
+                mode,
+                [item.net_cents for item in candidate.observations],
+                trailing=trailing,
+            )
+        ]
     definition = {
         "monte_carlo_version": MONTE_CARLO_VERSION,
         "config": asdict(config),
@@ -94,6 +106,8 @@ def simulate_report(
         "scenarios": [asdict(scenario) for scenario in scenarios],
         "source": source,
     }
+    if trailing is not None:
+        definition["trailing"] = trailing.as_dict()
     return store.save_analysis(
         "monte_carlo", definition, {"source": source, "simulations": results}
     )

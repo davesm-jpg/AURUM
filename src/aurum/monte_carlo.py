@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from random import Random
 
+from aurum.account_simulation import ACCOUNT_VERSION, AccountRules, LossTrail
 from aurum.statistics import block_sample, quantile
 
 MONTE_CARLO_VERSION = 1
@@ -51,11 +52,34 @@ class WinRateScenario:
             raise ValueError("invalid scenario payout or cost assumptions")
 
 
+@dataclass(frozen=True, slots=True)
+class TrailingLossScenario:
+    rules: AccountRules
+    trades_per_session: int
+
+    def __post_init__(self) -> None:
+        if self.trades_per_session < 1:
+            raise ValueError("trailing simulation needs a positive trade count per session")
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "account_version": ACCOUNT_VERSION,
+            "profile": self.rules.profile,
+            "starting_balance_cents": self.rules.starting_balance_cents,
+            "loss_allowance_cents": self.rules.loss_allowance_cents,
+            "locked_floor_cents": self.rules.locked_floor_cents,
+            "trades_per_session": self.trades_per_session,
+            "measurement": "trade_close_drawdown_only",
+        }
+
+
 def simulate(
     config: MonteCarloConfig,
     mode: SamplingMode,
     observations: Sequence[int] = (),
     scenario: WinRateScenario | None = None,
+    *,
+    trailing: TrailingLossScenario | None = None,
 ) -> dict[str, object]:
     if mode is SamplingMode.SCENARIO:
         if scenario is None or observations:
@@ -64,6 +88,11 @@ def simulate(
         raise ValueError("resampling requires completed backtest observations")
     if mode is SamplingMode.SHUFFLE and config.trades > len(observations):
         raise ValueError("shuffle cannot sample more trades than observed without replacement")
+    if trailing is not None and (
+        config.initial_equity_cents != trailing.rules.starting_balance_cents
+        or config.loss_allowance_cents != trailing.rules.loss_allowance_cents
+    ):
+        raise ValueError("simulation equity and allowance must match the trailing account profile")
 
     effective_block = min(config.block_length, len(observations), config.trades)
     rng = Random(config.seed)
@@ -75,14 +104,14 @@ def simulate(
             moves = rng.sample(observations, config.trades)
         else:
             moves = block_sample(observations, config.trades, effective_block, rng)
-        ending, drawdown, streak, breach = _path(moves, config)
+        ending, drawdown, streak, breach = _path(moves, config, trailing)
         endings.append(ending)
         drawdowns.append(drawdown)
         streaks.append(streak)
         if breach is not None:
             breach_times.append(breach)
 
-    return {
+    result: dict[str, object] = {
         "monte_carlo_version": MONTE_CARLO_VERSION,
         "mode": mode,
         "data_basis": "assumed_outcomes" if scenario else "resampled_backtest",
@@ -90,7 +119,11 @@ def simulate(
         "config": asdict(config),
         "scenario": asdict(scenario) if scenario else None,
         "effective_block_length": effective_block if mode is SamplingMode.BLOCK_BOOTSTRAP else None,
-        "breach_rule": "fixed_floor_reached_or_crossed_after_trade",
+        "breach_rule": (
+            "eod_trailing_floor_reached_or_crossed_after_trade"
+            if trailing
+            else "fixed_floor_reached_or_crossed_after_trade"
+        ),
         "ending_equity_cents": _distribution(endings),
         "maximum_drawdown_cents": _distribution(drawdowns),
         "maximum_losing_streak": _distribution(streaks),
@@ -104,13 +137,21 @@ def simulate(
             for horizon in _HORIZONS
         },
     }
+    if trailing is not None:
+        result["trailing"] = trailing.as_dict()
+    return result
 
 
-def _path(moves: Iterable[int], config: MonteCarloConfig) -> tuple[int, int, int, int | None]:
+def _path(
+    moves: Iterable[int],
+    config: MonteCarloConfig,
+    trailing: TrailingLossScenario | None,
+) -> tuple[int, int, int, int | None]:
     equity = peak = config.initial_equity_cents
     floor = equity - config.loss_allowance_cents
     worst_drawdown = streak = max_streak = 0
     breach = None
+    trail = LossTrail(trailing.rules) if trailing else None
     for index, move in enumerate(moves, start=1):
         equity += move
         peak = max(peak, equity)
@@ -119,6 +160,14 @@ def _path(moves: Iterable[int], config: MonteCarloConfig) -> tuple[int, int, int
         max_streak = max(max_streak, streak)
         if breach is None and equity <= floor:
             breach = index
+        if (
+            breach is None
+            and trail is not None
+            and trailing is not None
+            and index % trailing.trades_per_session == 0
+        ):
+            trail.settle(equity)
+            floor = trail.floor_cents
     return equity, worst_drawdown, max_streak, breach
 
 
