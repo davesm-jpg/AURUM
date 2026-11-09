@@ -5,7 +5,7 @@
 - Current phase — L01 normalized monitoring and in-app alert journal complete. L03 optional delivery is next. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — L01 durable monitoring, gap recovery and replay parity.
 - Current branch — `main`.
-- Last verified commit — the L01 implementation commit containing this handoff.
+- Last verified commit — `f5cff1686c0b6fb5a66bee1b38233edae971f7c9`.
 
 ## Current Objective
 
