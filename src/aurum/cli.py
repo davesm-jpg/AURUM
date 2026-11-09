@@ -3,19 +3,27 @@ import sqlite3
 import sys
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from aurum.account_reports import simulate_account_ledger
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, BreachMetric
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
+from aurum.continuous import SeriesPlan, replay_series, save_series
+from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
-from aurum.market_data import DataKind, ImportConfig, TimestampLabel, canonical_json, prepare_csv
+from aurum.market_data import (
+    DataKind,
+    ImportConfig,
+    TimestampLabel,
+    canonical_json,
+    prepare_history,
+)
 from aurum.market_structure import (
     DEFAULT_STRUCTURE_CONFIG,
     BreakMode,
@@ -31,6 +39,7 @@ from aurum.monte_carlo import (
     WinRateScenario,
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
+from aurum.providers import FileHistorySource, HttpsHistorySource, SourceFormat
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
@@ -45,15 +54,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     importer = commands.add_parser("import-csv", help="validate and store unadjusted MGC candles")
     importer.add_argument("csv", type=Path)
-    importer.add_argument("--calendar", type=Path, required=True)
-    importer.add_argument("--provider", required=True)
-    importer.add_argument("--contract", required=True)
-    importer.add_argument("--source-timezone", required=True)
-    importer.add_argument(
-        "--timestamp-label", type=TimestampLabel, choices=TimestampLabel, required=True
+    _import_options(importer)
+    parquet = commands.add_parser("import-parquet", help="validate and store Parquet MGC candles")
+    parquet.add_argument("parquet", type=Path)
+    _import_options(parquet)
+    historical = commands.add_parser(
+        "import-https", help="import from an authorized normalized endpoint"
     )
-    importer.add_argument("--data-kind", type=DataKind, choices=DataKind, required=True)
-    importer.add_argument("--price-basis", choices=("unadjusted",), required=True)
+    historical.add_argument("url")
+    historical.add_argument(
+        "--format", type=SourceFormat, choices=SourceFormat, default=SourceFormat.CSV
+    )
+    historical.add_argument("--token-env")
+    _import_options(historical)
+    catalog = commands.add_parser("contracts", help="assess a reviewed MGC contract inventory")
+    catalog.add_argument("catalog", type=Path)
+    catalog.add_argument("--as-of", type=minute_timestamp, required=True)
+    catalog.add_argument("--current", type=MgcContract)
+    catalog.add_argument("--expiry-lead-days", type=int, default=3)
+    catalog.add_argument("--volume-lead-bps", type=int, default=10_000)
+    catalog.add_argument("--open-interest-lead-bps", type=int)
+    continuous = commands.add_parser(
+        "continuous", help="save an explicit continuous research series"
+    )
+    continuous.add_argument("plan", type=Path)
+    continuous_bars = commands.add_parser(
+        "continuous-bars", help="stream a saved continuous research series"
+    )
+    continuous_bars.add_argument("report_id")
 
     inspect = commands.add_parser("inspect", help="show provenance and quality findings")
     inspect.add_argument("dataset_id")
@@ -149,17 +177,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
     try:
-        if args.command == "import-csv":
-            calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
-            config = ImportConfig(
-                args.provider,
-                MgcContract(args.contract),
-                args.source_timezone,
-                args.timestamp_label,
-                args.data_kind,
+        if args.command in ("import-csv", "import-parquet", "import-https"):
+            print(canonical_json(store.describe(_import_history(store, args))))
+        elif args.command == "contracts":
+            inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
+            policy = RollPolicy(
+                args.expiry_lead_days, args.volume_lead_bps, args.open_interest_lead_bps
             )
-            dataset_id = store.save(prepare_csv(args.csv, config, calendar))
-            print(canonical_json(store.describe(dataset_id)))
+            decision = inventory.decide(args.as_of, args.current, policy)
+            report_id = store.save_analysis(
+                "contract_roll_assessment",
+                {
+                    "contract_version": CONTRACT_VERSION,
+                    "catalog": inventory.as_dict(),
+                    "policy": asdict(policy),
+                    "as_of": args.as_of.isoformat(),
+                    "current": args.current.code if args.current else None,
+                },
+                {"data_kind": inventory.data_kind, **decision.as_dict()},
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "continuous":
+            plan = SeriesPlan.from_json(args.plan.read_text(encoding="utf-8"))
+            print(canonical_json(store.describe_analysis(save_series(store, plan))))
+        elif args.command == "continuous-bars":
+            for event in replay_series(store, args.report_id):
+                print(canonical_json(event))
         elif args.command == "inspect":
             print(canonical_json(store.describe(args.dataset_id)))
         elif args.command == "structure":
@@ -439,3 +482,34 @@ def _monte_carlo(store: DatasetStore, args: Namespace) -> str:
         else None
     )
     return simulate_report(store, config, args.mode, scenarios, args.backtest, trailing=trailing)
+
+
+def _import_options(parser: ArgumentParser) -> None:
+    parser.add_argument("--calendar", type=Path, required=True)
+    parser.add_argument("--provider", required=True)
+    parser.add_argument("--contract", required=True)
+    parser.add_argument("--source-timezone", required=True)
+    parser.add_argument(
+        "--timestamp-label", type=TimestampLabel, choices=TimestampLabel, required=True
+    )
+    parser.add_argument("--data-kind", type=DataKind, choices=DataKind, required=True)
+    parser.add_argument("--price-basis", choices=("unadjusted",), required=True)
+
+
+def _import_history(store: DatasetStore, args: Namespace) -> str:
+    calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
+    config = ImportConfig(
+        args.provider,
+        MgcContract(args.contract),
+        args.source_timezone,
+        args.timestamp_label,
+        args.data_kind,
+    )
+    source: FileHistorySource | HttpsHistorySource
+    if args.command == "import-csv":
+        source = FileHistorySource(args.csv, SourceFormat.CSV)
+    elif args.command == "import-parquet":
+        source = FileHistorySource(args.parquet, SourceFormat.PARQUET)
+    else:
+        source = HttpsHistorySource(args.url, args.format, args.token_env)
+    return store.save(prepare_history(source, config, calendar))

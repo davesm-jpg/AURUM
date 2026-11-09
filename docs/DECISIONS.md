@@ -109,3 +109,13 @@
 - Rationale. The model can distinguish what observed equity proves from conditional estimates. Payouts and activation remain simulated ledger operations.
 - Consequences. The paper default uses marked equity conservatively. The public drawdown page does not define unrealized treatment. Users supply flat provider-adjusted EOD marks and any DLL amount. Optional intraday payout handling is a research interpretation of the published window with extra conservative eligibility checks. See the provider links in `docs/VALIDATION.md`.
 - Files. `src/aurum/account_simulation.py`, `src/aurum/account_reports.py`, `src/aurum/monte_carlo.py`.
+
+## ADR-012 — Shared source validation and causal forward adjustment
+
+- Date 2026-11-09.
+- Context. Vendor formats and activity publication times vary. A continuous series can obscure which dated price was observable.
+- Alternatives. Normalize by vendor without a shared integrity gate, back-adjust old prices after each roll, or use one validation and explicitly mapped successor adjustment.
+- Decision. Reuse identical row validation for local CSV, Parquet and authorized HTTPS exports. Preserve the original bytes and legacy CSV identity. Use reviewed listing dates and compare available volume or open interest in matching intervals. Store explicit continuous switches and use the last specified overlapping close available by the switch for forward adjustment. Keep source OHLC separate from research prices.
+- Rationale. Market assumptions and roll inputs remain inspectable without rewriting older research values. Contract selection does not hardcode expiry or vendor rules.
+- Consequences. Actual source formats may need a normalization gateway. Compatibility checks require matching source provider, basis, data kind, tick settings and overlapping session dates/windows. Continuous series are separate research reports. Current backtests use a single dated contract per run.
+- Files. `src/aurum/providers.py`, `src/aurum/parquet_rows.py`, `src/aurum/contracts.py`, `src/aurum/continuous.py`.

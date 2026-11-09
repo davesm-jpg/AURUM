@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-09 — Historical adapters and contract mapping
+
+- Added Parquet and normalized HTTPS historical adapters with the same checks as CSV.
+- Added reviewed contract listings, activity-aware roll assessment and versioned continuous research plans.
+- Preserved immutable dated source prices and kept forward-adjusted values separate.
+
 ## 2026-11-09 — Paper account simulation
 
 - Added a versioned independent LucidFlex paper ledger with phase, loss, scaling, inactivity and payout behavior.

@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MAX_SQLITE_INTEGER, MGC, MgcContract
+from aurum.parquet_rows import parquet_rows
+from aurum.providers import FeedStatus, FileHistorySource, HistoricalSource, SourceFormat
 from aurum.timestamps import MINUTE, minute_timestamp, source_timezone
 
 IMPORT_VERSION = 1
@@ -107,45 +109,72 @@ def canonical_json(value: object) -> str:
 
 
 def prepare_csv(path: Path, config: ImportConfig, calendar: SessionCalendar) -> PreparedDataset:
-    raw = path.read_bytes()
-    candles, warnings = _parse_csv(raw, config, calendar)
+    return prepare_history(FileHistorySource(path, SourceFormat.CSV), config, calendar)
+
+
+def prepare_history(
+    source: HistoricalSource, config: ImportConfig, calendar: SessionCalendar
+) -> PreparedDataset:
+    raw = source.read()
+    if source.format is SourceFormat.CSV:
+        rows = _csv_rows(raw)
+        row_label = "CSV line"
+    else:
+        rows = parquet_rows(raw, COLUMNS)
+        row_label = "Parquet row"
+    candles, warnings = _parse_rows(rows, row_label, config, calendar)
     issues = (*warnings, *_gaps(candles, calendar))
     checksum = sha256(raw).hexdigest()
-    identity = canonical_json(
-        {
-            "dataset_version": IMPORT_VERSION,
-            "source_sha256": checksum,
-            "format": "csv",
-            "data_type": "ohlcv",
-            "instrument": MGC.symbol,
-            "contract": config.contract.code,
-            "price_basis": "unadjusted",
-            "timeframe_minutes": 1,
-            "tick_size": str(MGC.tick_size),
-            "provider": config.provider,
-            "source_timezone": config.source_timezone,
-            "tzdata_version": version("tzdata"),
-            "timestamp_label": config.timestamp_label,
-            "data_kind": config.data_kind,
-            "calendar": calendar.as_dict(),
-        }
-    )
+    provenance: dict[str, object] = {
+        "dataset_version": IMPORT_VERSION,
+        "source_sha256": checksum,
+        "format": source.format,
+        "data_type": "ohlcv",
+        "instrument": MGC.symbol,
+        "contract": config.contract.code,
+        "price_basis": "unadjusted",
+        "timeframe_minutes": 1,
+        "tick_size": str(MGC.tick_size),
+        "provider": config.provider,
+        "source_timezone": config.source_timezone,
+        "tzdata_version": version("tzdata"),
+        "timestamp_label": config.timestamp_label,
+        "data_kind": config.data_kind,
+        "calendar": calendar.as_dict(),
+    }
+    if source.origin is not None:
+        provenance["source_origin"] = source.origin
+    if source.format is not SourceFormat.CSV or source.origin is not None:
+        provenance["source_status"] = (
+            FeedStatus.SIMULATED
+            if config.data_kind is DataKind.SYNTHETIC
+            else FeedStatus.HISTORICAL
+        )
+    identity = canonical_json(provenance)
     return PreparedDataset(
         sha256(identity.encode()).hexdigest(), checksum, identity, raw, candles, issues
     )
 
 
-def _parse_csv(
-    raw: bytes, config: ImportConfig, calendar: SessionCalendar
-) -> tuple[tuple[Candle, ...], list[QualityIssue]]:
+def _csv_rows(raw: bytes) -> Iterator[tuple[int, list[str]]]:
     reader = csv.reader(StringIO(raw.decode("utf-8-sig"), newline=""), strict=True)
     if tuple(next(reader, ())) != COLUMNS:
         raise ValueError(f"CSV header must be {','.join(COLUMNS)}")
+    for row in reader:
+        yield reader.line_num, row
+
+
+def _parse_rows(
+    rows: Iterator[tuple[int, list[str]]],
+    row_label: str,
+    config: ImportConfig,
+    calendar: SessionCalendar,
+) -> tuple[tuple[Candle, ...], list[QualityIssue]]:
     zone = source_timezone(config.source_timezone)
     candles: dict[datetime, Candle] = {}
     latest: datetime | None = None
     out_of_order = zero_volume = 0
-    for row in reader:
+    for line, row in rows:
         try:
             candle = _parse_row(row, config, zone)
             start = candle.opened_at
@@ -154,7 +183,7 @@ def _parse_csv(
             if not calendar.permits(start):
                 raise ValueError(f"candle {start.isoformat()} falls outside open calendar windows")
         except (ValueError, OverflowError) as exc:
-            raise ValueError(f"CSV line {reader.line_num}: {exc}") from exc
+            raise ValueError(f"{row_label} {line}: {exc}") from exc
         if latest is not None and start < latest:
             out_of_order += 1
         else:
@@ -162,7 +191,7 @@ def _parse_csv(
         zero_volume += candle.volume == 0
         candles[start] = candle
     if not candles:
-        raise ValueError("CSV contains no candles")
+        raise ValueError(f"{row_label.split()[0]} contains no candles")
     warnings = [
         QualityIssue(code, count)
         for code, count in (("out_of_order", out_of_order), ("zero_volume", zero_volume))

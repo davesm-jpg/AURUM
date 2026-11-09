@@ -2,72 +2,72 @@
 
 ## Project Status
 
-- Current phase — Phase 5 statistical tooling and paper account simulation are implemented. D05 data adapters and contract management is next. Real-data tasks D04 and B02 await authorized MGC.
-- Current milestone — Q02 versioned LucidFlex paper ledger and trailing drawdown scenarios.
+- Current phase — Historical adapters and contract mapping D05 are complete. L01 normalized monitoring is the next implementation slice. D04 and B02 await authorized historical data.
+- Current milestone — D05 Parquet, HTTPS history, reviewed contracts and continuous research mapping.
 - Current branch — `main`.
-- Last verified commit — `2102bf5243aa32e19fe01df755c747b38b388c9f`.
+- Last verified commit — the D05 implementation commit containing this handoff.
 
 ## Current Objective
 
-- Task ID — D05.
-- Objective — Add interchangeable historical adapters and reviewed dated contract metadata, with explicit roll rules and research price basis.
-- Acceptance criteria — CSV IDs and original behavior stay stable. Parquet and authorized normalized historical sources share exact timestamp, contract and OHLCV validation and raw provenance. Track listing and expiry from reviewed metadata. Select rolls from time-available observations and preserve dated prices alongside any adjusted series.
+- Task ID — L01.
+- Objective — Build the persistent, paper-only monitoring path for normalized minute closes and share the strategy code with replay.
+- Acceptance criteria — Preserve source status and raw evidence. Detect duplicates, gaps, stale data and disconnects. Store progress and recover on restart. Gate paper alerts until continuity and freshness are verified. Historical and incremental equivalent inputs yield matching research events. Test against local synthetic transport and keep external verification separate.
 
 ## Completed Work
 
-- D01–D03 — Unadjusted MGC CSV import and replay, immutable raw provenance, dated session windows and completed 5m/15m/1h/4h/1d aggregation. Missing expected candles gate replay.
-- S01–S03 — Confirmed pivots, causal structure/evidence, mirrored strategy state, point-in-time context, experimental scoring and paper sizing. Immutable runs are available through CLI.
-- B01 — Audited paper fills from eligible minute opens, costs, conservative OHLC ambiguity, net metrics and closed-trade equity.
-- Q01 — Chronological purging and embargo, validation selection, held-out reporting, walk-forward, block resampling and assumed scenario simulation. SQLite v3 persists analysis definitions and results.
-- Q02 — `account_simulation.py` uses reviewed dated session bounds and explicit marked equity. It supports evaluation/funded phases, EOD loss trail, inclusive hard breach, daily lockout, consistency, scaling, inactivity and hypothetical payout. `account` persists paper ledgers. Monte Carlo can reuse the loss trail with explicit trades per session and trade-close-only assumptions.
-- Q02 verification — Official source links and rule interpretations are in `docs/VALIDATION.md`. The public drawdown page does not resolve unrealized PnL measurement, so the conservative default equity metric is configurable. DLL amount is caller supplied.
+- D01–D03 — Immutable raw datasets, validated MGC minute replay, dated sessions and completed higher-timeframe aggregation.
+- S01–S03 — Causal pivots, structure, liquidity and gap lifecycles, configurable strategy, context, risk and persisted paper setup transitions.
+- B01 — Auditable fills and costs, conservative OHLC ambiguity, net metrics and closed-trade equity. Real performance has not been measured.
+- Q01–Q02 — Chronological selection and holdout, conditional Monte Carlo, and separate versioned account ledger. LucidFlex rule sources and open assumptions are in `docs/VALIDATION.md`.
+- D05 adapters — `providers.py` exposes local/authorized HTTPS sources. `parquet_rows.py` validates native timestamps without precision loss. Shared parsing keeps legacy CSV IDs stable and preserves source bytes.
+- D05 contract research — `contracts` reads reviewed effective listings and causal activity. `continuous` stores explicit series plans. `continuous-bars` streams unadjusted or forward-adjusted research values alongside each original dated candle.
 
 ## Work In Progress
 
-- Current files — D05 has no implementation. Start with `market_data.py`, `exchange_calendar.py`, `instruments.py` and existing `DatasetStore` tests.
-- Implemented foundations — `prepare_csv` normalizes and validates source bytes. Dataset IDs hash exact source/config/calendar. Storage supports dated unadjusted 1m candles for a single contract. Existing run consumers expect the current normalized type and gate.
-- Remaining portions — Add Parquet and authorized historical adapter boundaries, preserve file format and provenance, then add versioned contract inventory and point-in-time roll planning. Document any connector that requires subscription or credentials. L01 service and U01 interface remain roadmap work.
+- Current files — L01 code is pending. Reuse `providers.py`, `exchange_calendar.py`, `strategy.py`, `storage.py` and the typed candle model.
+- Implemented foundations — `FeedStatus` distinguishes real time, delayed, historical, simulated and unavailable. The minute strategy consumer is `StrategyReplay.push`. Calendar v2 gives full sessions and clipped open windows. SQLite v3 uses transactional migrations and immutable research reports.
+- Remaining portions — Define normalized WebSocket event and source identity, durable gap/restart behavior and health status. Implement a paper-only in-app outbox and optional delivery adapters. Validate live behavior only when authorized data and service configuration are available.
 
 ## Important Decisions
 
-- ADR-004/005 — Preserve full exchange windows, use explicit trade dates and distinguish coverage from session boundaries. Publish only completed aggregates.
-- ADR-006 through ADR-009 — Use shared causal evidence and paper setup logic, exact sizing, actual availability and conservative fill assumptions.
-- ADR-010 — Keep held-out samples out of selection and label conditional paths distinctly.
-- ADR-011 — Separate account marks and hypothetical payouts from strategy and execution. Use explicit session boundaries and disclose uncertainty about provider mark treatment and optional intraday payouts.
-- Data policy — Do not silently splice or substitute contracts. An adjusted value is for research. Execution references use dated unadjusted source ticks.
+- ADR-004–009 — Use actual availability, explicit sessions and a shared causal path. Preserve structural risk and conservative paper execution.
+- ADR-010/011 — Protect final holdout and separate provider-specific marked equity from generic trade-close scenarios.
+- ADR-012 — Preserve legacy CSV IDs, unify source row checks and keep adjusted research prices separate. Continuous rolls must be explicit and use completed overlapping references.
+- Provider architecture — Only authorized data sources may be connected. An actual monitoring adapter must distinguish delayed and unavailable from real time and must suppress signals on data integrity failure.
 
 ## Known Issues
 
-- DATA-001 — High, blocked. No authorized historical MGC export and matching production-reviewed schedule were supplied. No empirical strategy result exists.
-- CAL-002/EVENT-001 — Exchange and economic schedule inputs are reviewed and supplied by the caller.
-- DATA-002/DATA-003 — Sparse exports gate replay and imports buffer raw bytes and bars.
-- ACCOUNT-001 — Provider unrealized measurement and optional DLL amount are not fully verified. Use explicit model assumptions.
-- Live feeds, external delivery and dashboards are pending. Real order execution is outside scope.
+- DATA-001 — High, blocked. No authorized historical MGC dataset and reviewed production schedule. No empirical strategy results.
+- CAL-002/EVENT-001 — Caller-reviewed exchange and economic schedule snapshots. Production feed integration is pending.
+- DATA-002/DATA-003 — Sparse exports block replay. Imports buffer raw files and bars.
+- ACCOUNT-001 — Provider unrealized treatment and optional daily loss limit need explicit scenario assumptions.
+- HTTPS history expects an already normalized export. Backtests currently use one dated contract. No external delivery or live account execution exists.
 
 ## Test Status
 
-- Passed — `.venv/bin/python -m pytest -q` (115), Ruff lint and format, mypy (37 files), dependency and Git whitespace checks. Tests exercise account floor, eligibility, phase, payout, survival and CLI.
+- Passed — `.venv/bin/python -m pytest -q` (123 with Parquet installed), Ruff lint and format, mypy (43 files), dependency and Git whitespace checks.
 - Failed — None outstanding.
-- Not run — Real-data reconciliation, empirical strategy performance or live provider integration.
-- Limitations — Market inputs, account marks and scenario outcomes in tests are synthetic or hypothetical.
+- Not run — Authorized source reconciliation, empirical market backtests, production feed or notification delivery.
+- Limitations — Adapter and rollover fixtures are synthetic. HTTPS was verified with a fake transport, not an external provider.
 
 ## Environment
 
-- Runtime — Python 3.12.7 on macOS arm64, SQLite 3.45.3. SQLite 3.37+ is required.
-- Setup — `python3.12 -m venv .venv` then `.venv/bin/python -m pip install -e '.[dev]'`.
-- Services — None for CLI. Keep authorized input in ignored `data/`.
-- Missing configuration — Authorized MGC export and matching reviewed schedule. No broker credentials are needed or permitted.
+- Runtime — Python 3.12.7 on macOS arm64 and SQLite 3.45.3. SQLite 3.37+ required.
+- Setup — `python3.12 -m venv .venv` then `.venv/bin/python -m pip install -e '.[dev,parquet]'`. Parquet extra pins PyArrow 26.0.1.
+- Services — None required for current CLI. Keep data in ignored `data/`.
+- Missing configuration — Authorized MGC history, applicable production calendar, authorized normalized streaming endpoint and optional channel credentials.
 
 ## Immediate Next Actions
 
-1. Rerun tests and read specification sections III–IV. Refactor the parser boundary so CSV and Parquet use the same validation and preserve the original CSV identity. Verify malformed, mixed and gap cases through both entry points.
-2. Add reviewed contract metadata and causal rollover conditions based on expiration and time-available volume or open interest. Use source versions, explicit dates and deterministic outcomes.
-3. Build an explicit continuous research mapping with independently identifiable dated prices and reproducible adjustment rules. Keep replay behavior stable and checkpoint the next completed slice.
+1. Run the checkpoint suite and review specification sections XIV–XV and XIX. Define an incremental monitored feed using reviewed session windows and immutable source identity.
+2. Persist accepted and pending candles and enough state to recover a restart. Add explicit gap, duplicate conflict, disconnect, freshness and known-closure behavior. Exercise synthetic local replay and transport.
+3. Persist in-app research alerts and add optional external notification components without sending messages during tests. Record exact outstanding production verification.
 
 ## Do Not Repeat
 
-- D01–D03, S01–S03, B01, Q01 and Q02 are verified. Reuse the existing data, evidence, strategy, audit and report paths.
-- Keep synthetic data and survival scenarios separate from observed results. Keep live brokerage credentials and actual order execution outside AURUM.
+- D01–D03, D05, S01–S03, B01, Q01 and Q02 are verified. Reuse the normalized strategy and data path.
+- Keep synthetic, adjusted and historical paper results labeled. Do not infer live access or provider authorization from local tests.
+- Keep real-money execution and brokerage credentials out of AURUM.
 
 ## Continuation Instruction
 

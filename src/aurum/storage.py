@@ -12,7 +12,7 @@ from aurum.backtesting import BACKTEST_VERSION, BacktestReplay
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
-from aurum.exchange_calendar import SessionCalendar
+from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import EXECUTION_VERSION, ExecutionConfig
 from aurum.instruments import MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
@@ -164,9 +164,9 @@ class DatasetStore:
             ).fetchone()
             return bytes(source["raw"])
 
-    def replay(self, dataset_id: str) -> Iterator[Candle]:
+    def replay(self, dataset_id: str, *, span: TradingWindow | None = None) -> Iterator[Candle]:
         with self._connection() as db:
-            yield from self._replay(db, self._dataset(db, dataset_id))
+            yield from self._replay(db, self._dataset(db, dataset_id), span=span)
 
     def build_structure_run(
         self,
@@ -389,15 +389,19 @@ class DatasetStore:
         raise ValueError(f"unknown structure run: {run_id}")
 
     @staticmethod
-    def _replay(db: sqlite3.Connection, dataset: sqlite3.Row) -> Iterator[Candle]:
+    def _replay(
+        db: sqlite3.Connection, dataset: sqlite3.Row, *, span: TradingWindow | None = None
+    ) -> Iterator[Candle]:
         if not dataset["replayable"]:
             raise ValueError("replay blocked because expected candles are missing")
         contract = MgcContract(json.loads(dataset["provenance"])["contract"])
-        rows = db.execute(
-            """SELECT opened_at, open_ticks, high_ticks, low_ticks, close_ticks, volume
-               FROM candles WHERE dataset_id = ? ORDER BY opened_at""",
-            (dataset["id"],),
-        )
+        query = """SELECT opened_at, open_ticks, high_ticks, low_ticks, close_ticks, volume
+                   FROM candles WHERE dataset_id = ?"""
+        parameters: tuple[object, ...] = (dataset["id"],)
+        if span is not None:
+            query += " AND opened_at >= ? AND opened_at < ?"
+            parameters += (span.start.isoformat(), span.end.isoformat())
+        rows = db.execute(query + " ORDER BY opened_at", parameters)
         for candle in rows:
             yield Candle(
                 contract,

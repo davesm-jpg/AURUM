@@ -10,6 +10,8 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 | `timestamps.py` | Aware UTC minute normalization, including rejection of ambiguous and nonexistent local times and source offset mismatches |
 | `exchange_calendar.py` | Validation and lookup of covered open windows and exchange trading dates in a supplied, versioned MGC schedule |
 | `market_data.py` | Import configuration, 1m candle model, CSV validation, provenance and gap detection |
+| `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
+| `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
 | `storage.py` | Versioned transactional SQLite schema, immutable dataset records and chronological candle iterator |
 | `candles.py` | Incremental aggregation of chronological minute closes into exchange-aligned intraday and daily bars |
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |
@@ -36,6 +38,7 @@ A Python 3.12+ modular monolith currently runs as a local CLI and requires no se
 10. Backtest replay processes queued orders and existing positions against each minute before asking the strategy about that minute's close. Entry orders become eligible only after the signal, at the next eligible open under configured latency. The run stores setup transitions, order audit, completed trades and a terminal summary. The manifest records execution, cost and performance versions.
 11. Research reports join completed trades to their setup timestamps and scores. Split eligibility uses both decision and observed outcome times. Candidate ranking and walk-forward use pre-holdout data. Scenario simulations have their own assumed label, and resampling retains the original backtest provenance.
 12. The account ledger consumes explicit paper observations, not trade orders. Session close updates the loss trail and funded sizing tier. Intraday checks compare the selected measurement against the current floor. Payout and phase actions are explicit and separately audited. The same loss trail powers an optional trade-close drawdown Monte Carlo model.
+13. Contract analysis filters reviewed listings by effective availability and compares activity over a common measurement period. Continuous series plans reference immutable datasets and explicit switches. Forward adjustment uses a shared close known by the switch and applies only to the successor segment. Streaming a series uses indexed time bounds and keeps dated source candles separate.
 
 ## Current database
 
@@ -51,6 +54,6 @@ The import parser holds a CSV and its normalized rows in memory. SQLite is a loc
 
 ## Next boundaries
 
-Expand historical adapters and reviewed contract metadata while keeping the normalized strategy path stable. Keep raw adapter events separate from normalized candles. A future streaming caller must handle freshness, ordering, checkpointing and backfill before invoking the aggregator. Replay already gates datasets with missing expected minutes.
+Implement the monitored feed path and deliver normalized minutes through the same research engine. Keep transport provenance separate from normalized candles. Handle freshness, ordering, checkpointing and backfill before alerts resume. Replay already gates datasets with missing expected minutes.
 
 Service/database, API, dashboard, strategy, simulation and notifications remain roadmap work. Evaluate PostgreSQL and migrations before a multi-client deployment. Keep credentials outside the data and strategy models.
