@@ -14,6 +14,11 @@ class EventRisk(StrEnum):
     ELEVATED = "elevated"
 
 
+class EconomicSourceKind(StrEnum):
+    OBSERVED_PUBLICATION = "observed_publication"
+    SYNTHETIC = "synthetic"
+
+
 @dataclass(frozen=True, slots=True)
 class Announcement:
     event_id: str
@@ -81,6 +86,7 @@ class EconomicCalendar:
     coverage_known_at: datetime
     events: tuple[Announcement, ...]
     coverage_complete: bool = True
+    data_kind: EconomicSourceKind | None = None
 
     def __post_init__(self) -> None:
         _require_utc(self.coverage_known_at)
@@ -109,11 +115,12 @@ class EconomicCalendar:
         required = {"source", "version", "coverage", "coverage_known_at", "events"}
         if (
             not isinstance(payload, dict)
-            or not required <= payload.keys() <= required | {"coverage_complete"}
+            or not required <= payload.keys() <= required | {"coverage_complete", "data_kind"}
             or not isinstance(payload["source"], str)
             or not isinstance(payload["version"], str)
             or not isinstance(payload["events"], list)
             or type(payload.get("coverage_complete", True)) is not bool
+            or ("data_kind" in payload and not isinstance(payload["data_kind"], str))
         ):
             raise ValueError("invalid economic calendar document")
         span = payload["coverage"]
@@ -132,6 +139,7 @@ class EconomicCalendar:
             _event_time(payload["coverage_known_at"]),
             tuple(_announcement(event) for event in payload["events"]),
             payload.get("coverage_complete", True),
+            EconomicSourceKind(payload["data_kind"]) if "data_kind" in payload else None,
         )
 
     def assess(self, as_of: datetime, buffer_minutes: int) -> EventAssessment:
@@ -170,6 +178,7 @@ class EconomicCalendar:
             "coverage_known_at": self.coverage_known_at.isoformat(),
             "events": [event.as_dict() for event in self.events],
             **({"coverage_complete": False} if not self.coverage_complete else {}),
+            **({"data_kind": self.data_kind} if self.data_kind is not None else {}),
         }
 
 

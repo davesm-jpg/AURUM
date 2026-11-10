@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Reviewed iCalendar captures
+
+- Added local timed-release normalization with source class, capture time, DST verification and partial coverage.
+
+
 ## 2026-11-10 — Streaming store contention recovery
 
 - Added bounded retry for SQLite locks and preserved transport receipt separately from processing time. Retried frames are audited and ineligible for alert and forward fill processing.

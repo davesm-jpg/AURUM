@@ -99,6 +99,18 @@ Strategy replay stores paper setup transitions, contextual measurements, sizing 
 
 Supply `--economic-calendar` only when you have a reviewed point-in-time snapshot. Its JSON fields are `source`, `version`, `coverage` with `start` and `end`, `coverage_known_at` and `events`. Each event has `event_id`, `title`, `scheduled_at`, `published_at` and optional `actual_at` plus `actual_known_at`. Use offset-bearing ISO timestamps. Use optional `supersedes` to replace an earlier announcement ID at the new publication time. A cancellation also sets `cancelled: true`. Set `coverage_complete: false` for partial sources, which can indicate elevated risk but leave other periods unknown. Without effective coverage, the calendar status is unknown. `--require-clear-event-risk` blocks signals unless the snapshot establishes clear coverage around the decision.
 
+Install `.[calendar]` to normalize a reviewed local iCalendar capture with
+`normalize-economic-ics FILE.ics`. Supply `--source`, UTC coverage with
+`--start` and `--end`, one or more `--title-prefix` values and an explicit
+`--data-kind`. Use `observed_publication` for a reviewed release source and
+`synthetic` for fixtures. By default the capture is known at normalization
+time. Supply `--observed-at` only for a preserved earlier capture. The output
+is compatible with `--economic-calendar` and provider settings. It is a partial
+snapshot that can flag known releases. BLS publishes an iCalendar covering many
+scheduled releases, including releases of interest to this workflow.
+[BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm)
+
+
 Backtest replay accepts the strategy options and simulates a single position at a time. It uses the next eligible minute open after a signal, applies the structural bracket and rechecks sizing at the fill price. Use `--latency-minutes`, `--entry-timeout-minutes`, `--round-trip-spread-ticks`, `--commission-cents` and `--slippage-ticks` to set execution assumptions. It uses stop-first for ambiguous same-minute touches, adverse opening prices for stop gaps and the target price for favorable opening gaps. On a trade-print dataset, `--resolve-with-trade-prints` creates a separate run that uses the first ordered trade print crossing either bracket in a dual-touch minute. The audit includes the print timestamp and sequence. Modeled bracket prices, observation at minute close and costs retain the minute paper assumptions. The execution sensitivity report pairs the saved runs and quantifies the net difference attributable to dual-touch ordering across the unpartitioned replay. It flattens at scheduled window close unless `--carry-across-closures` is set. Backtest audit distinguishes forced end-of-data exits. The summary reports actual sample size, net returns and closed-trade equity drawdown.
 
 Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report. Use `parameter-sensitivity` for a set of saved candidates varying just one setting. The report contains only development and validation outcomes. For a subset, supply `--candidate` once per included run, including the baseline.

@@ -12,7 +12,7 @@ from typing import Protocol, TypedDict
 
 from aurum.backtesting import BACKTEST_VERSION, BacktestReplay
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
-from aurum.economic_events import EconomicCalendar
+from aurum.economic_events import EconomicCalendar, EconomicSourceKind
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import (
@@ -23,7 +23,7 @@ from aurum.execution import (
 )
 from aurum.instruments import MAX_SQLITE_INTEGER, MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
-from aurum.market_data import Candle, PreparedDataset, TradePrint, canonical_json
+from aurum.market_data import Candle, DataKind, PreparedDataset, TradePrint, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig, StructureEngine
 from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
@@ -538,6 +538,12 @@ class DatasetStore:
         execution: ExecutionConfig | None = None,
         resolve_with_trade_prints: bool = False,
     ) -> str:
+        if (
+            economic is not None
+            and economic.data_kind is EconomicSourceKind.SYNTHETIC
+            and self.describe(dataset_id)["provenance"]["data_kind"] != DataKind.SYNTHETIC
+        ):
+            raise ValueError("synthetic economic snapshots require a synthetic dataset")
         manifest: dict[str, object] = {
             "dataset_id": dataset_id,
             "timeframe": timeframe,

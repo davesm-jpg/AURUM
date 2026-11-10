@@ -229,3 +229,12 @@
 - Decision — Keep a separate immutable normalized quote series with exact timestamp and sequence. A point-in-time read uses a strictly earlier quote within the same reviewed open window and explicitly classifies freshness.
 - Consequences — Quotes stay out of candle construction and fill simulation. No observation is carried over a closure. A future spread experiment must report its source and sampling assumptions separately.
 - Files — `quotes.py`, `timestamps.py`, `storage.py`, `tests/test_quotes.py`.
+
+## ADR-025 — Treat iCalendar captures as partial point-in-time evidence
+
+- Date — 2026-11-10.
+- Context — Public release calendars can supplement economic context but a current file cannot establish historical publication availability or complete risk coverage.
+- Alternatives — Infer availability from calendar edit metadata or use a known observation timestamp.
+- Decision — Normalize selected timed events from a reviewed local capture and use its observed time for availability. Mark the snapshot partial and record the source checksum and parser versions.
+- Consequences — A partial source can produce elevated risk. Absence leaves risk unknown. Recurring or unresolved timed releases are rejected. Automatic retrieval and merging across captures remain separate work.
+- Files — `economic_ics.py`, `economic_events.py`, `timestamps.py`, `pyproject.toml`.

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from functools import lru_cache
 from importlib.resources import files
 from re import fullmatch
@@ -80,15 +80,19 @@ def _normalized_utc(stamp: datetime, source_zone: ZoneInfo | None) -> datetime:
     if stamp.tzinfo is None:
         if source_zone is None:
             raise ValueError("timestamp must include a UTC offset")
-        candidates = set()
-        for fold in (0, 1):
-            utc = stamp.replace(tzinfo=source_zone, fold=fold).astimezone(UTC)
-            if utc.astimezone(source_zone).replace(tzinfo=None) == stamp:
-                candidates.add(utc)
-        if len(candidates) != 1:
-            raise ValueError("local timestamp is ambiguous or nonexistent")
-        stamp = candidates.pop()
+        return utc_from_wall_time(stamp, source_zone)
     elif source_zone is not None:
         if stamp.utcoffset() != stamp.astimezone(source_zone).utcoffset():
             raise ValueError("timestamp offset disagrees with source timezone")
     return stamp.astimezone(UTC)
+
+
+def utc_from_wall_time(stamp: datetime, zone: tzinfo) -> datetime:
+    candidates = set()
+    for fold in (0, 1):
+        utc = stamp.replace(tzinfo=zone, fold=fold).astimezone(UTC)
+        if utc.astimezone(zone).replace(tzinfo=None) == stamp:
+            candidates.add(utc)
+    if len(candidates) != 1:
+        raise ValueError("local timestamp is ambiguous or nonexistent")
+    return candidates.pop()

@@ -17,7 +17,8 @@ from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
-from aurum.economic_events import EconomicCalendar
+from aurum.economic_events import EconomicCalendar, EconomicSourceKind
+from aurum.economic_ics import normalize_economic_ics
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
@@ -157,6 +158,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     quote_lookup.add_argument("series_id")
     quote_lookup.add_argument("--at", type=event_timestamp, required=True)
     quote_lookup.add_argument("--maximum-age-ms", type=int, default=DEFAULT_QUOTE_MAX_AGE_MS)
+    economic_ics = commands.add_parser(
+        "normalize-economic-ics", help="convert a local iCalendar capture to a partial snapshot"
+    )
+    economic_ics.add_argument("ics", type=Path)
+    economic_ics.add_argument("--source", required=True)
+    economic_ics.add_argument("--start", type=minute_timestamp, required=True)
+    economic_ics.add_argument("--end", type=minute_timestamp, required=True)
+    economic_ics.add_argument("--observed-at", type=event_timestamp)
+    economic_ics.add_argument("--title-prefix", action="append", required=True)
+    economic_ics.add_argument(
+        "--data-kind", type=EconomicSourceKind, choices=EconomicSourceKind, required=True
+    )
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -414,6 +427,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "quote-at":
             print(canonical_json(quote_at(store, args.series_id, args.at, args.maximum_age_ms)))
+        elif args.command == "normalize-economic-ics":
+            observed = args.observed_at
+            if observed is not None and observed.nanosecond_tail:
+                raise ValueError("economic capture time supports microsecond precision")
+            snapshot = normalize_economic_ics(
+                args.ics,
+                source=args.source,
+                coverage=TradingWindow(args.start, args.end),
+                observed_at=observed.time if observed is not None else datetime.now(UTC),
+                data_kind=args.data_kind,
+                title_prefixes=tuple(args.title_prefix),
+            )
+            print(canonical_json(snapshot.as_dict()))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
             policy = RollPolicy(

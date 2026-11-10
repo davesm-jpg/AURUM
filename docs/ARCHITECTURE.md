@@ -20,7 +20,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |
 | `liquidity.py`, `liquidity_map.py`, `sessions.py` | Price-derived proxies, elapsed-window reclaims and timezone-aware source periods |
 | `imbalances.py`, `evidence.py` | FVG and IFVG lifecycle and shared causal structure/evidence replay |
-| `market_context.py`, `economic_events.py` | Completed higher-timeframe structure, regime, session and point-in-time event context |
+| `market_context.py`, `economic_events.py`, `economic_ics.py` | Completed higher-timeframe structure, regime, session, point-in-time event context and local release capture normalization |
 | `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
 | `execution.py`, `backtesting.py`, `performance.py` | Minute paper fill model, strategy replay orchestration and trade-level performance summaries |
 | `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |

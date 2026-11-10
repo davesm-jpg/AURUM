@@ -10,7 +10,7 @@ from hashlib import sha256
 from threading import Lock
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
-from aurum.economic_events import EconomicCalendar
+from aurum.economic_events import EconomicCalendar, EconomicSourceKind
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame, candle_from_dict
@@ -101,6 +101,12 @@ class MarketMonitor:
     ) -> None:
         if calendar.sessions is None:
             raise ValueError("monitoring requires reviewed dated sessions")
+        if (
+            economic is not None
+            and economic.data_kind is EconomicSourceKind.SYNTHETIC
+            and config.source_status is not FeedStatus.SIMULATED
+        ):
+            raise ValueError("synthetic economic snapshots require a simulated monitor")
         self.store = store
         self.calendar = calendar
         self.contract = contract

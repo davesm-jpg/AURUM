@@ -14,6 +14,7 @@ dependencies = ["tzdata==2026.6"]
 dev = ["mypy==1.15.0", "pytest==8.3.5", "ruff==0.11.13"]
 parquet = ["pyarrow==26.0.1"]
 stream = ["websockets==15.0.1"]
+calendar = ["icalendar==7.3.0", "python-dateutil==4.0.0"]
 api = ["fastapi==0.136.1", "uvicorn==0.46.0", "httpx==0.28.1"]
 
 [project.scripts]

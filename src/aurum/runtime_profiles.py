@@ -7,7 +7,7 @@ from re import fullmatch
 from typing import Any, Literal
 
 from aurum.candles import Timeframe
-from aurum.economic_events import EconomicCalendar
+from aurum.economic_events import EconomicCalendar, EconomicSourceKind
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
 from aurum.market_context import ResearchSession
@@ -94,7 +94,13 @@ class ProviderProfile:
         events = self.economic_calendar.get("events")
         if isinstance(events, list) and len(events) > 5_000:
             raise ValueError("provider snapshot supports at most 5000 economic announcements")
-        return EconomicCalendar.from_dict(self.economic_calendar)
+        calendar = EconomicCalendar.from_dict(self.economic_calendar)
+        if (
+            calendar.data_kind is EconomicSourceKind.SYNTHETIC
+            and self.source_status is not FeedStatus.SIMULATED
+        ):
+            raise ValueError("synthetic economic snapshots require a simulated provider profile")
+        return calendar
 
 
 @dataclass(frozen=True, slots=True)
