@@ -85,6 +85,50 @@ def test_economic_calendar_distinguishes_unknown_published_and_actual_times() ->
     assert calendar.assess(window.end - MINUTE, 5).risk is EventRisk.UNKNOWN
 
 
+def test_economic_revisions_and_cancellation_take_effect_at_publication() -> None:
+    original = Announcement("synthetic-original", "Synthetic schedule", START + 10 * MINUTE, START)
+    moved = replace(
+        original,
+        event_id="synthetic-moved",
+        scheduled_at=START + 13 * MINUTE,
+        published_at=START + 8 * MINUTE,
+        supersedes=original.event_id,
+    )
+    canceled = replace(
+        moved,
+        event_id="synthetic-canceled",
+        published_at=START + 12 * MINUTE,
+        supersedes=moved.event_id,
+        cancelled=True,
+    )
+    window = TradingWindow(START - 60 * MINUTE, START + 60 * MINUTE)
+    original_snapshot = EconomicCalendar(
+        "synthetic source", "fixture-v1", window, START, (original,)
+    )
+    current = replace(original_snapshot, events=(canceled, original, moved))
+    assert EconomicCalendar.from_dict(current.as_dict()) == current
+    assert current.assess(START + 7 * MINUTE, 3) == original_snapshot.assess(START + 7 * MINUTE, 3)
+    assert current.assess(START + 8 * MINUTE, 3).risk is EventRisk.CLEAR
+    assert current.assess(START + 10 * MINUTE, 3).event_ids == (moved.event_id,)
+    assert current.assess(START + 12 * MINUTE, 3).risk is EventRisk.CLEAR
+
+    partial = replace(current, coverage_complete=False)
+    assert EconomicCalendar.from_dict(partial.as_dict()) == partial
+    assert partial.assess(START + 12 * MINUTE, 3).risk is EventRisk.UNKNOWN
+    assert partial.assess(START + 10 * MINUTE, 3).event_ids == (moved.event_id,)
+    assert "coverage_complete" not in current.as_dict()
+    assert "supersedes" not in original.as_dict()
+
+    with pytest.raises(ValueError, match="earlier published"):
+        replace(current, events=(moved,))
+    fork = replace(moved, event_id="synthetic-fork")
+    with pytest.raises(ValueError, match="single chronological chain"):
+        replace(current, events=(original, moved, fork))
+    backwards = replace(moved, published_at=original.published_at)
+    with pytest.raises(ValueError, match="earlier published"):
+        replace(current, events=(original, backwards))
+
+
 def test_context_keeps_structural_range_and_known_higher_availability() -> None:
     context = MarketContext(CONTRACT, DEFAULT_STRUCTURE_CONFIG, ContextConfig())
     close = START + 5 * MINUTE

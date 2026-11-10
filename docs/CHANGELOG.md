@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Economic schedule revisions
+
+- Added published reschedules, cancellations and partial-source coverage to economic snapshots. Older assessments remain causal and legacy snapshot representations are preserved.
+
+
 ## 2026-11-10 — Operational heartbeat status
 
 - Shared the notification freshness deadline with CLI, API and dashboard monitor status. Overdue or clock-ahead heartbeats suspend operational eligibility while preserving the durable state.

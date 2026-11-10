@@ -22,11 +22,17 @@ class Announcement:
     published_at: datetime
     actual_at: datetime | None = None
     actual_known_at: datetime | None = None
+    supersedes: str | None = None
+    cancelled: bool = False
 
     def __post_init__(self) -> None:
         _require_utc(self.scheduled_at, self.published_at, self.actual_at, self.actual_known_at)
         if not self.event_id.strip() or not self.title.strip():
             raise ValueError("announcement identity and title are required")
+        if self.supersedes is not None and not self.supersedes.strip():
+            raise ValueError("superseded announcement identity is required")
+        if self.cancelled and (self.supersedes is None or self.actual_at is not None):
+            raise ValueError("a cancellation must replace an announcement and have no release")
         if (self.actual_at is None) != (self.actual_known_at is None):
             raise ValueError("actual releases require a known-at timestamp")
         if (
@@ -53,6 +59,8 @@ class Announcement:
             "published_at": self.published_at.isoformat(),
             "actual_at": self.actual_at.isoformat() if self.actual_at else None,
             "actual_known_at": self.actual_known_at.isoformat() if self.actual_known_at else None,
+            **({"supersedes": self.supersedes} if self.supersedes is not None else {}),
+            **({"cancelled": True} if self.cancelled else {}),
         }
 
 
@@ -72,13 +80,25 @@ class EconomicCalendar:
     coverage: TradingWindow
     coverage_known_at: datetime
     events: tuple[Announcement, ...]
+    coverage_complete: bool = True
 
     def __post_init__(self) -> None:
         _require_utc(self.coverage_known_at)
         if not self.source.strip() or not self.version.strip():
             raise ValueError("calendar source and version are required")
-        if len({event.event_id for event in self.events}) != len(self.events):
+        by_id = {event.event_id: event for event in self.events}
+        if len(by_id) != len(self.events):
             raise ValueError("economic announcement IDs must be unique")
+        replaced: set[str] = set()
+        for event in self.events:
+            if event.supersedes is None:
+                continue
+            previous = by_id.get(event.supersedes)
+            if previous is None or previous.published_at >= event.published_at:
+                raise ValueError("a revision must replace an earlier published announcement")
+            if event.supersedes in replaced:
+                raise ValueError("announcement revisions must form a single chronological chain")
+            replaced.add(event.supersedes)
 
     @classmethod
     def from_json(cls, raw: str) -> Self:
@@ -86,12 +106,14 @@ class EconomicCalendar:
 
     @classmethod
     def from_dict(cls, payload: object) -> Self:
+        required = {"source", "version", "coverage", "coverage_known_at", "events"}
         if (
             not isinstance(payload, dict)
-            or payload.keys() != {"source", "version", "coverage", "coverage_known_at", "events"}
+            or not required <= payload.keys() <= required | {"coverage_complete"}
             or not isinstance(payload["source"], str)
             or not isinstance(payload["version"], str)
             or not isinstance(payload["events"], list)
+            or type(payload.get("coverage_complete", True)) is not bool
         ):
             raise ValueError("invalid economic calendar document")
         span = payload["coverage"]
@@ -109,6 +131,7 @@ class EconomicCalendar:
             coverage,
             _event_time(payload["coverage_known_at"]),
             tuple(_announcement(event) for event in payload["events"]),
+            payload.get("coverage_complete", True),
         )
 
     def assess(self, as_of: datetime, buffer_minutes: int) -> EventAssessment:
@@ -116,15 +139,24 @@ class EconomicCalendar:
             raise ValueError("event buffer must be nonnegative")
         buffer = timedelta(minutes=buffer_minutes)
         lower, upper = as_of - buffer, as_of + buffer
+        superseded = {
+            event.supersedes
+            for event in self.events
+            if event.supersedes is not None and event.published_at <= as_of
+        }
         nearby = tuple(
             event.event_id
             for event in self.events
-            if event.published_at <= as_of and lower <= event.available_release_at(as_of) <= upper
+            if event.published_at <= as_of
+            and event.event_id not in superseded
+            and not event.cancelled
+            and lower <= event.available_release_at(as_of) <= upper
         )
         if nearby:
             return EventAssessment(EventRisk.ELEVATED, nearby)
         if (
-            self.coverage_known_at <= as_of
+            self.coverage_complete
+            and self.coverage_known_at <= as_of
             and self.coverage.start <= lower <= upper < self.coverage.end
         ):
             return EventAssessment(EventRisk.CLEAR)
@@ -137,6 +169,7 @@ class EconomicCalendar:
             "coverage": self.coverage.as_dict(),
             "coverage_known_at": self.coverage_known_at.isoformat(),
             "events": [event.as_dict() for event in self.events],
+            **({"coverage_complete": False} if not self.coverage_complete else {}),
         }
 
 
@@ -156,11 +189,15 @@ def _event_time(value: object) -> datetime:
 
 def _announcement(value: object) -> Announcement:
     required = {"event_id", "title", "scheduled_at", "published_at"}
+    optional = {"actual_at", "actual_known_at", "supersedes", "cancelled"}
     if (
         not isinstance(value, dict)
-        or not required <= value.keys() <= required | {"actual_at", "actual_known_at"}
+        or not required <= value.keys() <= required | optional
         or not isinstance(value["event_id"], str)
         or not isinstance(value["title"], str)
+        or value.get("supersedes") is not None
+        and not isinstance(value["supersedes"], str)
+        or type(value.get("cancelled", False)) is not bool
     ):
         raise ValueError("invalid economic announcement")
     actual, known = value.get("actual_at"), value.get("actual_known_at")
@@ -171,4 +208,6 @@ def _announcement(value: object) -> Announcement:
         _event_time(value["published_at"]),
         _event_time(actual) if actual is not None else None,
         _event_time(known) if known is not None else None,
+        value.get("supersedes"),
+        value.get("cancelled", False),
     )
