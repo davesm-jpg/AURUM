@@ -1,7 +1,10 @@
 """Normalize reviewed local iCalendar captures into causal scheduled-event evidence."""
 
 from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from hashlib import sha256
 from importlib import import_module
 from importlib.metadata import version
@@ -26,6 +29,19 @@ ECONOMIC_COMPARISON_VERSION = 1
 _RECURRING = {"RRULE", "RDATE", "EXDATE", "EXRULE", "RECURRENCE-ID"}
 
 
+@dataclass(frozen=True, slots=True)
+class EconomicIcsInput:
+    observed_at: datetime
+    read: Callable[[], bytes]
+    archive_id: str | None = None
+
+    def parse(self) -> tuple[Any, str]:
+        document, version = parse_economic_ics(self.read())
+        if self.archive_id is not None:
+            version = f"archive-v1/{self.archive_id}/{version}"
+        return document, version
+
+
 def normalize_economic_ics(
     path: Path,
     *,
@@ -35,22 +51,41 @@ def normalize_economic_ics(
     data_kind: EconomicSourceKind,
     title_prefixes: tuple[str, ...],
 ) -> EconomicCalendar:
-    if observed_at.tzinfo is not UTC:
+    return normalize_economic_ics_input(
+        EconomicIcsInput(observed_at, partial(_read_bytes, path)),
+        source=source,
+        coverage=coverage,
+        data_kind=data_kind,
+        title_prefixes=title_prefixes,
+    )
+
+
+def normalize_economic_ics_input(
+    capture: EconomicIcsInput,
+    *,
+    source: str,
+    coverage: TradingWindow,
+    data_kind: EconomicSourceKind,
+    title_prefixes: tuple[str, ...],
+) -> EconomicCalendar:
+    if capture.observed_at.tzinfo is not UTC:
         raise ValueError("economic calendar capture time must be UTC")
     prefixes = _prefixes(title_prefixes)
-    document, capture_version = _read_capture(path)
+    document, capture_version = capture.parse()
     events = []
     for uid, title, component in _selected_events(document, prefixes, {}):
         if _cancelled(component):
             continue
         scheduled_at = _release_time(component)
         if coverage.start <= scheduled_at < coverage.end:
-            events.append(Announcement(_digest((source, uid)), title, scheduled_at, observed_at))
+            events.append(
+                Announcement(_digest((source, uid)), title, scheduled_at, capture.observed_at)
+            )
     return EconomicCalendar(
         source,
         capture_version,
         coverage,
-        observed_at,
+        capture.observed_at,
         tuple(sorted(events, key=lambda event: (event.scheduled_at, event.event_id))),
         coverage_complete=False,
         data_kind=data_kind,
@@ -65,10 +100,29 @@ def compare_economic_ics(
     data_kind: EconomicSourceKind,
     title_prefixes: tuple[str, ...],
 ) -> EconomicCalendar:
+    return compare_economic_ics_inputs(
+        tuple(
+            EconomicIcsInput(observed, partial(_read_bytes, path)) for path, observed in captures
+        ),
+        source=source,
+        coverage=coverage,
+        data_kind=data_kind,
+        title_prefixes=title_prefixes,
+    )
+
+
+def compare_economic_ics_inputs(
+    captures: tuple[EconomicIcsInput, ...],
+    *,
+    source: str,
+    coverage: TradingWindow,
+    data_kind: EconomicSourceKind,
+    title_prefixes: tuple[str, ...],
+) -> EconomicCalendar:
     """Build a partial point-in-time snapshot from ordered copies of one publication."""
     if not 2 <= len(captures) <= MAX_ECONOMIC_CAPTURES:
         raise ValueError(f"provide between 2 and {MAX_ECONOMIC_CAPTURES} economic captures")
-    observed_times = tuple(observed for _, observed in captures)
+    observed_times = tuple(capture.observed_at for capture in captures)
     if any(observed.tzinfo is not UTC for observed in observed_times):
         raise ValueError("economic calendar capture time must be UTC")
     if any(older >= newer for older, newer in pairwise(observed_times)):
@@ -79,8 +133,9 @@ def compare_economic_ics(
     sequences: dict[str, int] = {}
     history = []
     provenance = []
-    for path, observed_at in captures:
-        document, capture_version = _read_capture(path)
+    for capture in captures:
+        observed_at = capture.observed_at
+        document, capture_version = capture.parse()
         method = document.get("METHOD", "PUBLISH")
         if not isinstance(method, str) or method.upper() != "PUBLISH":
             raise ValueError("comparison requires reviewed calendar publications")
@@ -157,9 +212,12 @@ def _prefixes(title_prefixes: tuple[str, ...]) -> tuple[str, ...]:
     return prefixes
 
 
-def _read_capture(path: Path) -> tuple[Any, str]:
+def _read_bytes(path: Path) -> bytes:
     with path.open("rb") as stream:
-        raw = stream.read(MAX_ECONOMIC_ICS_BYTES + 1)
+        return stream.read(MAX_ECONOMIC_ICS_BYTES + 1)
+
+
+def parse_economic_ics(raw: bytes) -> tuple[Any, str]:
     if len(raw) > MAX_ECONOMIC_ICS_BYTES:
         raise ValueError("economic iCalendar capture exceeds 8 MiB")
     try:

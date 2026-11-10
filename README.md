@@ -122,6 +122,18 @@ recurrence and inconsistent supplied sequence numbers on schedule changes
 require source review. Keep the original files with their capture records.
 [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html)
 
+Fetch a public publication explicitly with
+`aurum capture-economic-ics bea` or `aurum capture-economic-ics bls`. The
+selected local store archives the exact bytes, official endpoint, checksum
+and completed receipt time. Use `aurum economic-captures` to list receipts
+and `aurum economic-capture-raw CAPTURE_ID` to review the original bytes.
+Normalize a receipt with `aurum normalize-economic-captures CAPTURE_ID`
+and the same `--start`, `--end` and `--title-prefix` options. Provide
+multiple same-publisher IDs in increasing receipt order to compare captures.
+The commands establish partial evidence and retain the actual receipt clocks.
+[BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm) ·
+[BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar)
+
 Use `compose-economic-calendars A.json B.json --source "Reviewed US releases"`
 to combine separately reviewed publications. Provide 2–16 original
 snapshots with matching explicit source classes and distinct source names.

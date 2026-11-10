@@ -19,6 +19,14 @@ from aurum.contract_reports import save_contract_assessment
 from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.dataset_audit import verify_dataset
+from aurum.economic_archive import (
+    EconomicPublisher,
+    capture_official_ics,
+    economic_capture_bytes,
+    economic_receipt,
+    economic_receipts,
+    normalize_archived_ics,
+)
 from aurum.economic_composition import compose_economic_calendars
 from aurum.economic_events import MAX_ECONOMIC_PUBLICATIONS, EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
@@ -195,6 +203,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     economic_bundle.add_argument("snapshots", type=Path, nargs="+")
     economic_bundle.add_argument("--source", required=True)
+    fetch_calendar = commands.add_parser(
+        "capture-economic-ics", help="archive an official economic iCalendar publication"
+    )
+    fetch_calendar.add_argument("publisher", type=EconomicPublisher, choices=EconomicPublisher)
+    receipt = commands.add_parser("economic-captures", help="read archived capture receipts")
+    receipt.add_argument("capture_id", nargs="?")
+    receipt.add_argument("--limit", type=int, default=100)
+    raw_calendar = commands.add_parser(
+        "economic-capture-raw", help="export preserved iCalendar bytes"
+    )
+    raw_calendar.add_argument("capture_id")
+    archived_calendar = commands.add_parser(
+        "normalize-economic-captures", help="normalize stored captures using their receipt times"
+    )
+    archived_calendar.add_argument("capture_ids", nargs="+")
+    archived_calendar.add_argument("--start", type=minute_timestamp, required=True)
+    archived_calendar.add_argument("--end", type=minute_timestamp, required=True)
+    archived_calendar.add_argument("--title-prefix", action="append", required=True)
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -509,6 +535,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 canonical_json(compose_economic_calendars(snapshots, source=args.source).as_dict())
             )
+        elif args.command == "capture-economic-ics":
+            print(canonical_json(capture_official_ics(store, args.publisher).as_dict()))
+        elif args.command == "economic-captures":
+            capture_details = (
+                economic_receipt(store, args.capture_id).as_dict()
+                if args.capture_id is not None
+                else [receipt.as_dict() for receipt in economic_receipts(store, args.limit)]
+            )
+            print(canonical_json(capture_details))
+        elif args.command == "economic-capture-raw":
+            sys.stdout.buffer.write(
+                economic_capture_bytes(store, economic_receipt(store, args.capture_id))
+            )
+        elif args.command == "normalize-economic-captures":
+            snapshot = normalize_archived_ics(
+                store,
+                tuple(args.capture_ids),
+                coverage=TradingWindow(args.start, args.end),
+                title_prefixes=tuple(args.title_prefix),
+            )
+            print(canonical_json(snapshot.as_dict()))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
             policy = RollPolicy(

@@ -177,3 +177,15 @@ synthetic complete and partial queries, including actual releases known at the
 same instant as cancellation, restored events and shuffled event order.
 The 20,000-query benchmark preserved its output digest. The complete Python
 suite passed 222 tests.
+
+## Official economic archive smoke test
+
+On 2026-11-10, the explicit BEA capture stored 43,459 public response bytes
+and normalized two releases selected by the Personal Income and Outlays
+prefix in a temporary store. The snapshot was partial and used the saved
+receipt time. The store checksum audit verified the raw blob. The direct BLS
+capture returned HTTP 403 and did not publish a receipt. This smoke test
+establishes current public release access for BEA. Historical publication
+availability and authorized MGC research remain separate.
+[BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar) ·
+[BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm)

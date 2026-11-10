@@ -59,6 +59,7 @@ def test_historical_quote_import_and_lookup_are_exact_and_exchange_aware(tmp_pat
     with sqlite3.connect(store.path) as db:
         db.execute("DROP TABLE book_quotes")
         db.execute("DROP TABLE quote_series")
+        db.execute("DROP TABLE economic_captures")
         db.execute("PRAGMA user_version = 12")
     assert list_quote_series(store) == []
     aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]

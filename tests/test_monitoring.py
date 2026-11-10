@@ -419,6 +419,7 @@ def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observatio
         db.execute("DROP INDEX structure_event_available")
         db.execute("ALTER TABLE monitor_minutes DROP COLUMN execution_eligible")
         db.execute("ALTER TABLE monitor_minutes DROP COLUMN applied_at")
+        db.execute("DROP TABLE economic_captures")
         db.execute("PRAGMA user_version = 5")
     assert market_events_page(store, original.monitor_id) == []
 

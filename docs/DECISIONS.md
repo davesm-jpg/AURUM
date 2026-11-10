@@ -265,3 +265,12 @@
 - Decision — Compose a partial envelope with matching source classes. Attach original event IDs and normalized snapshot hashes. Retain individual coverage and capture provenance. Require revisions to stay within one publication.
 - Consequences — A cancellation cannot suppress another source. Duplicate observations of the same release may remain separate. Bundle coverage establishes known event risk and leaves other windows unknown.
 - Files — `economic_composition.py`, `economic_events.py`, `cli.py`, `tests/test_economic_composition.py`.
+
+## ADR-029 — Archive public calendar responses before applying scope
+
+- Date — 2026-11-10.
+- Context — The operator needs a reproducible first-observed clock and unaltered evidence for official public calendar releases.
+- Alternatives — Use calendar metadata as the observation clock, write paired local files or persist a receipt and shared raw blob transactionally.
+- Decision — Accept an explicit fetch from a fixed official publisher. Bound the response, refuse redirects and capture the time after receiving the body. Store exact bytes once per checksum, with a receipt per observation. Normalize independently using the receipt.
+- Consequences — Failed requests produce no receipt. Current captures cannot be used as earlier historical evidence. The worker continues to use a frozen reviewed snapshot. Polling and runtime refresh remain open.
+- Files — `economic_archive.py`, `economic_ics.py`, `storage.py`, CLI and archive tests.

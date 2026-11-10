@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Official economic capture archive
+
+- Added explicit BEA and BLS iCalendar retrieval, immutable SQLite receipts, raw export and point-in-time normalization using archived receipt clocks.
+
 ## 2026-11-10 — Indexed economic risk assessment
 
 - Added in-memory release-time indexing. A 20,000-query synthetic run retained all decisions and reduced assessment time.
