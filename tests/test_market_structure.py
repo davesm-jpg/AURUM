@@ -12,12 +12,15 @@ from threading import Barrier, Event
 import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
+from aurum.evidence import EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG
 from aurum.feed_frames import FeedFrame
 from aurum.forward import ForwardPaper, forward_events, register_forward
 from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.imbalances import ImbalanceConfig
 from aurum.instruments import MgcContract
+from aurum.liquidity import LiquidityConfig
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.market_structure import (
     BreakMode,
@@ -451,6 +454,35 @@ def test_evidence_replay_links_only_an_earlier_sweep_to_mss(tmp_path: Path) -> N
     assert json.loads(alternate.stdout)["run_id"] != run_id
     same = subprocess.run(args, check=True, capture_output=True, text=True)
     assert same.stdout == run.stdout
+
+
+def test_historical_chart_index_matches_synthetic_full_journal_projection(tmp_path: Path) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    bars = [
+        synthetic_bar(index, 29000 + (index % 8) * 10, 29002 + (index % 8) * 10)
+        for index in range(36)
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    run_id = store.build_structure_run(
+        dataset,
+        TIMEFRAME,
+        StructureConfig(PivotRule(1, 1)),
+        evidence=EvidenceConfig(
+            liquidity=LiquidityConfig(max_level_age_bars=3),
+            imbalances=ImbalanceConfig(max_age_bars=3),
+        ),
+    )
+    left, right = bars[31].opened_at, bars[33].available_at
+    route = f"/api/runs/{run_id}/chart-evidence"
+    params = {"start": left.isoformat(), "through": right.isoformat()}
+    with http.TestClient(api.create_app(store)) as client:
+        indexed = client.get(route, params=params)
+        assert indexed.status_code == 200 and indexed.json()["spans"]
+        with sqlite3.connect(store.path) as db:
+            db.execute("DROP INDEX structure_event_available")
+            db.execute("PRAGMA user_version = 10")
+        assert client.get(route, params=params).json() == indexed.json()
 
 
 @pytest.mark.parametrize("mirror", [False, True])

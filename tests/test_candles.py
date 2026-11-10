@@ -7,7 +7,7 @@ from sys import executable
 
 import pytest
 
-from aurum.candles import AggregateCandle, CandleAggregator, Timeframe
+from aurum.candles import AggregateCandle, CandleAggregator, Timeframe, completed_bar_start
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_data import Candle, DataKind, ImportConfig, TimestampLabel, prepare_csv
@@ -117,6 +117,36 @@ def test_partial_export_and_missing_minutes_do_not_publish_incomplete_buckets() 
     ]
     assert [bar.opened_at.minute for bar in completed] == [10, 15]
     assert completed[-1].shortened
+
+
+@pytest.mark.parametrize("timeframe", list(Timeframe))
+def test_completed_bar_lookback_matches_synthetic_aggregation_across_clips(
+    timeframe: Timeframe,
+) -> None:
+    monday = window("2025-03-10T13:00Z", "2025-03-10T17:13Z")
+    tuesday = window("2025-03-11T13:00Z", "2025-03-11T13:07Z")
+    tuesday_late = window("2025-03-11T13:11Z", "2025-03-11T17:13Z")
+    wednesday = window("2025-03-12T13:00Z", "2025-03-12T17:13Z")
+    coverage = TradingWindow(monday.start + MINUTE, wednesday.end - 2 * MINUTE)
+    calendar = SessionCalendar(
+        "synthetic lookback fixture",
+        "synthetic-v1",
+        coverage,
+        sessions=(
+            TradingSession(monday.start.date(), (monday,)),
+            TradingSession(tuesday.start.date(), (tuesday, tuesday_late)),
+            TradingSession(wednesday.start.date(), (wednesday,)),
+        ),
+    )
+    bars = list(
+        CandleAggregator(calendar, CONTRACT, (timeframe,)).consume(synthetic_bars(calendar))
+    )
+    boundaries = (coverage.start, tuesday.end, tuesday_late.start, tuesday_late.end, coverage.end)
+    for through in boundaries:
+        seen = [item for item in bars if item.available_at <= through]
+        for count in (1, 2, 7, 1000):
+            expected = seen[-min(len(seen), count)].opened_at if seen else None
+            assert completed_bar_start(calendar, timeframe, through, count) == expected
 
 
 def test_rejected_input_leaves_state_available_for_correct_next_candle() -> None:

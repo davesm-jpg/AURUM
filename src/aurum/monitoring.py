@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
+from threading import Lock
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig
@@ -81,6 +82,7 @@ class MarketMonitor:
         self._structure = structure
         self._strategy_config = strategy
         self._evidence = evidence
+        self._ingest_lock = Lock()
         self._checkpoint: str | None = None
         self._engine = self._new_engine()
         definition = canonical_json(
@@ -109,7 +111,8 @@ class MarketMonitor:
                    VALUES (?, ?, ?, 0, ?) ON CONFLICT (id) DO NOTHING""",
                 (self.monitor_id, definition, MonitorState.DISCONNECTED, expected),
             )
-            self._restore(db, _run(db, self.monitor_id)["last_applied"])
+            checkpoint = _run(db, self.monitor_id)["last_applied"]
+        self._restore(checkpoint)
 
     def set_connection(self, connected: bool, now: datetime) -> dict[str, object]:
         _utc(now)
@@ -170,17 +173,23 @@ class MarketMonitor:
             and self.config.source_status in (FeedStatus.REAL_TIME, FeedStatus.DELAYED)
         ):
             raise ValueError("feed candle status is incompatible with monitor configuration")
-        try:
-            with self.store.connection(write=True) as db:
-                return self._ingest(db, frame)
-        except BaseException:
-            self._checkpoint = None
-            self._engine = self._new_engine()
-            raise
+        with self._ingest_lock:
+            try:
+                while True:
+                    with self.store.connection(write=True) as db:
+                        row = _run(db, self.monitor_id)
+                        checkpoint = row["last_applied"]
+                        if checkpoint == self._checkpoint:
+                            return self._ingest(db, row, frame)
+                    self._restore(checkpoint)
+            except BaseException:
+                self._checkpoint = None
+                self._engine = self._new_engine()
+                raise
 
-    def _ingest(self, db: sqlite3.Connection, frame: FeedFrame) -> dict[str, object]:
-        row = _run(db, self.monitor_id)
-        self._restore(db, row["last_applied"])
+    def _ingest(
+        self, db: sqlite3.Connection, row: sqlite3.Row, frame: FeedFrame
+    ) -> dict[str, object]:
         now = frame.received_at
         opened = frame.candle.opened_at.isoformat()
         normalized = canonical_json(frame.candle.as_dict())
@@ -276,16 +285,34 @@ class MarketMonitor:
         self._checkpoint = last_applied
         return self._refresh(db, now)
 
-    def _restore(self, db: sqlite3.Connection, checkpoint: str | None) -> None:
+    def _restore(self, checkpoint: str | None) -> None:
         if checkpoint == self._checkpoint:
             return
-        self._engine = self._new_engine()
-        for row in db.execute(
-            """SELECT candle FROM monitor_minutes
-               WHERE run_id = ? AND applied = 1 ORDER BY opened_at""",
-            (self.monitor_id,),
-        ):
-            self._engine.push(candle_from_dict(json.loads(row["candle"])))
+        if checkpoint is None or (self._checkpoint is not None and self._checkpoint > checkpoint):
+            self._engine = self._new_engine()
+            self._checkpoint = None
+        if checkpoint is None:
+            return
+        previous = self._checkpoint
+        if previous is None:
+            expected = self.calendar.windows[0].start.isoformat() if self.calendar.windows else None
+        else:
+            expected = self._next_open(datetime.fromisoformat(previous))
+        if expected is None:
+            raise ValueError("monitor checkpoint is outside its reviewed schedule")
+        span = TradingWindow(
+            datetime.fromisoformat(expected), datetime.fromisoformat(checkpoint) + MINUTE
+        )
+        for batch in applied_minute_batches(self.store, self.monitor_id, span):
+            for candle, _source in batch:
+                opened = candle.opened_at.isoformat()
+                if opened != expected:
+                    raise ValueError("durable monitor checkpoint contains an applied gap")
+                self._engine.push(candle)
+                previous = opened
+                expected = self._next_open(candle.opened_at)
+        if previous != checkpoint:
+            raise ValueError("durable monitor checkpoint cannot be reconstructed")
         self._checkpoint = checkpoint
 
     def _new_engine(self) -> StrategyReplay:

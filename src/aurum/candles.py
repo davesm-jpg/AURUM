@@ -32,6 +32,43 @@ _INTRADAY_MINUTES = {
 }
 
 
+def completed_bar_start(
+    calendar: SessionCalendar, timeframe: Timeframe, through: datetime, count: int
+) -> datetime | None:
+    """Find the earliest open among the last complete bars in a continuous input prefix."""
+    if count < 1:
+        raise ValueError("completed bar lookback must be positive")
+    through = min(through, calendar.coverage.end)
+    coverage_start = calendar.coverage.start
+    earliest = None
+    minutes = timeframe.minutes
+    for session in reversed(calendar.sessions or ()):
+        if minutes is None:
+            if coverage_start <= session.start and session.end <= through:
+                earliest = session.start
+                count -= 1
+                if not count:
+                    return earliest
+            continue
+        for window in reversed(session.windows):
+            left, right = max(window.start, coverage_start), min(window.end, through)
+            if left >= right:
+                continue
+            start_offset = (left - window.start) // MINUTE
+            end_offset = (right - window.start) // MINUTE
+            first = (start_offset + minutes - 1) // minutes
+            last = (end_offset + (minutes - 1 if right == window.end else 0)) // minutes
+            complete = last - first
+            if complete <= 0:
+                continue
+            width = minutes * MINUTE
+            if count <= complete:
+                return window.start + (last - count) * width
+            earliest = window.start + first * width
+            count -= complete
+    return earliest
+
+
 @dataclass(frozen=True, slots=True)
 class AggregateCandle:
     contract: MgcContract

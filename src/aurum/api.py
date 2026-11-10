@@ -26,7 +26,7 @@ from aurum.api_reports import (
     ValidationReportRequest,
     report_configuration,
 )
-from aurum.candles import CandleAggregator, Timeframe
+from aurum.candles import CandleAggregator, Timeframe, completed_bar_start
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
@@ -230,7 +230,7 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
             raise ValueError("chart window must have positive duration")
         run = store.describe_structure_run(run_id)
         return chart_evidence(
-            _chart_events(store, run_id),
+            _chart_events(store, run_id, _history_chart_start(store, run, left), right),
             left,
             right,
             tracks_execution="backtest_version" in run,
@@ -558,11 +558,33 @@ def _events(
         ]
 
 
-def _chart_events(store: DatasetStore, run_id: str) -> Iterator[tuple[int, dict[str, object]]]:
-    for batch in store.structure_payload_batches(run_id):
-        for sequence, event in batch:
-            if event["event"] in _CHART_KINDS:
-                yield sequence, event
+def _history_chart_start(
+    store: DatasetStore, run: dict[str, object], left: datetime
+) -> datetime | None:
+    if "backtest_version" in run:
+        # An open bracket can span many sessions under a carry policy.
+        return None
+    if "evidence_version" not in run or "strategy_version" in run:
+        return left
+    lookback = span_lookback(run.get("evidence_config"), run["evidence_version"])
+    if lookback is None or run.get("aggregation_version") != 1:
+        return None
+    dataset = store.describe(str(run["dataset_id"]))
+    calendar = SessionCalendar.from_dict(dataset["provenance"]["calendar"])
+    if calendar.sessions is None:
+        return None
+    return (
+        completed_bar_start(calendar, Timeframe(str(run["timeframe"])), left - MINUTE, lookback)
+        or left
+    )
+
+
+def _chart_events(
+    store: DatasetStore, run_id: str, start: datetime | None, through: datetime
+) -> Iterator[tuple[int, dict[str, object]]]:
+    for sequence, event in store.timed_structure_payloads(run_id, start, through):
+        if event["event"] in _CHART_KINDS:
+            yield sequence, event
 
 
 def _candles(

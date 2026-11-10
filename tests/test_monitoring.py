@@ -1,9 +1,10 @@
 import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from typing import Protocol
 from urllib.request import Request
 
@@ -24,7 +25,7 @@ from aurum.monitoring import (
 )
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
-from aurum.strategy import DEFAULT_STRATEGY_CONFIG
+from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupEvent, StrategyReplay
 from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
 from aurum.timestamps import MINUTE, minute_timestamp
 
@@ -113,6 +114,47 @@ def test_market_closure_disconnection_staleness_and_unknown_coverage(tmp_path: P
     assert monitor.refresh(START + 70 * MINUTE)["state"] == MonitorState.UNAVAILABLE
 
 
+def test_monitor_restart_rebuilds_without_blocking_ingestion_and_catches_up_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    schedule = calendar((0, 10))
+    active = fixture_monitor(store, schedule, FeedStatus.SIMULATED)
+    active.set_connection(True, START)
+    for index in range(5):
+        active.ingest(frame(index, mode=FeedStatus.SIMULATED))
+
+    rebuilding, resume = Event(), Event()
+    restored = []
+    original = StrategyReplay.push
+
+    def pause(self: StrategyReplay, candle: Candle) -> tuple[SetupEvent, ...]:
+        restored.append(candle.opened_at)
+        if len(restored) == 1:
+            rebuilding.set()
+            assert resume.wait(8), "synthetic restart was not released"
+        return original(self, candle)
+
+    monkeypatch.setattr(StrategyReplay, "push", pause)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fixture_monitor, store, schedule, FeedStatus.SIMULATED)
+        try:
+            assert rebuilding.wait(5), "synthetic restart did not reach replay"
+            assert (
+                active.ingest(frame(5, mode=FeedStatus.SIMULATED))["last_applied_open"]
+                == (START + 5 * MINUTE).isoformat()
+            )
+        finally:
+            resume.set()
+        restarted = future.result(timeout=5)
+
+    restarted.ingest(frame(6, mode=FeedStatus.SIMULATED))
+    active.ingest(frame(7, mode=FeedStatus.SIMULATED))
+    assert restored == [START + index * MINUTE for index in range(7)]
+    contexts = market_events_page(store, active.monitor_id, kind="market_context_observed")
+    assert [item["confirmed_at"] for item in contexts] == [(START + 5 * MINUTE).isoformat()]
+
+
 def test_monitor_transaction_rollback_can_retry_a_failed_apply(tmp_path: Path) -> None:
     store = DatasetStore(tmp_path / "monitor.sqlite")
     monitor = fixture_monitor(store, calendar((0, 8)))
@@ -148,6 +190,7 @@ def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observatio
         db.execute("DROP INDEX monitor_setup_observation")
         db.execute("DROP INDEX monitor_observed_start")
         db.execute("DROP INDEX monitor_minute_observation")
+        db.execute("DROP INDEX structure_event_available")
         db.execute("ALTER TABLE monitor_minutes DROP COLUMN execution_eligible")
         db.execute("ALTER TABLE monitor_minutes DROP COLUMN applied_at")
         db.execute("PRAGMA user_version = 5")

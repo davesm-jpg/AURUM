@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -229,6 +229,13 @@ SCHEMA_V10 = (
        WHERE json_extract(payload, '$.event') = 'paper_setup_transition'
          AND json_extract(payload, '$.state') = 'paper_signal'""",
 )
+
+_STRUCTURE_EVENT_AT = (
+    "coalesce(json_extract(payload, '$.recorded_at'), json_extract(payload, '$.confirmed_at'))"
+)
+SCHEMA_V11 = f"""CREATE INDEX structure_event_available
+        ON structure_events(run_id, {_STRUCTURE_EVENT_AT}, sequence)
+        WHERE {_STRUCTURE_EVENT_AT} IS NOT NULL"""
 
 
 class DatasetDescription(TypedDict):
@@ -548,6 +555,37 @@ class DatasetStore:
                 return
             after = rows[-1]["sequence"]
 
+    def timed_structure_payloads(
+        self, run_id: str, start: datetime | None, through: datetime
+    ) -> Iterator[tuple[int, dict[str, object]]]:
+        """Read immutable evidence in availability order, retaining sequence on ties."""
+        with self.connection() as db:
+            indexed = db.execute("PRAGMA user_version").fetchone()[0] >= 11
+        if not indexed:
+            for batch in self.structure_payload_batches(run_id):
+                yield from batch
+            return
+        stamp = start.isoformat() if start is not None else ""
+        after = 0
+        end = through.isoformat()
+        while True:
+            with self.connection() as db:
+                rows = db.execute(
+                    f"""SELECT sequence, payload, {_STRUCTURE_EVENT_AT} AS available
+                        FROM structure_events INDEXED BY structure_event_available
+                        WHERE run_id = ? AND {_STRUCTURE_EVENT_AT} >= ?
+                          AND ({_STRUCTURE_EVENT_AT}, sequence) > (?, ?)
+                          AND {_STRUCTURE_EVENT_AT} <= ?
+                        ORDER BY {_STRUCTURE_EVENT_AT}, sequence LIMIT 1000""",
+                    (run_id, stamp, stamp, after, end),
+                ).fetchall()
+            for row in rows:
+                yield row["sequence"], json.loads(row["payload"])
+            if len(rows) < 1000:
+                return
+            stamp = rows[-1]["available"]
+            after = rows[-1]["sequence"]
+
     def save_analysis(
         self, kind: str, definition: dict[str, object], result: dict[str, object]
     ) -> str:
@@ -695,4 +733,6 @@ class DatasetStore:
         if write and version < 10:
             for statement in SCHEMA_V10:
                 db.execute(statement)
-            db.execute("PRAGMA user_version = 10")
+        if write and version < 11:
+            db.execute(SCHEMA_V11)
+            db.execute("PRAGMA user_version = 11")
