@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — L09 reviewed calendar capture comparison and Q06 staged final holdout are verified. Next is L10 economic source composition.
+- Current milestone — L09 calendar capture comparison, Q06 staged holdout and L10 economic source composition are verified. Next is L11 risk lookup benchmarking.
 - Current branch — `main`.
-- Last verified code commit — `3023537738f9ec6146184f845624de8318cc4403`.
+- Last verified code commit — `40baf2cf133bdc0aa9d0bea1c8d45e5fca6b3508`.
 
 ## Current Objective
 
-- Task ID — L10.
-- Objective — Compose separately reviewed economic publications into one auditable partial snapshot.
-- Acceptance criteria — Retain source and capture provenance. Keep release identities and cancellations isolated by source. Reject mixing observed and synthetic inputs.
+- Task ID — L11.
+- Objective — Measure and bound repeated point-in-time economic risk assessment on a large synthetic bundle.
+- Acceptance criteria — Preserve exact assessment results, including revision, cancellation and actual-release boundaries. Record before and after times and the same output digest.
 
 ## Completed Work
 
@@ -20,14 +20,14 @@
 - S01–S03 — Deterministic causal structure, liquidity proxies and sweeps, FVG/IFVG evidence, mirrored setup state, higher-timeframe context, score and integer paper risk.
 - B01 and B03–B06 — Shared conservative paper replay and explicit costs. The ordered-print variant resolves dual touches from stored prints and has a separate run identity. Intrabar sensitivity pairs saved runs. Quote reports assess observed spread and optionally reprice the paired subset at fixed fills.
 - Q01–Q06 — Chronological validation, Monte Carlo, LucidFlex paper rules, development-fitted matched control, grouped execution diagnostics and pre-holdout one-factor sensitivity. Staged selection excludes all final outcomes and final evaluation starts paper execution flat after embargo. The browser exercised both reports. No historical strategy performance has been measured.
-- L01 and L03–L09 — Durable normalized WebSocket monitoring, gap backfill, restart, health and optional Telegram/Discord delivery. Transient SQLite retries preserve transport receipt and record later processing while suppressing affected alert and forward eligibility. Economic snapshots can be imported from reviewed local iCalendar captures, can represent causal revisions and can be supplied through direct monitoring or provider profiles. Source-close and observation-time event risk remain separate. Standalone reviewed schedules can configure a worker before any dataset import. Ordered local iCalendar comparisons preserve capture digests, first observations and explicit cancellations.
+- L01 and L03–L10 — Durable normalized WebSocket monitoring, gap backfill, restart, health and optional Telegram/Discord delivery. Transient SQLite retries preserve transport receipt and record later processing while suppressing affected alert and forward eligibility. Economic snapshots can be imported from reviewed local iCalendar captures, can represent causal revisions and can be supplied through direct monitoring or provider profiles. Source-close and observation-time event risk remain separate. Standalone reviewed schedules can configure a worker before any dataset import. Ordered local iCalendar comparisons preserve capture digests, first observations and explicit cancellations. Composed partial snapshots retain isolated source IDs and per-source provenance.
 - U01–U02 and F01 — Loopback API and dashboard, chart evidence with original availability, local report creation, provider settings, rollover and continuous preview. A forward consumer registers at an applied cursor, audits observed paper execution and can save completed daily, weekly and monthly periods. Browser checks exercised synthetic matched controls, reconciliation, provider settings, rollover and adjusted versus dated prices.
 - O01 — The repeatable 21,600-minute synthetic workload measured 4.44 s batched monitor ingestion, approximately 0.81 s restart and 6, 10 and 12 ms for the three chart projections. All projection SHA-256 digests matched the recorded baseline. See `docs/PERFORMANCE.md`.
 
 ## Work In Progress
 
 - Schema v13. Recent changes are committed. The temporary browser preview services were stopped.
-- L10 has no implementation yet. Extend the existing economic snapshot schema compatibly. Preserve legacy snapshot JSON and IDs.
+- L11 has no implementation yet. Benchmark the existing linear assessment before changing its internals. Keep calendar serialization and event order stable.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
 ## Important Decisions
@@ -42,13 +42,13 @@
 
 - DATA-001 and CAL-002 — Authorized historical MGC and a matching reviewed production schedule are absent. Real outcomes and operating coverage remain unverified.
 - DATA-002 and DATA-003 — Sparse expected minutes block replay, and normalization buffers source data. Use bounded exports for large sources.
-- EVENT-001 — Automated external economic retrieval and running-worker refresh remain open. The next slice composes local reviewed source snapshots. The official BLS iCalendar request returned HTTP 403 from this runtime. Local reviewed captures are supported.
+- EVENT-001 — Automated external economic retrieval and running-worker refresh remain open. Local composition supports separately reviewed snapshots. The official BLS iCalendar request returned HTTP 403 from this runtime. Local reviewed captures are supported.
 - MONITOR-001 and STORE-001 — Legacy journals can lack observed timestamps. Long SQLite transactions still serialize. Conflicting duplicates require a corrected monitor run after investigation.
 - ACCOUNT-001 — Public LucidFlex documentation leaves unrealized breach treatment and optional DLL amount open. Keep those simulation assumptions explicit.
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (218), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (79 files), `.venv/bin/python -m pip check` and Git whitespace checks.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (220), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (81 files), `.venv/bin/python -m pip check` and Git whitespace checks.
 - Frontend — Five tests, TypeScript typecheck and production build passed. Browser checks used temporary synthetic stores.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
@@ -62,8 +62,8 @@
 
 ## Immediate Next Actions
 
-1. Inspect `economic_events.py` and `economic_ics.py` for optional composition provenance and stable event identity.
-2. Implement and test local composition, including colliding source event IDs, same-source cancellations, partial gaps and source-class gates.
+1. Record a deterministic large synthetic calendar assessment benchmark on the current linear path.
+2. Build a release-time lookup that preserves publication intervals and original event ordering. Compare it against the benchmark digest and a brute-force oracle.
 3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
 
 ## Do Not Repeat
