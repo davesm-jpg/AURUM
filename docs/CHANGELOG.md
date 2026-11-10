@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Bounded recovery transactions
+
+- Batched historical backfill and simulated replay while preserving individual frame audit and live eligibility rules.
+
 ## 2026-11-10 — Indexed history and concurrent restart
 
 - Indexed historical chart availability and verified exact aggregate lookbacks across clipped schedules.

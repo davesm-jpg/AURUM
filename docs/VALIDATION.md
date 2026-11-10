@@ -10,6 +10,8 @@
 - `.venv/bin/mypy .` passed across 61 source/test and benchmark files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
+The bounded-replay test matched single-frame journal, context and minute rows through synthetic out-of-order recovery, verified batch rollback, and re-ran the larger benchmark with all projection digests unchanged.
+
 A concurrent restart test held strategy reconstruction open while the original writer committed, then verified the resumed instance replayed only the new durable tail. Historical lookup matched the full journal across an indexed migration, and all five timeframe lookbacks matched aggregation across shortened and clipped windows.
 
 The November 10 performance checkpoint used 7,200 and 21,600 synthetic minutes. The monitor projection matched the full-journal fallback in recovery tests and retained the benchmark digest. See [performance measurements](PERFORMANCE.md).

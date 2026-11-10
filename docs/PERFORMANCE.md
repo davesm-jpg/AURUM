@@ -43,3 +43,7 @@ The 60-session simulated ingestion measurement moved from 32.87 s to 33.47 s aft
 On the same 21,600-minute workload, the first historical chart took 6.3 ms and the recent historical chart took 10.0 ms, compared with 144.9 and 143.1 ms in the baseline. The recent monitor chart took 11.8 ms. All three projection digests remained unchanged. Evidence replay and persistence measured 883.6 ms versus 845.3 ms before indexing. A historical backtest with carried positions still reads its earlier order prefix when the view might intersect an open bracket.
 
 Restart reconstruction still processes the applied prefix when a process has no in-memory state. The concurrency test verified that another writer commits while reconstruction is paused. Benchmark restart times above precede that lock-scope change.
+
+## Bounded recovery transactions
+
+`.venv/bin/python benchmarks/synthetic_pipeline.py --sessions 60 --batch-size 256` processed 21,600 synthetic minutes in 4.36 s, versus 33.73 s for individual commits with the same chart indexes. Every chart digest and event count matched. The restart median was 801 ms with continuity validation and short read pages. Live ingestion still commits one frame at a time.
