@@ -20,7 +20,7 @@ from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind
-from aurum.economic_ics import normalize_economic_ics
+from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
@@ -173,14 +173,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "normalize-economic-ics", help="convert a local iCalendar capture to a partial snapshot"
     )
     economic_ics.add_argument("ics", type=Path)
-    economic_ics.add_argument("--source", required=True)
-    economic_ics.add_argument("--start", type=minute_timestamp, required=True)
-    economic_ics.add_argument("--end", type=minute_timestamp, required=True)
     economic_ics.add_argument("--observed-at", type=event_timestamp)
-    economic_ics.add_argument("--title-prefix", action="append", required=True)
-    economic_ics.add_argument(
-        "--data-kind", type=EconomicSourceKind, choices=EconomicSourceKind, required=True
+    economic_comparison = commands.add_parser(
+        "compare-economic-ics", help="compare ordered local iCalendar captures of one source"
     )
+    economic_comparison.add_argument(
+        "--capture", action="append", nargs=2, metavar=("OBSERVED_AT", "FILE"), required=True
+    )
+    for economic_command in (economic_ics, economic_comparison):
+        economic_command.add_argument("--source", required=True)
+        economic_command.add_argument("--start", type=minute_timestamp, required=True)
+        economic_command.add_argument("--end", type=minute_timestamp, required=True)
+        economic_command.add_argument("--title-prefix", action="append", required=True)
+        economic_command.add_argument(
+            "--data-kind", type=EconomicSourceKind, choices=EconomicSourceKind, required=True
+        )
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -461,6 +468,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 source=args.source,
                 coverage=TradingWindow(args.start, args.end),
                 observed_at=observed.time if observed is not None else datetime.now(UTC),
+                data_kind=args.data_kind,
+                title_prefixes=tuple(args.title_prefix),
+            )
+            print(canonical_json(snapshot.as_dict()))
+        elif args.command == "compare-economic-ics":
+            inputs = []
+            for raw_observed, path in args.capture:
+                observed = event_timestamp(raw_observed)
+                if observed.nanosecond_tail:
+                    raise ValueError("economic capture time supports microsecond precision")
+                inputs.append((Path(path), observed.time))
+            snapshot = compare_economic_ics(
+                tuple(inputs),
+                source=args.source,
+                coverage=TradingWindow(args.start, args.end),
                 data_kind=args.data_kind,
                 title_prefixes=tuple(args.title_prefix),
             )

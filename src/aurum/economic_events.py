@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from itertools import pairwise
 from typing import Self
 
 from aurum.exchange_calendar import TradingWindow
@@ -17,6 +18,20 @@ class EventRisk(StrEnum):
 class EconomicSourceKind(StrEnum):
     OBSERVED_PUBLICATION = "observed_publication"
     SYNTHETIC = "synthetic"
+
+
+@dataclass(frozen=True, slots=True)
+class EconomicCapture:
+    version: str
+    observed_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_utc(self.observed_at)
+        if not self.version.strip():
+            raise ValueError("economic capture version is required")
+
+    def as_dict(self) -> dict[str, str]:
+        return {"version": self.version, "observed_at": self.observed_at.isoformat()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,11 +102,24 @@ class EconomicCalendar:
     events: tuple[Announcement, ...]
     coverage_complete: bool = True
     data_kind: EconomicSourceKind | None = None
+    captures: tuple[EconomicCapture, ...] = ()
 
     def __post_init__(self) -> None:
         _require_utc(self.coverage_known_at)
         if not self.source.strip() or not self.version.strip():
             raise ValueError("calendar source and version are required")
+        if self.captures:
+            observed = tuple(capture.observed_at for capture in self.captures)
+            if (
+                len(observed) < 2
+                or observed[0] != self.coverage_known_at
+                or any(older >= newer for older, newer in pairwise(observed))
+            ):
+                raise ValueError("economic capture provenance requires strictly increasing times")
+            if self.coverage_complete or self.data_kind is None:
+                raise ValueError("compared economic captures require partial, classified coverage")
+            if {event.published_at for event in self.events}.difference(observed):
+                raise ValueError("compared announcements must reference a capture time")
         by_id = {event.event_id: event for event in self.events}
         if len(by_id) != len(self.events):
             raise ValueError("economic announcement IDs must be unique")
@@ -115,7 +143,9 @@ class EconomicCalendar:
         required = {"source", "version", "coverage", "coverage_known_at", "events"}
         if (
             not isinstance(payload, dict)
-            or not required <= payload.keys() <= required | {"coverage_complete", "data_kind"}
+            or not required
+            <= payload.keys()
+            <= required | {"coverage_complete", "data_kind", "captures"}
             or not isinstance(payload["source"], str)
             or not isinstance(payload["version"], str)
             or not isinstance(payload["events"], list)
@@ -132,6 +162,9 @@ class EconomicCalendar:
         ):
             raise ValueError("economic calendar coverage requires timestamp boundaries")
         coverage = TradingWindow(minute_timestamp(span["start"]), minute_timestamp(span["end"]))
+        captures = payload.get("captures", [])
+        if not isinstance(captures, list) or ("captures" in payload and not captures):
+            raise ValueError("invalid economic capture provenance")
         return cls(
             payload["source"],
             payload["version"],
@@ -140,6 +173,7 @@ class EconomicCalendar:
             tuple(_announcement(event) for event in payload["events"]),
             payload.get("coverage_complete", True),
             EconomicSourceKind(payload["data_kind"]) if "data_kind" in payload else None,
+            tuple(_capture(capture) for capture in captures),
         )
 
     def assess(self, as_of: datetime, buffer_minutes: int) -> EventAssessment:
@@ -179,6 +213,11 @@ class EconomicCalendar:
             "events": [event.as_dict() for event in self.events],
             **({"coverage_complete": False} if not self.coverage_complete else {}),
             **({"data_kind": self.data_kind} if self.data_kind is not None else {}),
+            **(
+                {"captures": [capture.as_dict() for capture in self.captures]}
+                if self.captures
+                else {}
+            ),
         }
 
 
@@ -194,6 +233,16 @@ def _event_time(value: object) -> datetime:
     if stamp.tzinfo is None:
         raise ValueError("economic timestamp must include a UTC offset")
     return stamp.astimezone(UTC)
+
+
+def _capture(value: object) -> EconomicCapture:
+    if (
+        not isinstance(value, dict)
+        or value.keys() != {"version", "observed_at"}
+        or not isinstance(value["version"], str)
+    ):
+        raise ValueError("invalid economic capture provenance")
+    return EconomicCapture(value["version"], _event_time(value["observed_at"]))
 
 
 def _announcement(value: object) -> Announcement:

@@ -125,3 +125,17 @@ Contract and continuous reports use the same immutable manifest and result throu
 Two synthetic timing cases published a fictional release after a qualifying candle close but either before or after the monitor's later observation. Both preserved the same clear-risk source-close decision. With the clear-risk filter enabled, the release known by observation blocked the new forward setup. The underlying minute retained price processing eligibility. The monitor records both clocks and assessments, and the notification renderer includes observed risk when supplied.
 
 The optional `verify-store --verify-normalized` audit captures dataset and quote-series IDs from the checked snapshot, closes the structural reader, and rebuilds each source without network access. It reports counts including accurately stored incomplete datasets. `backup --verify-normalized` runs the audit on the private staged copy before publication. Synthetic tests verified normalized candle and quote counts, reported a blocked incomplete import, and confirmed a failed normalization audit leaves no destination or staged file.
+
+## Compared release captures
+
+`compare-economic-ics` uses the operator's recorded observation clock for each
+preserved file. A stable UID follows a release through changes without changing
+earlier assessments. Missing or replaced UIDs never cancel earlier evidence.
+The output remains partial, includes raw SHA-256 and parser version for every
+capture and can be loaded through the existing calendar and provider paths.
+Keep the raw files for review. The command cannot establish that the capture
+clock is authentic or that the selected publication covers other releases.
+
+Eleven synthetic iCalendar tests passed, including six comparison cases covering
+a changed release time, unchanged repeat, omission, explicit cancellation,
+duplicate UID, stale or conflicting sequence and out-of-order captures.

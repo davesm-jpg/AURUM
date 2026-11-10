@@ -110,6 +110,18 @@ snapshot that can flag known releases. BLS publishes an iCalendar covering many
 scheduled releases, including releases of interest to this workflow.
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm)
 
+Use `compare-economic-ics` with the same source, scope, filters and data kind
+to process 2–64 preserved copies of one publication. Repeat
+`--capture OBSERVED_AT FILE.ics` in increasing order with offset-bearing
+timestamps that include seconds. The output is a compatible partial snapshot
+and lists every input checksum, parser version and observation time. An
+existing UID keeps its identity through a title or time change. A missing UID
+leaves its last observed schedule in place. Only an explicit
+`STATUS:CANCELLED` for a known UID records a cancellation. Duplicate UIDs,
+recurrence and inconsistent supplied sequence numbers on schedule changes
+require source review. Keep the original files with their capture records.
+[RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html)
+
 
 Backtest replay accepts the strategy options and simulates a single position at a time. It uses the next eligible minute open after a signal, applies the structural bracket and rechecks sizing at the fill price. Use `--latency-minutes`, `--entry-timeout-minutes`, `--round-trip-spread-ticks`, `--commission-cents` and `--slippage-ticks` to set execution assumptions. It uses stop-first for ambiguous same-minute touches, adverse opening prices for stop gaps and the target price for favorable opening gaps. On a trade-print dataset, `--resolve-with-trade-prints` creates a separate run that uses the first ordered trade print crossing either bracket in a dual-touch minute. The audit includes the print timestamp and sequence. Modeled bracket prices, observation at minute close and costs retain the minute paper assumptions. The execution sensitivity report pairs the saved runs and quantifies the net difference attributable to dual-touch ordering across the unpartitioned replay. It flattens at scheduled window close unless `--carry-across-closures` is set. Backtest audit distinguishes forced end-of-data exits. The summary reports actual sample size, net returns and closed-trade equity drawdown.
 

@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Economic release capture comparison
+
+- Added causal schedule revisions and explicit cancellations from ordered local iCalendar publications, with checksums and observation times retained in the snapshot.
+
 ## 2026-11-10 — Whole-store normalization audit
 
 - Added optional normalized archive verification and a pre-publication check on staged backups.

@@ -236,5 +236,14 @@
 - Context — Public release calendars can supplement economic context but a current file cannot establish historical publication availability or complete risk coverage.
 - Alternatives — Infer availability from calendar edit metadata or use a known observation timestamp.
 - Decision — Normalize selected timed events from a reviewed local capture and use its observed time for availability. Mark the snapshot partial and record the source checksum and parser versions.
-- Consequences — A partial source can produce elevated risk. Absence leaves risk unknown. Recurring or unresolved timed releases are rejected. Automatic retrieval and merging across captures remain separate work.
+- Consequences — A partial source can produce elevated risk. Absence leaves risk unknown. Recurring or unresolved timed releases are rejected. Automatic retrieval remains separate work. ADR-026 covers comparisons of preserved captures.
 - Files — `economic_ics.py`, `economic_events.py`, `timestamps.py`, `pyproject.toml`.
+
+## ADR-026 — Compare reviewed captures by UID and observation time
+
+- Date — 2026-11-10.
+- Context — A later publication can move or cancel a release. A missing item alone cannot establish either change.
+- Alternatives — Compare titles and nearby times, trust edit metadata or track publication UIDs using preserved capture clocks.
+- Decision — Follow a selected UID within one reviewed publication. Append changed titles and times at first observation. Require explicit cancellation of a known UID, and reject ambiguous UID or sequence evidence. Preserve all input checksums and observation times in the partial snapshot.
+- Consequences — The prior schedule still informs earlier assessments. The last observed schedule remains possible after omission. Publishers with unstable UIDs may produce independent schedule entries. Comparison is local and does not attest capture times or refresh a running monitor.
+- Files — `economic_ics.py`, `economic_events.py`, `cli.py`, `tests/test_economic_ics.py`.
