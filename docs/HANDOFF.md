@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03 and D06 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03, D06 and L04 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `5bdc78f4351c10fbb0bf358bae77e4d2d55129da`.
+- Last verified commit — `1b12133c00ceb75238c7e66beae31f485a9b0b6b`.
 
 ## Current Objective
 
-- Task ID — L04.
-- Objective — Feed a reviewed point-in-time economic snapshot into the shared monitor strategy path.
-- Acceptance criteria — Monitor and replay use the same event-risk rules and preserve existing identities when no snapshot is supplied.
+- Task ID — U01 verification.
+- Objective — Exercise the new research report and provider setting flows through the built browser workspace.
+- Acceptance criteria — Use a temporary labeled synthetic store. Check the report form, saved summary, source labels and provider snapshot input.
 
 ## Completed Work
 
@@ -23,6 +23,8 @@
 - L01 journal — SQLite v4 holds monitor definitions, raw/normalized pending and applied minutes, cursor, research events and in-app alerts. Contiguous application and resulting events commit together. Restart restores the applied strategy prefix without replaying delivery.
 - L01 transport — `streaming.py` accepts normalized WebSocket minute-close frames with explicit source status, reconnects with bounded backoff, can fill observed gaps using authorized HTTPS and gates stale or invalid data. The connector supports local synthetic transport. Known market closure and unavailable calendar coverage are separate states.
 - L01 verification — `monitor-replay` matches strategy replay events. Tests cover gap/restart, SQLite rollback, duplicates/conflicts, scheduled closures, staleness, backfill, local sockets and in-app alert gating.
+
+- L04 — Monitor and replay share versioned economic snapshots. Linked revisions take effect at publication, cancellations retire earlier versions and partial coverage cannot yield clear risk. API/CLI health uses the same heartbeat cutoff as notification delivery.
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
 
@@ -55,8 +57,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 167 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (167), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
+- Latest checkpoint — 171 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (171), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -70,8 +72,8 @@
 
 ## Immediate Next Actions
 
-1. Accept the existing reviewed economic snapshot in direct monitor, monitor-replay and saved provider profiles.
-2. Test prior-ID compatibility, causal event availability and restart/replay parity with the event-risk filter.
+1. Start temporary loopback services using the matched-control synthetic test database and a second synthetic export.
+2. Exercise the matched-control and data reconciliation forms and the provider economic settings in the browser.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
