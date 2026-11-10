@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Grouped paper execution diagnostics
+
+- Added holding time, favorable and adverse excursion, execution cost, ambiguous exit and sample net P&L dispersion to the backtest breakdown.
+
+
 ## 2026-11-10 — Standalone provider schedules
 
 - Added immutable reviewed exchange schedule and dated contract settings for provider profiles without a historical dataset.

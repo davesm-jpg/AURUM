@@ -1,6 +1,7 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime
+from statistics import median, stdev
 
 from aurum.monte_carlo import (
     MONTE_CARLO_VERSION,
@@ -36,7 +37,18 @@ _COMPARABLE_FIELDS = (
     "economic_calendar",
     "execution_config",
 )
-BACKTEST_ANALYTICS_VERSION = 1
+BACKTEST_ANALYTICS_VERSION = 2
+
+
+@dataclass(frozen=True, slots=True)
+class _TradeDiagnostics:
+    observation: Observation
+    trade_date: date
+    holding_seconds: int
+    mfe_ticks: int
+    mae_ticks: int
+    execution_cost_cents: int
+    ambiguous: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +56,7 @@ class _BacktestEvidence:
     candidate: Candidate
     signals_by_date: Counter[str]
     signals_by_session: Counter[str]
+    trade_diagnostics: tuple[_TradeDiagnostics, ...]
 
 
 def validate_runs(store: DatasetStore, run_ids: tuple[str, ...], config: ValidationConfig) -> str:
@@ -139,7 +152,7 @@ def backtest_analytics(store: DatasetStore, run_id: str, window: int) -> dict[st
     run = store.describe_backtest(run_id)
     dataset_id = str(run["dataset_id"])
     dataset = store.describe(dataset_id)
-    evidence = _load_backtest_evidence(store, run_id)
+    evidence = _load_backtest_evidence(store, run_id, include_diagnostics=True)
     items = evidence.candidate.observations
     return {
         "backtest_analytics_version": BACKTEST_ANALYTICS_VERSION,
@@ -157,14 +170,18 @@ def backtest_analytics(store: DatasetStore, run_id: str, window: int) -> dict[st
         "rolling_outcomes": rolling_outcomes(items, window),
         "by_score_decile": outcomes_by_score(items),
         "cost_sensitivity_fixed_fills": cost_sensitivity(items, (0, 50, 100, 200)),
+        "execution_diagnostics": _execution_diagnostics(evidence.trade_diagnostics),
     }
 
 
-def _load_backtest_evidence(store: DatasetStore, run_id: str) -> _BacktestEvidence:
+def _load_backtest_evidence(
+    store: DatasetStore, run_id: str, *, include_diagnostics: bool = False
+) -> _BacktestEvidence:
     signals: dict[str, tuple[datetime, int | None]] = {}
     observations = []
     by_date: Counter[str] = Counter()
     by_session: Counter[str] = Counter()
+    diagnostics = []
     for item in store.structure_events(run_id):
         if item["event"] == "paper_setup_transition" and item["state"] == "paper_signal":
             score = item["score"]
@@ -179,23 +196,84 @@ def _load_backtest_evidence(store: DatasetStore, run_id: str) -> _BacktestEviden
             if setup not in signals:
                 raise ValueError("backtest trade has no earlier setup signal")
             decision, score_value = signals.pop(setup)
-            observations.append(
-                Observation(
-                    setup,
-                    decision,
-                    datetime.fromisoformat(str(item["entry_at"])),
-                    datetime.fromisoformat(str(item["recorded_at"])),
-                    _integer(item["net_cents"]),
-                    _integer(item["quantity"]),
-                    str(item["session"]),
-                    str(item["regime"]),
-                    str(item["direction"]),
-                    _integer(score_value) if score_value is not None else None,
-                )
+            observation = Observation(
+                setup,
+                decision,
+                datetime.fromisoformat(str(item["entry_at"])),
+                datetime.fromisoformat(str(item["recorded_at"])),
+                _integer(item["net_cents"]),
+                _integer(item["quantity"]),
+                str(item["session"]),
+                str(item["regime"]),
+                str(item["direction"]),
+                _integer(score_value) if score_value is not None else None,
             )
+            observations.append(observation)
+            if include_diagnostics:
+                diagnostics.append(
+                    _TradeDiagnostics(
+                        observation,
+                        date.fromisoformat(str(item["trade_date"])),
+                        _integer(item["holding_seconds"]),
+                        _integer(item["mfe_ticks"]),
+                        _integer(item["mae_ticks"]),
+                        sum(
+                            _integer(item[key])
+                            for key in ("commission_cents", "slippage_cents", "spread_cents")
+                        ),
+                        item["ambiguous_stop_target"] is True,
+                    )
+                )
         elif item["event"] == "paper_entry_canceled" and item["reason"] != "duplicate_setup":
             signals.pop(str(item["setup_id"]), None)
-    return _BacktestEvidence(Candidate(run_id, tuple(observations)), by_date, by_session)
+    return _BacktestEvidence(
+        Candidate(run_id, tuple(observations)), by_date, by_session, tuple(diagnostics)
+    )
+
+
+def _execution_diagnostics(trades: tuple[_TradeDiagnostics, ...]) -> dict[str, object]:
+    groups: dict[str, defaultdict[str, list[_TradeDiagnostics]]] = {
+        name: defaultdict(list)
+        for name in ("by_month", "by_weekday", "by_session", "by_regime", "by_direction")
+    }
+    for trade in trades:
+        observation = trade.observation
+        groups["by_month"][trade.trade_date.isoformat()[:7]].append(trade)
+        groups["by_weekday"][str(trade.trade_date.isoweekday())].append(trade)
+        groups["by_session"][observation.session].append(trade)
+        groups["by_regime"][observation.regime].append(trade)
+        groups["by_direction"][observation.direction].append(trade)
+
+    monthly_nets = [
+        sum(trade.observation.net_cents for trade in group) for group in groups["by_month"].values()
+    ]
+    return {
+        "months_with_trades": len(monthly_nets),
+        "profitable_months": sum(net > 0 for net in monthly_nets),
+        "monthly_net_stddev_cents": stdev(monthly_nets) if len(monthly_nets) > 1 else None,
+        **{
+            name: {label: _diagnostic_summary(group) for label, group in sorted(partitions.items())}
+            for name, partitions in groups.items()
+        },
+    }
+
+
+def _diagnostic_summary(trades: list[_TradeDiagnostics]) -> dict[str, object]:
+    net = [trade.observation.net_cents for trade in trades]
+    holding = [trade.holding_seconds for trade in trades]
+    count = len(trades)
+    return {
+        "trades": count,
+        "average_holding_seconds": sum(holding) / count,
+        "median_holding_seconds": median(holding),
+        "average_mfe_ticks": sum(trade.mfe_ticks for trade in trades) / count,
+        "average_mae_ticks": sum(trade.mae_ticks for trade in trades) / count,
+        "max_mfe_ticks": max(trade.mfe_ticks for trade in trades),
+        "max_mae_ticks": max(trade.mae_ticks for trade in trades),
+        "net_trade_stddev_cents": stdev(net) if count > 1 else None,
+        "execution_cost_cents": sum(trade.execution_cost_cents for trade in trades),
+        "ambiguous_exits": sum(trade.ambiguous for trade in trades),
+    }
 
 
 def _integer(value: object) -> int:

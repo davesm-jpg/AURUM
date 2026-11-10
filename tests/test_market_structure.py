@@ -603,6 +603,26 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert analytics["signals_by_utc_date"] == {"2025-03-10": 1}
     assert analytics["signals_by_session"] == {"new_york": 1}
     assert analytics["scored_trades"] == 1
+    diagnostics = analytics["execution_diagnostics"]
+    assert isinstance(diagnostics, dict)
+    expected = {
+        "trades": 1,
+        "average_holding_seconds": 60.0,
+        "median_holding_seconds": 60,
+        "average_mfe_ticks": 0.0,
+        "average_mae_ticks": 33.0,
+        "max_mfe_ticks": 0,
+        "max_mae_ticks": 33,
+        "net_trade_stddev_cents": None,
+        "execution_cost_cents": 260,
+        "ambiguous_exits": 1,
+    }
+    assert diagnostics["by_session"] == {"new_york": expected}
+    assert diagnostics["by_weekday"] == {"1": expected}
+    assert diagnostics["by_month"] == {"2025-03": expected}
+    assert diagnostics["months_with_trades"] == 1
+    assert diagnostics["profitable_months"] == 0
+    assert diagnostics["monthly_net_stddev_cents"] is None
     costs = analytics["cost_sensitivity_fixed_fills"]
     assert isinstance(costs, list)
     assert costs[1]["net_cents"] == int(str(trade["net_cents"])) - 50 * int(str(trade["quantity"]))
@@ -684,6 +704,12 @@ def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_pat
         )
 
     reference, opportunity = run(Variant.SWEEP_MSS_IFVG), run(Variant.MSS)
+    opportunity_diagnostics = backtest_analytics(store, opportunity, 5)["execution_diagnostics"]
+    assert isinstance(opportunity_diagnostics, dict)
+    groups = opportunity_diagnostics["by_session"]
+    assert isinstance(groups, dict)
+    assert groups["new_york"]["trades"] == 5
+    assert groups["new_york"]["net_trade_stddev_cents"] > 0
     validation_config = ValidationConfig(
         sessions[2].start - timedelta(hours=2),
         sessions[3].start,

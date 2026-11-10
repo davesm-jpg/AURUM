@@ -43,6 +43,30 @@ const outcomeColumns: Column[] = [
     value: (row) => money(row.net_cents ?? row.net_profit_cents),
   },
 ];
+const oneDecimal = (value: unknown) =>
+  number(value)?.toLocaleString(undefined, { maximumFractionDigits: 1 }) ?? "—";
+const executionColumns: Column[] = [
+  {
+    title: "Avg / median hold (s)",
+    value: (row) =>
+      oneDecimal(row.average_holding_seconds) +
+      " / " +
+      oneDecimal(row.median_holding_seconds),
+  },
+  {
+    title: "Avg MFE / MAE (ticks)",
+    value: (row) =>
+      oneDecimal(row.average_mfe_ticks) +
+      " / " +
+      oneDecimal(row.average_mae_ticks),
+  },
+  { title: "Trade P&L SD", value: (row) => money(row.net_trade_stddev_cents) },
+  { title: "Modeled costs", value: (row) => money(row.execution_cost_cents) },
+  {
+    title: "Ambiguous exits",
+    value: (row) => String(row.ambiguous_exits ?? "—"),
+  },
+];
 
 export function DataTable({
   labelHeading,
@@ -275,6 +299,9 @@ export function BacktestAnalytics({
   const stats = record(results.performance);
   const evidence =
     details?.windowSize === windowSize ? details.data : undefined;
+  const diagnostics = record(evidence?.execution_diagnostics);
+  const groupDiagnostics = record(diagnostics[group]);
+  const hasGroupDiagnostics = Object.keys(groupDiagnostics).length > 0;
   const scoredTrades = number(evidence?.scored_trades) ?? 0;
   const scoreRange = (name: string) =>
     `${name}–${name === "90" ? 100 : Number(name) + 9}`;
@@ -410,15 +437,34 @@ export function BacktestAnalytics({
             group === "by_weekday"
               ? (WEEKDAYS[Number(name) - 1] ?? name)
               : label(name),
-            record(value),
+            { ...record(value), ...record(groupDiagnostics[name]) },
           ])}
-          columns={outcomeColumns}
+          columns={
+            hasGroupDiagnostics
+              ? [...outcomeColumns, ...executionColumns]
+              : outcomeColumns
+          }
           empty={
             group === "observation_milestones"
               ? "The replay has fewer than 100 completed trades."
               : "No qualifying observations."
           }
         />
+        {hasGroupDiagnostics && (
+          <p className="muted analytics-note">
+            MFE and MAE are modeled favorable and adverse excursion. Trade
+            P&amp;L SD is sample dispersion of completed net outcomes.
+            {group === "by_month" && (
+              <>
+                {" "}
+                {String(diagnostics.profitable_months ?? 0)} of{" "}
+                {String(diagnostics.months_with_trades ?? 0)} active months were
+                profitable. Monthly net P&amp;L SD{" "}
+                {money(diagnostics.monthly_net_stddev_cents)}.
+              </>
+            )}
+          </p>
+        )}
       </section>
       <Distribution evidence={stats.net_return_distribution_cents} />
       {evidence && (
