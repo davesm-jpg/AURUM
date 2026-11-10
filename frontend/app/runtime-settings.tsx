@@ -57,6 +57,14 @@ function clockMinutes(value: FormDataEntryValue | null) {
   return hour * 60 + minute;
 }
 
+function snapshotJson(value: string, name: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error(name + " must contain a reviewed JSON snapshot.");
+  }
+}
+
 export function RuntimeSettings({
   datasets,
   monitors,
@@ -67,6 +75,9 @@ export function RuntimeSettings({
   const [profiles, setProfiles] = useState<Saved[]>([]);
   const [defaults, setDefaults] = useState<Defaults>();
   const [mode, setMode] = useState("simulated");
+  const [scheduleSource, setScheduleSource] = useState(
+    datasets.length ? "dataset" : "snapshot",
+  );
   const [channel, setChannel] = useState("telegram");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -144,19 +155,22 @@ export function RuntimeSettings({
       const economic = String(fields.get("economic_calendar") ?? "").trim();
       let settings: RecordData = profile;
       if (kind === "providers") {
-        let snapshot: unknown = null;
-        if (economic) {
-          try {
-            snapshot = JSON.parse(economic);
-          } catch {
-            throw new Error(
-              "Economic calendar must be a reviewed JSON snapshot.",
-            );
-          }
-        }
         settings = {
           ...profile,
-          economic_calendar: snapshot,
+          calendar_snapshot:
+            scheduleSource === "snapshot"
+              ? {
+                  contract: fields.get("schedule_contract"),
+                  calendar: snapshotJson(
+                    String(fields.get("exchange_snapshot") ?? ""),
+                    "Exchange schedule",
+                  ),
+                  synthetic: fields.has("synthetic_schedule"),
+                }
+              : null,
+          economic_calendar: economic
+            ? snapshotJson(economic, "Economic calendar")
+            : null,
           require_clear_event_risk: fields.has("require_clear_event_risk"),
         };
       }
@@ -215,18 +229,62 @@ export function RuntimeSettings({
               </select>
             </label>
             <label>
-              Reviewed calendar dataset
-              <select name="calendar_dataset_id" required>
-                {!sources.length && (
-                  <option value="">No matching reviewed dataset</option>
-                )}
-                {sources.map((item) => (
-                  <option key={item.dataset_id} value={item.dataset_id}>
-                    {item.contract} · {item.provider} · {item.data_kind}
-                  </option>
-                ))}
+              Exchange schedule source
+              <select
+                value={scheduleSource}
+                onChange={(event) => setScheduleSource(event.target.value)}
+              >
+                <option value="dataset">Reviewed dataset calendar</option>
+                <option value="snapshot">Reviewed schedule JSON</option>
               </select>
             </label>
+            {scheduleSource === "dataset" ? (
+              <label>
+                Reviewed calendar dataset
+                <select name="calendar_dataset_id" required>
+                  {!sources.length && (
+                    <option value="">No matching reviewed dataset</option>
+                  )}
+                  {sources.map((item) => (
+                    <option key={item.dataset_id} value={item.dataset_id}>
+                      {item.contract} · {item.provider} · {item.data_kind}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <>
+                <label>
+                  Dated MGC contract
+                  <input
+                    name="schedule_contract"
+                    pattern="MGC-[1-9][0-9]{3}-(0[1-9]|1[0-2])"
+                    placeholder="MGC-YYYY-MM"
+                    required
+                  />
+                </label>
+                <label>
+                  Reviewed exchange schedule JSON
+                  <textarea
+                    name="exchange_snapshot"
+                    rows={6}
+                    spellCheck={false}
+                    required
+                    placeholder="Dated MGC session calendar, schema version 2"
+                  />
+                </label>
+                {mode === "simulated" && (
+                  <label className="checkbox-setting">
+                    <input
+                      name="synthetic_schedule"
+                      type="checkbox"
+                      defaultChecked
+                    />
+                    This schedule is synthetic
+                  </label>
+                )}
+              </>
+            )}
             <EnvironmentName
               name="endpoint_env"
               title="WebSocket endpoint variable"
@@ -306,7 +364,11 @@ export function RuntimeSettings({
             </details>
             <button
               className="primary"
-              disabled={pending || !sources.length || !defaults}
+              disabled={
+                pending ||
+                !defaults ||
+                (scheduleSource === "dataset" && !sources.length)
+              }
             >
               Save provider profile
             </button>

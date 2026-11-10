@@ -39,11 +39,21 @@ def _validate_reference(reference: str) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderSchedule:
+    contract: str
+    calendar: dict[str, object]
+    synthetic: bool
+
+    def dated_calendar(self) -> tuple[SessionCalendar, MgcContract]:
+        return SessionCalendar.from_dict(self.calendar), MgcContract(self.contract)
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderProfile:
     name: str
-    calendar_dataset_id: str
     endpoint_env: str
     source_status: FeedStatus
+    calendar_dataset_id: str | None = None
     token_env: str | None = None
     backfill_endpoint_env: str | None = None
     backfill_token_env: str | None = None
@@ -52,10 +62,14 @@ class ProviderProfile:
     stale_seconds: int = 90
     economic_calendar: dict[str, object] | None = None
     require_clear_event_risk: bool = False
+    calendar_snapshot: ProviderSchedule | None = None
 
     def __post_init__(self) -> None:
         _validate_label(self.name)
-        _validate_reference(self.calendar_dataset_id)
+        if (self.calendar_dataset_id is None) == (self.calendar_snapshot is None):
+            raise ValueError("provide one calendar dataset or an explicit reviewed schedule")
+        if self.calendar_dataset_id is not None:
+            _validate_reference(self.calendar_dataset_id)
         _validate_env(
             self.endpoint_env, self.token_env, self.backfill_endpoint_env, self.backfill_token_env
         )
@@ -113,7 +127,16 @@ def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
     kind = "provider" if isinstance(profile, ProviderProfile) else "delivery"
     settings = asdict(profile)
     if isinstance(profile, ProviderProfile):
-        _provider_calendar(store, profile)
+        calendar, contract = _provider_calendar(store, profile)
+        if profile.calendar_snapshot is None:
+            del settings["calendar_snapshot"]
+        else:
+            del settings["calendar_dataset_id"]
+            settings["calendar_snapshot"] = {
+                "contract": contract.code,
+                "calendar": calendar.as_dict(),
+                "synthetic": profile.calendar_snapshot.synthetic,
+            }
         economic = profile.economic_events()
         if economic is None:
             del settings["economic_calendar"]
@@ -190,16 +213,20 @@ def _settings(
 def _provider_calendar(
     store: DatasetStore, profile: ProviderProfile
 ) -> tuple[SessionCalendar, MgcContract]:
-    provenance = store.describe(profile.calendar_dataset_id)["provenance"]
-    calendar = SessionCalendar.from_dict(provenance["calendar"])
+    if profile.calendar_snapshot is not None:
+        calendar, contract = profile.calendar_snapshot.dated_calendar()
+        synthetic = profile.calendar_snapshot.synthetic
+    else:
+        assert profile.calendar_dataset_id is not None
+        provenance = store.describe(profile.calendar_dataset_id)["provenance"]
+        calendar = SessionCalendar.from_dict(provenance["calendar"])
+        contract = MgcContract(str(provenance["contract"]))
+        synthetic = provenance["data_kind"] == DataKind.SYNTHETIC
     if calendar.sessions is None:
         raise ValueError("provider profile requires a dated reviewed calendar")
-    if (
-        profile.source_status is not FeedStatus.SIMULATED
-        and provenance["data_kind"] == DataKind.SYNTHETIC
-    ):
-        raise ValueError("real and delayed profiles require a non-synthetic calendar dataset")
-    return calendar, MgcContract(str(provenance["contract"]))
+    if profile.source_status is not FeedStatus.SIMULATED and synthetic:
+        raise ValueError("real and delayed profiles require a non-synthetic reviewed calendar")
+    return calendar, contract
 
 
 def _env_value(name: str) -> str:
@@ -213,12 +240,14 @@ def provider_runtime(
     store: DatasetStore, profile_id: str
 ) -> tuple[MarketMonitor, WebSocketSource, HttpsGapBackfill | None]:
     raw = _settings(store, profile_id, "provider")
+    snapshot = raw.get("calendar_snapshot")
     profile = ProviderProfile(
         **{
             **raw,
             "source_status": FeedStatus(str(raw["source_status"])),
             "timeframe": Timeframe(str(raw["timeframe"])),
             "variant": Variant(str(raw["variant"])),
+            "calendar_snapshot": ProviderSchedule(**snapshot) if snapshot is not None else None,
         }
     )
     calendar, contract = _provider_calendar(store, profile)

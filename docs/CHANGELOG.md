@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Standalone provider schedules
+
+- Added immutable reviewed exchange schedule and dated contract settings for provider profiles without a historical dataset.
+
+
 ## 2026-11-10 — Economic schedule revisions
 
 - Added published reschedules, cancellations and partial-source coverage to economic snapshots. Older assessments remain causal and legacy snapshot representations are preserved.

@@ -180,6 +180,7 @@ def test_api_provider_profiles_keep_environment_values_out_of_storage(
         assert "18991" not in listed.text
         assert "economic_calendar" not in saved.json()["settings"]
         assert "require_clear_event_risk" not in saved.json()["settings"]
+        assert "calendar_snapshot" not in saved.json()["settings"]
 
         invalid = client.post(route, json={"profile": {**profile, "economic_calendar": {}}})
         assert invalid.status_code == 422
@@ -202,6 +203,67 @@ def test_api_provider_profiles_keep_environment_values_out_of_storage(
         assert isinstance(definition, dict)
         assert definition["economic_calendar"] == snapshot
         assert definition["strategy_config"]["require_clear_event_risk"] is True
+
+
+def test_provider_profile_can_start_from_explicit_dated_schedule_without_dataset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    store = DatasetStore(tmp_path / "fresh-synthetic.sqlite")
+    with store.connection(write=True):
+        pass
+    start = minute_timestamp("2025-03-10T13:00Z")
+    span = TradingWindow(start, start + 10 * MINUTE)
+    calendar = SessionCalendar(
+        "synthetic standalone schedule",
+        "fixture-v1",
+        span,
+        sessions=(TradingSession(date(2025, 3, 10), (span,)),),
+    )
+    snapshot = {"contract": "MGC-2025-04", "calendar": calendar.as_dict(), "synthetic": True}
+    profile = {
+        "name": "Standalone synthetic schedule",
+        "endpoint_env": "AURUM_SYNTHETIC_TEST_ENDPOINT",
+        "source_status": "simulated",
+        "calendar_snapshot": snapshot,
+    }
+    monkeypatch.setenv("AURUM_SYNTHETIC_TEST_ENDPOINT", "ws://127.0.0.1:18992/synthetic")
+    with http.TestClient(api.create_app(store)) as client:
+        route = "/api/configuration/providers"
+        assert client.get("/api/datasets").json() == []
+        saved = client.post(route, json={"profile": profile})
+        assert saved.status_code == 201
+        settings = saved.json()["settings"]
+        assert settings["calendar_snapshot"] == snapshot
+        assert "calendar_dataset_id" not in settings
+        profile_id = saved.json()["profile_id"]
+        instance, source, backfill = provider_runtime(store, profile_id)
+        assert instance.calendar == calendar
+        assert instance.contract == MgcContract("MGC-2025-04")
+        assert source.mode is FeedStatus.SIMULATED and backfill is None
+        assert client.get("/api/datasets").json() == []
+        assert client.post(route, json={"profile": profile}).json()["profile_id"] == profile_id
+        for changes in (
+            {"calendar_dataset_id": "0" * 64},
+            {"calendar_snapshot": None},
+            {"source_status": "delayed"},
+            {"calendar_snapshot": {"contract": "MGC-2025-04", "calendar": calendar.as_dict()}},
+            {"calendar_snapshot": {**snapshot, "contract": "XAUUSD"}},
+        ):
+            response = client.post(route, json={"profile": {**profile, **changes}})
+            assert response.status_code == 422
+        legacy = SessionCalendar("synthetic legacy", "v1", span, (span,))
+        response = client.post(
+            route,
+            json={
+                "profile": {
+                    **profile,
+                    "calendar_snapshot": {**snapshot, "calendar": legacy.as_dict()},
+                }
+            },
+        )
+        assert response.status_code == 422
 
 
 def test_api_saves_assumed_and_explicit_synthetic_paper_reports(tmp_path: Path) -> None:
