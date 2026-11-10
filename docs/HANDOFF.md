@@ -2,16 +2,16 @@
 
 ## Project Status
 
-- Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
+- Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01–U02 API and dashboard slices are verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
 - Current milestone — Q03–Q05, D06–D10, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `0f05669d5cc03afeaa9f0d17117996b51197ba64`.
+- Last verified commit — `a307e69487356439cb7f3b80b35772a4c71c42e6`.
 
 ## Current Objective
 
-- Task ID — U02.
-- Objective — Expose point-in-time rollover assessments and continuous research plans in the API and dashboard.
-- Acceptance criteria — Keep CLI report identities, disclose reviewed catalog provenance and decision time, and retain separately labeled dated and adjusted prices in bounded previews.
+- Task ID — L08.
+- Objective — Apply the configured economic event gate again at actual monitor observation time.
+- Acceptance criteria — Keep source-close research evidence intact. Suppress new alerts and forward entries if event risk changes before observation while retaining execution eligibility for already open positions.
 
 ## Completed Work
 
@@ -40,6 +40,8 @@
 - L04 — Monitor and replay share versioned economic snapshots. Linked revisions take effect at publication, cancellations retire earlier versions and partial coverage cannot yield clear risk. API/CLI health uses the same heartbeat cutoff as notification delivery.
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
+
+- U02 — The contract research workspace creates rollover assessments and continuous plans with CLI/API parity. Browser verification showed separate dated and research closes after a synthetic roll.
 
 - U01 — Loopback API and server-side proxy, interactive candle chart and evidence overlays, paper backtest controls and saved report inspection. A dedicated chart projection respects original availability and recorded level, zone and paper-plan retirement. The monitor view reads the applied prefix with source-minute provenance, independent selection and overlays based on observed evidence. Schema v6 journals structure, liquidity, imbalances and contextual measurements. Research analytics show closed-trade equity, drawdown, rolling diagnostics, groups, costs and experimental score bands. Saved validation, Monte Carlo and account results have dedicated views. The paper form uses typed server defaults and can reload an immutable run profile. The dashboard creates validation, Monte Carlo and explicit paper ledger reports. Verified using labeled synthetic fixtures.
 
@@ -70,8 +72,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 207 Python tests, Ruff lint/format and mypy across 76 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (207), Ruff lint/format, mypy (76 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 208 Python tests, Ruff lint/format and mypy across 77 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (208), Ruff lint/format, mypy (77 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -85,8 +87,8 @@
 
 ## Immediate Next Actions
 
-1. Reuse existing contract catalog and continuous plan algorithms for report creation and bounded REST preview.
-2. Add dashboard forms and summaries with explicit as-of, contract and research price basis. Verify exact CLI/API identity and provenance separation.
+1. Record economic risk at actual observation separately from the source-close decision.
+2. Test a fictional announcement first known between those clocks, verifying source evidence stays qualified while new alerts and forward entries are suppressed.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
