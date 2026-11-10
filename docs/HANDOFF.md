@@ -9,9 +9,9 @@
 
 ## Current Objective
 
-- Task ID — U01 verification.
-- Objective — Exercise the new research report and provider setting flows through the built browser workspace.
-- Acceptance criteria — Use a temporary labeled synthetic store. Check the report form, saved summary, source labels and provider snapshot input.
+- Task ID — L05.
+- Objective — Allow a provider profile to use a reviewed exchange schedule before any historical data import.
+- Acceptance criteria — Persist either one existing dataset reference or an explicit reviewed dated schedule and contract. Retain existing profile IDs and reject synthetic schedules for real and delayed feeds.
 
 ## Completed Work
 
@@ -58,7 +58,7 @@
 ## Test Status
 
 - Latest checkpoint — 171 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (171), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (171), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -72,8 +72,8 @@
 
 ## Immediate Next Actions
 
-1. Start temporary loopback services using the matched-control synthetic test database and a second synthetic export.
-2. Exercise the matched-control and data reconciliation forms and the provider economic settings in the browser.
+1. Add a reviewed dated schedule and contract option to provider runtime profiles.
+2. Test fresh-store setup, legacy profile identity, synthetic classification and the Settings form.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
