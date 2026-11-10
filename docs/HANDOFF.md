@@ -3,19 +3,20 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03–Q05, D06–D08, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q05, D06–D09, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `43c55e3b96a8d4190ae5ef6fc5bbcd5b356306ee`.
+- Last verified commit — `b2970f69dffb37395192b4e655049c9bdcdc2ec8`.
 
 ## Current Objective
 
-- Task ID — D09.
-- Objective — Verify immutable datasets by reconstructing normalized rows from preserved raw bytes.
-- Acceptance criteria — Validate original provenance, calendar, parser versions, warnings, bounds and exact persisted candle and trade values. Verify blocked imports without clearing replay gates.
+- Task ID — D10.
+- Objective — Extend offline reconstruction and normalized integrity verification to quote series.
+- Acceptance criteria — Verify raw checksum, original configuration, bounds, warnings and every normalized quote observation without changing the store.
 
 ## Completed Work
 
 - D01–D05 — Immutable authorized-format CSV/Parquet/HTTPS history, reviewed dated schedules, completed candle aggregation, point-in-time contract selection and explicit continuous research mapping.
+- D09 — `verify-dataset` rebuilds CSV, Parquet and trade-derived imports from preserved bytes and checks exact normalized rows without reconnecting to a provider.
 - D08 — Schema v13 stores immutable historical top-of-book series with exact timestamps and strict preceding, same-window quote lookup.
 - D07 — Schema v12 preserves normalized trade prints and raw bytes with derived minute OHLCV. Exact nanosecond/sequence ordering and normal replay gates are verified.
 - D06 — Data reconciliation compares two immutable imports with bounded samples of missing minutes, calendar differences and exact OHLCV mismatches. It preserves replay eligibility and distinguishes synthetic inputs.
@@ -68,8 +69,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 205 Python tests, Ruff lint/format and mypy across 75 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (205), Ruff lint/format, mypy (75 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 206 Python tests, Ruff lint/format and mypy across 76 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (206), Ruff lint/format, mypy (76 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -83,8 +84,8 @@
 
 ## Immediate Next Actions
 
-1. Replay stored source bytes through the version-matched normalizer using the original provenance and schedule.
-2. Add a read-only verify-dataset command and regression tests for tampered normalized values, gaps, and original remote provenance without network access.
+1. Reuse the quote normalizer to rebuild a series from its preserved input and immutable schedule.
+2. Compare the complete normalized quote journal in bounded read pages and test altered quotes and restored backups.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
