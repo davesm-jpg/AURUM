@@ -47,3 +47,17 @@ Restart reconstruction still processes the applied prefix when a process has no 
 ## Bounded recovery transactions
 
 `.venv/bin/python benchmarks/synthetic_pipeline.py --sessions 60 --batch-size 256` processed 21,600 synthetic minutes in 4.36 s, versus 33.73 s for individual commits with the same chart indexes. Every chart digest and event count matched. The restart median was 801 ms with continuity validation and short read pages. Live ingestion still commits one frame at a time.
+
+## Economic release availability
+
+Run `.venv/bin/python benchmarks/synthetic_economic_calendar.py` for 4,000
+invented announcements, revisions and cancellations and 20,000 deterministic
+point-in-time queries. On macOS arm64 and Python 3.12.7, the linear lookup
+took 7.3090 s and the indexed lookup took 0.1113 s. Snapshot construction
+increased from 0.0146 s to 0.0197 s. These are single measurements including
+result hashing. Both runs returned 2,775 elevated assessments and SHA-256
+`979455975fc118499147e448b22ee661e33b3ebd5a3ddc265c73862d59a5dba9`.
+
+The index narrows the scan by release time and checks publication and
+retirement within that slice. Actual times only replace the scheduled time
+once known. The output preserves the snapshot's original event order.

@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Indexed economic risk assessment
+
+- Added in-memory release-time indexing. A 20,000-query synthetic run retained all decisions and reduced assessment time.
+
 ## 2026-11-10 — Multiple reviewed economic publications
 
 - Added composition of reviewed calendar snapshots with per-publication evidence and isolated revision chains.

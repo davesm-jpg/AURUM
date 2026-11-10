@@ -1,5 +1,6 @@
 import json
-from dataclasses import dataclass
+from bisect import bisect_left, bisect_right
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from itertools import pairwise
@@ -146,6 +147,14 @@ class EventAssessment:
 
 
 @dataclass(frozen=True, slots=True)
+class _ReleaseWindow:
+    release_at: datetime
+    known_at: datetime
+    hidden_at: datetime | None
+    ordinal: int
+
+
+@dataclass(frozen=True, slots=True)
 class EconomicCalendar:
     source: str
     version: str
@@ -156,6 +165,8 @@ class EconomicCalendar:
     data_kind: EconomicSourceKind | None = None
     captures: tuple[EconomicCapture, ...] = ()
     publications: tuple[EconomicPublication, ...] = ()
+    _release_index: tuple[_ReleaseWindow, ...] = field(init=False, repr=False, compare=False)
+    _release_times: tuple[datetime, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         _require_utc(self.coverage_known_at)
@@ -173,7 +184,7 @@ class EconomicCalendar:
         by_id = {event.event_id: event for event in self.events}
         if len(by_id) != len(self.events):
             raise ValueError("economic announcement IDs must be unique")
-        replaced: set[str] = set()
+        replaced: dict[str, datetime] = {}
         for event in self.events:
             if event.supersedes is None:
                 continue
@@ -190,7 +201,10 @@ class EconomicCalendar:
                 )
             if event.supersedes in replaced:
                 raise ValueError("announcement revisions must form a single chronological chain")
-            replaced.add(event.supersedes)
+            replaced[event.supersedes] = event.published_at
+        index = _release_windows(self.events, replaced)
+        object.__setattr__(self, "_release_index", index)
+        object.__setattr__(self, "_release_times", tuple(window.release_at for window in index))
 
     def _check_publications(self) -> None:
         if not self.publications:
@@ -265,21 +279,17 @@ class EconomicCalendar:
             raise ValueError("event buffer must be nonnegative")
         buffer = timedelta(minutes=buffer_minutes)
         lower, upper = as_of - buffer, as_of + buffer
-        superseded = {
-            event.supersedes
-            for event in self.events
-            if event.supersedes is not None and event.published_at <= as_of
-        }
-        nearby = tuple(
-            event.event_id
-            for event in self.events
-            if event.published_at <= as_of
-            and event.event_id not in superseded
-            and not event.cancelled
-            and lower <= event.available_release_at(as_of) <= upper
+        left = bisect_left(self._release_times, lower)
+        right = bisect_right(self._release_times, upper)
+        nearby = sorted(
+            window.ordinal
+            for window in self._release_index[left:right]
+            if window.known_at <= as_of and (window.hidden_at is None or as_of < window.hidden_at)
         )
         if nearby:
-            return EventAssessment(EventRisk.ELEVATED, nearby)
+            return EventAssessment(
+                EventRisk.ELEVATED, tuple(self.events[index].event_id for index in nearby)
+            )
         if (
             self.coverage_complete
             and self.coverage_known_at <= as_of
@@ -308,6 +318,30 @@ class EconomicCalendar:
                 else {}
             ),
         }
+
+
+def _release_windows(
+    events: tuple[Announcement, ...], replaced: dict[str, datetime]
+) -> tuple[_ReleaseWindow, ...]:
+    windows = []
+    for ordinal, event in enumerate(events):
+        if event.cancelled:
+            continue
+        retired = replaced.get(event.event_id)
+        scheduled_until = retired
+        actual_known = event.actual_known_at
+        if (
+            event.actual_at is not None
+            and actual_known is not None
+            and (retired is None or actual_known < retired)
+        ):
+            windows.append(_ReleaseWindow(event.actual_at, actual_known, retired, ordinal))
+            scheduled_until = actual_known
+        if scheduled_until is None or event.published_at < scheduled_until:
+            windows.append(
+                _ReleaseWindow(event.scheduled_at, event.published_at, scheduled_until, ordinal)
+            )
+    return tuple(sorted(windows, key=lambda window: window.release_at))
 
 
 def _require_utc(*timestamps: datetime | None) -> None:

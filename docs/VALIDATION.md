@@ -171,3 +171,9 @@ does not certify that the composed bundle covers all relevant announcements.
 Two synthetic tests verified causal cancellation, separately known actual
 times, repeated deterministic CLI output, mixed-class rejection and provider
 profile use. The inputs remain local and independently reviewable.
+
+The indexed economic assessor matched an independent scan for 1,048
+synthetic complete and partial queries, including actual releases known at the
+same instant as cancellation, restored events and shuffled event order.
+The 20,000-query benchmark preserved its output digest. The complete Python
+suite passed 222 tests.
