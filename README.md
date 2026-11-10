@@ -60,6 +60,8 @@ This **synthetic schema example** covers two minutes of a full session.
 .venv/bin/aurum --db data/aurum.sqlite backtest-summary RUN_ID
 .venv/bin/aurum --db data/aurum.sqlite validate RUN_A RUN_B \
   --validation-start 2025-04-01T00:00Z --holdout-start 2025-07-01T00:00Z
+.venv/bin/aurum --db data/aurum.sqlite matched-control VALIDATION_ID MSS_RUN_ID \
+  --replications 30 --strata session_direction --seed 42
 .venv/bin/aurum --db data/aurum.sqlite monte-carlo --paths 1000 --trades 1000
 .venv/bin/aurum --db data/aurum.sqlite account data/paper-ledger.json \
   --calendar data/account-schedule.json --phase funded
@@ -89,6 +91,8 @@ Supply `--economic-calendar` only when you have a reviewed point-in-time snapsho
 Backtest replay accepts the strategy options and simulates a single position at a time. It uses the next eligible minute open after a signal, applies the structural bracket and rechecks sizing at the fill price. Use `--latency-minutes`, `--entry-timeout-minutes`, `--round-trip-spread-ticks`, `--commission-cents` and `--slippage-ticks` to set execution assumptions. It uses stop-first for ambiguous same-minute touches, adverse opening prices for stop gaps and the target price for favorable opening gaps. It flattens at scheduled window close unless `--carry-across-closures` is set. Backtest audit distinguishes forced end-of-data exits. The summary reports actual sample size, net returns and closed-trade equity drawdown.
 
 Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report.
+
+For a matched random control, choose a broader opportunity variant before inspecting holdout results. Build its backtest with the same settings as the reference except for the variant, such as `mss` in place of `sweep_mss_ifvg`. The control fits admission rates on development decisions, then replays all arms from flat after the holdout embargo. The comparison describes sampled structural opportunities on one shared period. Record the opportunity rule, strata and seed in the research plan before evaluation.
 
 Monte Carlo defaults to the reference assumed win rates of 30%, 35%, 40%, 45%, 50% and 60%. Set `--mode block_bootstrap --backtest RUN_ID` to resample net backtest outcomes, or use `shuffle` with a trade count at or below the observed sample size. Simulated paths use a generic fixed floor at trade closes. They are conditional on the source and assumptions.
 

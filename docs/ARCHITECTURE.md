@@ -22,6 +22,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `strategy.py`, `paper_risk.py` | Setup state, rule variants, experimental scoring and exact paper sizing |
 | `execution.py`, `backtesting.py`, `performance.py` | Minute paper fill model, strategy replay orchestration and trade-level performance summaries |
 | `statistics.py`, `monte_carlo.py`, `research_reports.py` | Chronological selection and holdout, block-bootstrap diagnostics, conditional equity paths and saved analysis reports |
+| `control.py` | Development-fitted admission of structural opportunities, independent flat-start holdout execution and saved controls |
 | `account_simulation.py`, `account_reports.py` | Independent versioned paper account ledger, loss trail, phase rules and persisted reports |
 | `feed_frames.py`, `monitoring.py`, `streaming.py` | Normalized WebSocket, reviewed continuity, restart recovery, HTTPS backfill and in-app alert journal |
 | `forward.py` | Registration-bound paper execution over observed monitor minutes, durable cursor and independent ledger |

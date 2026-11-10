@@ -2,7 +2,7 @@ import json
 import sqlite3
 from collections import defaultdict
 from collections.abc import Iterator
-from dataclasses import asdict, fields
+from dataclasses import asdict
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
@@ -12,19 +12,15 @@ from aurum.execution import (
     DEFAULT_EXECUTION_CONFIG,
     EXECUTION_VERSION,
     ExecutionConfig,
-    JournalContext,
     JournalSignal,
     PaperExecution,
 )
 from aurum.feed_frames import candle_from_dict
 from aurum.instruments import MgcContract
-from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import canonical_json
-from aurum.market_structure import Direction
-from aurum.paper_risk import RiskConfig, RiskPlan, RiskRejection, TargetMode
+from aurum.paper_risk import RiskConfig, TargetMode
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
-from aurum.strategy import Variant
 from aurum.timestamps import MINUTE
 
 FORWARD_VERSION = 1
@@ -229,7 +225,7 @@ class ForwardPaper:
                 continue
             if datetime.fromisoformat(item["observed_at"]) != observed:
                 raise ValueError("forward signal observation does not match its applied minute")
-            signal = _signal(item)
+            signal = JournalSignal.from_setup_payload(item)
             yield {
                 "event": "paper_forward_signal",
                 "recorded_at": observed.isoformat(),
@@ -248,24 +244,6 @@ class ForwardPaper:
 
 def _risk_config(raw: dict[str, Any]) -> RiskConfig:
     return RiskConfig(**{**raw, "target_mode": TargetMode(raw["target_mode"])})
-
-
-def _signal(item: dict[str, Any]) -> JournalSignal:
-    raw = item["plan"]
-    plan = {field.name: raw[field.name] for field in fields(RiskPlan)}
-    plan["direction"] = Direction(plan["direction"])
-    if plan["rejection"] is not None:
-        plan["rejection"] = RiskRejection(plan["rejection"])
-    return JournalSignal(
-        item["setup_id"],
-        Variant(item["variant"]),
-        Direction(item["direction"]),
-        datetime.fromisoformat(item["confirmed_at"]),
-        RiskPlan(**plan),
-        JournalContext(
-            ResearchSession(item["context"]["session"]), Regime(item["context"]["regime"])
-        ),
-    )
 
 
 def _forward_run(db: sqlite3.Connection, run_id: str) -> sqlite3.Row:

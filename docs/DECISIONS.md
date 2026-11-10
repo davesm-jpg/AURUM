@@ -184,3 +184,12 @@
 - Decision — Save content-addressed profiles with AURUM environment names. Resolve values only in CLI workers. Guard the bearer proxy with loopback host and same-origin mutation checks.
 - Consequences — Profile creation does not launch workers. Production authorization and integration verification remain separate.
 - Files — `runtime_profiles.py`, `api.py`, `cli.py`, `frontend/app/runtime-settings.tsx`.
+
+## ADR-020 — Match random admissions on development signals
+
+- Date — 2026-11-10.
+- Context — Strategy evaluation needs a comparison that uses the same execution rules and controls for opportunity frequency without fitting on the final holdout.
+- Alternatives — Reshuffle realized returns, match counts after observing the holdout or fit admission on development decisions.
+- Decision — Sample qualified decisions from an analyst-selected structural opportunity variant. Estimate admission separately by session and direction, with optional regime, using pre-validation decisions only. Run the reference and seeded control replications from flat after the holdout embargo.
+- Consequences — The same cost model and position constraints apply across arms. Trade counts can differ, zero-rate strata are reported and only paths with trades contribute to expectancy quantiles. All paths share one holdout, so quantiles describe conditional variation. The analyst must predeclare the opportunity rule and settings outside the software.
+- Files — `src/aurum/control.py`, `src/aurum/execution.py`, `src/aurum/api_reports.py`, `tests/test_market_structure.py`.

@@ -12,6 +12,7 @@ from threading import Barrier, Event
 import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
+from aurum.control import ControlConfig, save_matched_control
 from aurum.evidence import EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG
@@ -43,7 +44,7 @@ from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics, validate_runs
 from aurum.statistics import ValidationConfig
 from aurum.storage import SCHEMA_VERSION, DatasetStore
-from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay
+from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay, Variant
 from aurum.timestamps import MINUTE, minute_timestamp
 
 CONTRACT = MgcContract("MGC-2025-04")
@@ -629,6 +630,163 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert validation["result"]["selected_run_id"] == run["run_id"]
     assert validation["result"]["candidates"][run["run_id"]]["validation"]["net_cents"] == -3560
     assert validation["result"]["holdout"]["summary"]["trades"] == 0
+
+
+def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_path: Path) -> None:
+    # Five fictional sessions. The second develops an MSS without an IFVG retest.
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 70, 180, 111, 110),
+    ]
+    source = tmp_path / "synthetic-control.csv"
+    rows = ["timestamp,contract,open,high,low,close,volume"]
+    sessions = []
+    for index in range(5):
+        offset = timedelta(days=index)
+        window = TradingWindow(bars[0].opened_at + offset, bars[-1].available_at + offset)
+        sessions.append(TradingSession(TRADE_DATE + offset, (window,)))
+        day = bars
+        if index == 1:
+            day = [*bars[:12], synthetic_bar(12, 119, 125), synthetic_bar(13, 123, 128)]
+        elif index == 4:
+            day = [*bars[:12], synthetic_bar(12, 119, 125, 123), bars[13]]
+        for bar in day:
+            for minute in range(5):
+                opened = bar.opened_at + offset + minute * MINUTE
+                rows.append(
+                    f"{opened.isoformat()},{CONTRACT.code},{bar.open_ticks / 10:.1f},"
+                    f"{bar.high_ticks / 10:.1f},{bar.low_ticks / 10:.1f},"
+                    f"{bar.close_ticks / 10:.1f},2"
+                )
+    source.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    calendar = SessionCalendar(
+        "synthetic control calendar",
+        "fixture-v1",
+        TradingWindow(sessions[0].start, sessions[-1].end),
+        sessions=tuple(sessions),
+    )
+    store = DatasetStore(tmp_path / "synthetic-control.sqlite")
+    config = ImportConfig("synthetic", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC)
+    dataset = store.save(prepare_csv(source, config, calendar))
+
+    def run(variant: Variant, pivot: int = 1) -> str:
+        return store.build_strategy_run(
+            dataset,
+            TIMEFRAME,
+            StructureConfig(PivotRule(pivot, pivot)),
+            replace(DEFAULT_STRATEGY_CONFIG, variant=variant),
+            execution=DEFAULT_EXECUTION_CONFIG,
+        )
+
+    reference, opportunity = run(Variant.SWEEP_MSS_IFVG), run(Variant.MSS)
+    validation_config = ValidationConfig(
+        sessions[2].start - timedelta(hours=2),
+        sessions[3].start,
+        minimum_selection_trades=1,
+        bootstrap_draws=10,
+    )
+    validation = validate_runs(store, (reference,), validation_config)
+    args = [
+        str(Path(executable).with_name("aurum")),
+        "--db",
+        str(store.path),
+        "matched-control",
+        validation,
+        opportunity,
+        "--replications",
+        "30",
+        "--bootstrap-draws",
+        "10",
+    ]
+    output = subprocess.run(args, check=True, capture_output=True, text=True)
+    report = json.loads(output.stdout)
+    result = report["result"]
+    assert result["data_kind"] == "synthetic"
+    assert result["holdout_used_for_calibration"] is False
+    assert result["fit"] == [
+        {
+            "admission_rate": 0.5,
+            "development_opportunities": 2,
+            "development_reference_signals": 1,
+            "reference_rate_unattainable": False,
+            "stratum": ["new_york", "bullish"],
+        }
+    ]
+    assert result["holdout_reference_opportunities"] == 1
+    assert result["holdout_control_opportunities"] == 2
+    assert result["reference"]["net_profit_cents"] == -160
+    assert {arm["admitted_signals"] for arm in result["controls"]} == {0, 1, 2}
+    assert result["control_net_distribution_cents"]["replications"] == 30
+    assert result["control_expectancy_distribution_cents"]["replications"] < 30
+    assert result["audit"]["reference"]["signals"][0]["decision_at"].startswith("2025-03-13")
+    assert result["audit"]["reference"]["events"][-1]["net_cents"] == -160
+
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        request = {
+            "validation_id": validation,
+            "opportunity_run_id": opportunity,
+            "bootstrap_draws": 10,
+        }
+        saved = client.post("/api/reports/matched-control", json=request)
+        assert saved.status_code == 201
+        assert saved.json() == report
+        oversized = client.post(
+            "/api/reports/matched-control",
+            json={
+                **request,
+                "replications": 101,
+            },
+        )
+        assert oversized.status_code == 422
+
+    with pytest.raises(ValueError, match="distinct"):
+        save_matched_control(store, validation, reference)
+    incompatible = run(Variant.MSS, pivot=2)
+    with pytest.raises(ValueError, match="share data, rules, risk and execution"):
+        save_matched_control(store, validation, incompatible)
+    moved = validate_runs(
+        store,
+        (reference,),
+        replace(
+            validation_config,
+            minimum_selection_trades=100,
+        ),
+    )
+    assert store.describe_analysis(moved)["kind"] == "chronological_validation"
+    with pytest.raises(ValueError, match="selected independent holdout"):
+        save_matched_control(store, moved, opportunity)
+
+    embargoed = validate_runs(store, (reference,), replace(validation_config, embargo_minutes=61))
+    embargoed_report = store.describe_analysis(
+        save_matched_control(store, embargoed, opportunity, ControlConfig(bootstrap_draws=10))
+    )
+    definition, embargoed_result = embargoed_report["definition"], embargoed_report["result"]
+    assert isinstance(definition, dict) and isinstance(embargoed_result, dict)
+    assert definition["holdout_start"] == (sessions[3].start + 61 * MINUTE).isoformat()
+    assert embargoed_result["fit"] == result["fit"]
+    assert embargoed_result["holdout_reference_opportunities"] == 1
+    assert embargoed_result["holdout_control_opportunities"] == 1
+
+    shifted = validate_runs(
+        store,
+        (reference,),
+        replace(
+            validation_config,
+            holdout_start=sessions[4].start,
+        ),
+    )
+    shifted_result = store.describe_analysis(
+        save_matched_control(store, shifted, opportunity, ControlConfig(bootstrap_draws=10))
+    )["result"]
+    assert isinstance(shifted_result, dict)
+    assert shifted_result["fit"] == result["fit"]
+    assert shifted_result["holdout_control_opportunities"] == 1
 
 
 def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(

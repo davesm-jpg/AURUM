@@ -245,6 +245,81 @@ function ValidationReport({ result }: { result: RecordData }) {
   );
 }
 
+function MatchedControlReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const definition = record(report.definition);
+  const reference = record(result.reference);
+  const net = record(result.control_net_distribution_cents);
+  const expectancy = record(result.control_expectancy_distribution_cents);
+  const dataset = record(result.dataset);
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {label(dataset.provider)} ·{" "}
+        {String(dataset.contract ?? "—")} ·{" "}
+        {utcDateTime(definition.holdout_start)} to{" "}
+        {utcDateTime(definition.holdout_end)}
+      </p>
+      <div className="metrics">
+        <Metric
+          title="Reference net expectancy"
+          value={money(reference.expectancy_cents)}
+          detail={`${String(reference.trades ?? 0)} trades · ${label(definition.reference_variant)}`}
+        />
+        <Metric
+          title="Median control expectancy"
+          value={money(expectancy.p50)}
+          detail={`${String(expectancy.replications ?? 0)} replications with trades`}
+        />
+        <Metric
+          title="Median control net P&L"
+          value={money(net.p50)}
+          detail={`${String(net.replications ?? 0)} replications · ${label(definition.opportunity_variant)}`}
+        />
+      </div>
+      <p className="muted">
+        Reference expectancy interval {interval(result.reference_bootstrap)}.
+        Control expectancy spans {money(expectancy.p05)} to{" "}
+        {money(expectancy.p95)} from the 5th to the 95th percentile.{" "}
+        {String(result.holdout_controls_without_positive_admission ?? 0)} of{" "}
+        {String(result.holdout_control_opportunities ?? 0)} holdout
+        opportunities had zero fitted admission. All arms start flat and use the
+        same execution costs.
+      </p>
+      <p className="muted">
+        Control replications share the same holdout and sample from a structural
+        opportunity variant. Treat the comparison as conditional on that variant
+        and period.
+      </p>
+      <DataTable
+        labelHeading="Development group"
+        items={rows(result.fit).map((item) => [
+          Array.isArray(item.stratum)
+            ? item.stratum.map(label).join(" · ")
+            : "—",
+          item,
+        ])}
+        columns={[
+          {
+            title: "Reference signals",
+            value: (item) => String(item.development_reference_signals ?? 0),
+          },
+          {
+            title: "Opportunities",
+            value: (item) => String(item.development_opportunities ?? 0),
+          },
+          {
+            title: "Admission rate",
+            value: (item) =>
+              percentage(item.admission_rate) +
+              (item.reference_rate_unattainable ? " · capped" : ""),
+          },
+        ]}
+      />
+    </>
+  );
+}
+
 function AccountReport({ result }: { result: RecordData }) {
   const final = record(result.final_state);
   const timeline = rows(result.timeline);
@@ -427,6 +502,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <MonteCarloReport result={result} />;
   if (report.kind === "chronological_validation")
     return <ValidationReport result={result} />;
+  if (report.kind === "matched_random_control")
+    return <MatchedControlReport report={report} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

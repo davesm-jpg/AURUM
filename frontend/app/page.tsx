@@ -796,9 +796,7 @@ export default function Dashboard() {
               </label>
             </div>
             {!reportId ? (
-              <div className="empty">
-                Create a validation, Monte Carlo or paper account report below.
-              </div>
+              <div className="empty">Create a research report below.</div>
             ) : !report ? (
               <div className="empty">Loading saved report…</div>
             ) : (
@@ -815,6 +813,9 @@ export default function Dashboard() {
           <ReportBuilder
             datasetId={datasetId}
             runs={runs.filter((item) => item.kind === "backtest")}
+            validationReports={reports.filter(
+              (item) => item.kind === "chronological_validation",
+            )}
             onComplete={selectCompletedReport}
           />
         </>

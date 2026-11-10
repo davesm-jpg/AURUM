@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aurum.account_reports import simulate_account_document
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, AccountRules
+from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.exchange_calendar import SessionCalendar
 from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.market_data import canonical_json
@@ -56,6 +57,24 @@ class ValidationReportRequest(BaseModel):
             extra_cost_per_contract_cents=self.extra_cost_per_contract_cents,
         )
         return validate_runs(store, self.run_ids, config)
+
+
+class MatchedControlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    validation_id: _RunId
+    opportunity_run_id: _RunId
+    seed: int = 42
+    replications: int = Field(default=30, ge=1, le=100)
+    strata: ControlStrata = ControlStrata.SESSION_DIRECTION
+    bootstrap_draws: int = Field(default=1000, ge=2, le=10_000)
+    block_length: int = Field(default=5, ge=1, le=1000)
+
+    def run(self, store: DatasetStore) -> str:
+        config = ControlConfig(
+            self.seed, self.replications, self.strata, self.bootstrap_draws, self.block_length
+        )
+        return save_matched_control(store, self.validation_id, self.opportunity_run_id, config)
 
 
 class MonteCarloReportRequest(BaseModel):
@@ -128,6 +147,8 @@ class ForwardReportRequest(BaseModel):
 
 def report_configuration() -> dict[str, object]:
     return {
+        "matched_control": asdict(ControlConfig()),
+        "control_strata": list(ControlStrata),
         "monte_carlo": asdict(MonteCarloConfig()),
         "sampling_modes": list(SamplingMode),
         "assumed_scenarios": [asdict(WinRateScenario(rate)) for rate in REFERENCE_WIN_RATES_BPS],

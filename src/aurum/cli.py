@@ -16,6 +16,7 @@ from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, BreachMetric
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
+from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
@@ -162,6 +163,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     validation.add_argument("--walk-train-days", type=int, default=90)
     validation.add_argument("--walk-test-days", type=int, default=30)
     validation.add_argument("--extra-cost-cents", type=int, action="append")
+    control = commands.add_parser(
+        "matched-control", help="compare a holdout to development-fitted random admissions"
+    )
+    control.add_argument("validation_id")
+    control.add_argument("opportunity_run_id")
+    control.add_argument("--seed", type=int, default=42)
+    control.add_argument("--replications", type=int, default=30)
+    control.add_argument(
+        "--strata",
+        type=ControlStrata,
+        choices=ControlStrata,
+        default=ControlStrata.SESSION_DIRECTION,
+    )
+    control.add_argument("--bootstrap-draws", type=int, default=1000)
+    control.add_argument("--block-length", type=int, default=5)
     monte_carlo = commands.add_parser("monte-carlo", help="simulate conditional equity paths")
     monte_carlo.add_argument(
         "--mode", type=SamplingMode, choices=SamplingMode, default=SamplingMode.SCENARIO
@@ -451,6 +467,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 extra_cost_per_contract_cents=tuple(args.extra_cost_cents or (0, 50, 100, 200)),
             )
             report_id = validate_runs(store, tuple(args.run_ids), validation_config)
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "matched-control":
+            control_config = ControlConfig(
+                args.seed, args.replications, args.strata, args.bootstrap_draws, args.block_length
+            )
+            report_id = save_matched_control(
+                store, args.validation_id, args.opportunity_run_id, control_config
+            )
             print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "monte-carlo":
             print(canonical_json(store.describe_analysis(_monte_carlo(store, args))))

@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Matched structural control
+
+- Added seeded control replays with development-only admission, flat-start holdout fills, CLI/API parity and a dashboard report.
+
+
 ## 2026-11-10 — Verified local backups
 
 - Added private, non-overwriting SQLite snapshots and structural, foreign-key and source-checksum validation.

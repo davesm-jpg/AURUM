@@ -1,13 +1,14 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from typing import Any, Self
 
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import Candle
 from aurum.market_structure import Direction
-from aurum.paper_risk import MGC_TICK_CENTS, RiskConfig, RiskPlan
+from aurum.paper_risk import MGC_TICK_CENTS, RiskConfig, RiskPlan, RiskRejection
 from aurum.strategy import SetupEvent, SetupState, Variant
 from aurum.timestamps import MINUTE
 
@@ -60,6 +61,25 @@ class JournalSignal:
     plan: RiskPlan
     context: JournalContext
     state: SetupState = SetupState.PAPER_SIGNAL
+
+    @classmethod
+    def from_setup_payload(cls, item: dict[str, Any]) -> Self:
+        if item["state"] != SetupState.PAPER_SIGNAL:
+            raise ValueError("journal signal requires a qualified paper setup")
+        raw = item["plan"]
+        plan = {field.name: raw[field.name] for field in fields(RiskPlan)}
+        plan["direction"] = Direction(plan["direction"])
+        if plan["rejection"] is not None:
+            plan["rejection"] = RiskRejection(plan["rejection"])
+        context = item["context"]
+        return cls(
+            item["setup_id"],
+            Variant(item["variant"]),
+            Direction(item["direction"]),
+            datetime.fromisoformat(item["confirmed_at"]),
+            RiskPlan(**plan),
+            JournalContext(ResearchSession(context["session"]), Regime(context["regime"])),
+        )
 
 
 type TradeSignal = SetupEvent | JournalSignal

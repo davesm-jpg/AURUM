@@ -21,6 +21,7 @@ from aurum.api_config import (
 )
 from aurum.api_reports import (
     ForwardReportRequest,
+    MatchedControlRequest,
     MonteCarloReportRequest,
     PaperAccountReportRequest,
     ValidationReportRequest,
@@ -301,6 +302,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/validation", status_code=201)
     def create_validation(request: ValidationReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/matched-control", status_code=201)
+    def create_matched_control(request: MatchedControlRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/monte-carlo", status_code=201)

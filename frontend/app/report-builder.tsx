@@ -2,7 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, type RecordData } from "./client";
 import { label, record, rows, utcDateTime } from "./format";
 
-type ReportKind = "validation" | "monte-carlo" | "paper-account";
+type ReportKind =
+  | "validation"
+  | "matched-control"
+  | "monte-carlo"
+  | "paper-account";
 type RunChoice = {
   run_id: string;
   variant?: string;
@@ -10,6 +14,8 @@ type RunChoice = {
   dataset_id: string;
 };
 type Defaults = {
+  matched_control: RecordData;
+  control_strata: string[];
   monte_carlo: RecordData;
   sampling_modes: string[];
   assumed_scenarios: RecordData[];
@@ -18,6 +24,7 @@ type Defaults = {
 };
 const TYPES: Record<ReportKind, string> = {
   validation: "Chronological validation",
+  "matched-control": "Matched random control",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
 };
@@ -70,10 +77,12 @@ function objectJson(value: string, title: string) {
 
 export function ReportBuilder({
   runs,
+  validationReports,
   datasetId,
   onComplete,
 }: {
   runs: RunChoice[];
+  validationReports: { report_id: string; created_at: string }[];
   datasetId: string;
   onComplete: (reportId: string) => Promise<void>;
 }) {
@@ -137,6 +146,16 @@ export function ReportBuilder({
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
         };
+      } else if (kind === "matched-control") {
+        request = {
+          validation_id: fields.get("validation_id"),
+          opportunity_run_id: fields.get("opportunity_run_id"),
+          strata: fields.get("strata"),
+          replications: int("replications"),
+          bootstrap_draws: int("bootstrap_draws"),
+          block_length: int("block_length"),
+          seed: int("seed"),
+        };
       } else if (kind === "monte-carlo") {
         const config = Object.fromEntries(
           Object.keys(defaults.monte_carlo).map((name) => [name, int(name)]),
@@ -187,7 +206,8 @@ export function ReportBuilder({
   const canRun =
     kind === "paper-account" ||
     (kind === "monte-carlo" && mode === "scenario") ||
-    runs.length > 0;
+    (runs.length > 0 &&
+      (kind !== "matched-control" || validationReports.length > 0));
   return (
     <section className="panel lower sidebar-panel">
       <details className="report-builder">
@@ -298,6 +318,71 @@ export function ReportBuilder({
                         required
                       />
                     </label>
+                  </div>
+                </>
+              )}
+              {kind === "matched-control" && (
+                <>
+                  <p className="muted">
+                    Use a saved validation selection and a predeclared
+                    opportunity variant with the same data and execution
+                    assumptions. Admission rates are fitted on development
+                    signals.
+                  </p>
+                  <label>
+                    Chronological validation report
+                    <select name="validation_id" required>
+                      <option value="">Select a report</option>
+                      {validationReports.map((item) => (
+                        <option key={item.report_id} value={item.report_id}>
+                          {item.report_id.slice(0, 8)} ·{" "}
+                          {utcDateTime(item.created_at)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Opportunity backtest
+                    <select name="opportunity_run_id" required>
+                      <option value="">Select a run</option>
+                      {runs.map((item) => (
+                        <option key={item.run_id} value={item.run_id}>
+                          {label(item.variant)} · {item.timeframe} ·{" "}
+                          {item.run_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="fields">
+                    <label>
+                      Admission groups
+                      <select
+                        name="strata"
+                        defaultValue={String(defaults.matched_control.strata)}
+                      >
+                        {defaults.control_strata.map((group) => (
+                          <option key={group} value={group}>
+                            {label(group)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {(
+                      [
+                        ["replications", "Control replications", 1],
+                        ["bootstrap_draws", "Bootstrap draws", 2],
+                        ["block_length", "Bootstrap block trades", 1],
+                        ["seed", "Random seed", undefined],
+                      ] as const
+                    ).map(([name, title, min]) => (
+                      <IntegerInput
+                        key={name}
+                        name={name}
+                        title={title}
+                        value={defaults.matched_control[name]}
+                        min={min}
+                      />
+                    ))}
                   </div>
                 </>
               )}
