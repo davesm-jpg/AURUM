@@ -8,6 +8,7 @@ from sys import executable
 import pytest
 
 from aurum.candles import Timeframe
+from aurum.dataset_audit import verify_dataset
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG
 from aurum.instruments import MgcContract
@@ -162,6 +163,13 @@ def test_trade_import_audits_gaps_without_fabricating_bars(tmp_path: Path) -> No
     with pytest.raises(ValueError, match="expected candles are missing"):
         list(store.replay(dataset_id))
     assert len(list(store.trade_prints(dataset_id))) == 2
+    verified = verify_dataset(store, dataset_id)
+    assert verified["verified"] is True and verified["replayable"] is False
+    assert verified["trade_print_count"] == 2
+    with sqlite3.connect(store.path) as db:
+        db.execute("UPDATE trade_prints SET price_ticks = price_ticks + 1 WHERE sequence = 2")
+    with pytest.raises(ValueError, match="stored normalized trade print differs at sequence 2"):
+        verify_dataset(store, dataset_id)
 
 
 def test_intrabar_comparison_retains_an_empty_sample(tmp_path: Path) -> None:

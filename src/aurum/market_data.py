@@ -155,11 +155,18 @@ def prepare_csv(path: Path, config: ImportConfig, calendar: SessionCalendar) -> 
 def prepare_trade_csv(
     path: Path, config: ImportConfig, calendar: SessionCalendar
 ) -> PreparedDataset:
+    return prepare_trade_history(FileHistorySource(path, SourceFormat.CSV), config, calendar)
+
+
+def prepare_trade_history(
+    source: HistoricalSource, config: ImportConfig, calendar: SessionCalendar
+) -> PreparedDataset:
+    if source.format is not SourceFormat.CSV:
+        raise ValueError("trade import requires normalized CSV")
     if config.timestamp_label is not TimestampLabel.OPEN:
         raise ValueError("trade-derived candles use minute open labels")
     if calendar.sessions is None:
         raise ValueError("trade print import requires a dated reviewed calendar")
-    source = FileHistorySource(path, SourceFormat.CSV)
     raw = source.read()
     prints, warnings = _parse_trade_prints(raw, config, calendar)
     candles = tuple(_trade_candles(prints))

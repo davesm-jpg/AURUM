@@ -381,6 +381,8 @@ class DatasetStore:
             source = db.execute(
                 "SELECT raw FROM source_blobs WHERE sha256 = ?", (row["source_sha256"],)
             ).fetchone()
+            if source is None:
+                raise ValueError("dataset has no preserved source bytes")
             return bytes(source["raw"])
 
     def replay(self, dataset_id: str, *, span: TradingWindow | None = None) -> Iterator[Candle]:

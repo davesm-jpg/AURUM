@@ -17,6 +17,7 @@ from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
+from aurum.dataset_audit import verify_dataset
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import normalize_economic_ics
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
@@ -145,6 +146,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     inspect = commands.add_parser("inspect", help="show provenance and quality findings")
     inspect.add_argument("dataset_id")
+    dataset_audit = commands.add_parser(
+        "verify-dataset", help="verify normalized dataset rows against preserved source bytes"
+    )
+    dataset_audit.add_argument("dataset_id")
     prints = commands.add_parser("trade-prints", help="read preserved normalized trade prints")
     prints.add_argument("dataset_id")
     prints.add_argument("--start", type=trade_timestamp)
@@ -545,6 +550,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(canonical_json(event))
         elif args.command == "inspect":
             print(canonical_json(store.describe(args.dataset_id)))
+        elif args.command == "verify-dataset":
+            print(canonical_json(verify_dataset(store, args.dataset_id)))
         elif args.command == "trade-prints":
             if (args.after_timestamp is None) != (args.after_sequence is None):
                 raise ValueError("trade cursor requires both timestamp and sequence")

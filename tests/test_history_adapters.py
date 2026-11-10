@@ -8,6 +8,7 @@ from urllib.request import Request
 
 import pytest
 
+from aurum.dataset_audit import verify_dataset
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv, prepare_history
@@ -89,6 +90,7 @@ def test_native_parquet_and_csv_share_exact_normalization(tmp_path: Path) -> Non
     assert manifest["dataset_id"] == prepared.dataset_id
     assert manifest["provenance"]["format"] == "parquet"
     assert DatasetStore(db).source_bytes(prepared.dataset_id) == prepared.raw
+    assert verify_dataset(DatasetStore(db), prepared.dataset_id)["source_format"] == "parquet"
 
 
 @pytest.mark.parametrize("case", ["nanoseconds", "contract", "gap"])
@@ -130,6 +132,7 @@ def test_parquet_preserves_precision_and_uses_quality_gate(tmp_path: Path, case:
 
 def test_https_adapter_keeps_auth_and_query_out_of_provenance(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     class SyntheticOpener:
         def open(self, request: Request, *, timeout: int) -> BytesIO:
@@ -150,6 +153,15 @@ def test_https_adapter_keeps_auth_and_query_out_of_provenance(
     assert "synthetic-access" not in dataset.provenance_json
     assert "synthetic-private" not in dataset.provenance_json
     assert dataset.raw == RAW
+    store = DatasetStore(tmp_path / "synthetic-http.sqlite")
+    dataset_id = store.save(dataset)
+
+    def unavailable(_: object) -> None:
+        pytest.fail("verification attempted to reconnect to the historical provider")
+
+    monkeypatch.delenv("AURUM_SYNTHETIC_TEST_TOKEN")
+    monkeypatch.setattr("aurum.providers.build_opener", unavailable)
+    assert verify_dataset(store, dataset_id)["verified"] is True
     with pytest.raises(ValueError, match="must be HTTPS"):
         HttpsHistorySource("http://data.invalid/export", SourceFormat.CSV)
     with pytest.raises(ValueError, match="embedded credentials"):

@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Offline dataset integrity reproduction
+
+- Added a read-only command that reconstructs candle and trade datasets from stored raw bytes and compares their exact normalized rows.
+
+
 ## 2026-11-10 — Reviewed iCalendar captures
 
 - Added local timed-release normalization with source class, capture time, DST verification and partial coverage.

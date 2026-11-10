@@ -193,8 +193,14 @@ data. Handle it under the same access and licensing requirements as the store.
 ```sh
 .venv/bin/aurum --db data/aurum.sqlite backup data/aurum-backup.sqlite
 .venv/bin/aurum --db data/aurum-backup.sqlite verify-store --full --verify-sources
+.venv/bin/aurum --db data/aurum-backup.sqlite verify-dataset DATASET_ID
 ```
 
 For a restore rehearsal, point `--db` at the verified snapshot and inspect or
 replay a known dataset before switching workers. Keep the original store for
 comparison. The command uses the [SQLite Online Backup API](https://sqlite.org/backup.html).
+
+`verify-dataset` rebuilds normalized candles and stored trade prints from the
+preserved source with the original supported import and timezone versions.
+It compares metadata, quality findings and exact normalized rows offline. An
+accurately stored incomplete dataset can verify while remaining blocked for replay.
