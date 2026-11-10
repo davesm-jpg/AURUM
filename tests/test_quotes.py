@@ -175,6 +175,11 @@ def test_quote_audit_rebuilds_restored_series_and_detects_late_page_changes(
     result = verify_quote_series(copy, series)
     assert result["verified"] is True and result["quote_count"] == 1002
     assert result["data_kind"] == "synthetic"
+    assert verify_store(copy, verify_normalized=True)["normalized"] == {
+        "datasets_verified": 0,
+        "quote_series_verified": 1,
+        "datasets_blocked_for_replay": 0,
+    }
     cli = [
         str(Path(executable).with_name("aurum")),
         "--db",
@@ -187,6 +192,8 @@ def test_quote_audit_rebuilds_restored_series_and_detects_late_page_changes(
     with sqlite3.connect(backup) as db:
         db.execute("UPDATE book_quotes SET ask_ticks = ask_ticks + 1 WHERE sequence = 1001")
     assert verify_store(copy, verify_sources=True)["source_checksums_verified"] == 1
+    with pytest.raises(ValueError, match=f"quote series {series} failed normalization audit"):
+        verify_store(copy, verify_normalized=True)
     rejected = subprocess.run(cli, check=False, capture_output=True, text=True)
     assert rejected.returncode == 1 and rejected.stdout == ""
     assert "stored normalized quote differs at sequence 1001" in rejected.stderr

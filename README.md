@@ -191,8 +191,8 @@ a SHA-256 digest in the command output. The snapshot contains original source
 data. Handle it under the same access and licensing requirements as the store.
 
 ```sh
-.venv/bin/aurum --db data/aurum.sqlite backup data/aurum-backup.sqlite
-.venv/bin/aurum --db data/aurum-backup.sqlite verify-store --full --verify-sources
+.venv/bin/aurum --db data/aurum.sqlite backup data/aurum-backup.sqlite --verify-normalized
+.venv/bin/aurum --db data/aurum-backup.sqlite verify-store --full --verify-sources --verify-normalized
 .venv/bin/aurum --db data/aurum-backup.sqlite verify-dataset DATASET_ID
 .venv/bin/aurum --db data/aurum-backup.sqlite verify-quote-series SERIES_ID
 ```
@@ -206,4 +206,6 @@ preserved source with the original supported import and timezone versions.
 It compares metadata, quality findings and exact normalized rows offline. An
 accurately stored incomplete dataset can verify while remaining blocked for replay.
 `verify-quote-series` applies the same source-reconstruction check to normalized
-bid and ask observations.
+bid and ask observations. The optional whole-store audit checks every recorded
+dataset and quote series. With `backup --verify-normalized`, the staged copy
+must pass before it is published. The backup timeout applies to the SQLite copy.

@@ -16,6 +16,7 @@ from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_trade_csv
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
 from aurum.storage import SCHEMA_VERSION, DatasetStore
+from aurum.storage_admin import verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG
 from aurum.timestamps import MINUTE, minute_timestamp, source_timezone, trade_timestamp
 
@@ -166,6 +167,11 @@ def test_trade_import_audits_gaps_without_fabricating_bars(tmp_path: Path) -> No
     verified = verify_dataset(store, dataset_id)
     assert verified["verified"] is True and verified["replayable"] is False
     assert verified["trade_print_count"] == 2
+    assert verify_store(store, verify_normalized=True)["normalized"] == {
+        "datasets_verified": 1,
+        "quote_series_verified": 0,
+        "datasets_blocked_for_replay": 1,
+    }
     with sqlite3.connect(store.path) as db:
         db.execute("UPDATE trade_prints SET price_ticks = price_ticks + 1 WHERE sequence = 2")
     with pytest.raises(ValueError, match="stored normalized trade print differs at sequence 2"):

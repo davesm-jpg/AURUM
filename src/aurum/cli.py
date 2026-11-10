@@ -396,11 +396,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     backup = commands.add_parser("backup", help="save a verified local SQLite snapshot")
     backup.add_argument("output", type=Path)
     backup.add_argument("--timeout-seconds", type=float, default=120)
+    backup.add_argument("--verify-normalized", action="store_true")
     verify = commands.add_parser(
         "verify-store", help="verify database and preserved source integrity"
     )
     verify.add_argument("--full", action="store_true")
     verify.add_argument("--verify-sources", action="store_true")
+    verify.add_argument("--verify-normalized", action="store_true")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -410,13 +412,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "backup":
             print(
                 canonical_json(
-                    backup_store(store, args.output, timeout_seconds=args.timeout_seconds)
+                    backup_store(
+                        store,
+                        args.output,
+                        timeout_seconds=args.timeout_seconds,
+                        verify_normalized=args.verify_normalized,
+                    )
                 )
             )
         elif args.command == "verify-store":
             print(
                 canonical_json(
-                    verify_store(store, full=args.full, verify_sources=args.verify_sources)
+                    verify_store(
+                        store,
+                        full=args.full,
+                        verify_sources=args.verify_sources,
+                        verify_normalized=args.verify_normalized,
+                    )
                 )
             )
         elif args.command in ("import-csv", "import-parquet", "import-https", "import-trades"):

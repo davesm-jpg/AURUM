@@ -6,13 +6,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
 
+from aurum.dataset_audit import verify_dataset
+from aurum.quotes import verify_quote_series
 from aurum.storage import DatasetStore
 
 
 def verify_store(
-    store: DatasetStore, *, full: bool = False, verify_sources: bool = False
+    store: DatasetStore,
+    *,
+    full: bool = False,
+    verify_sources: bool = False,
+    verify_normalized: bool = False,
 ) -> dict[str, object]:
-    """Validate the SQLite snapshot and optionally verify every preserved source checksum."""
+    """Validate SQLite and optionally audit source bytes or their normalized rows."""
     with store.connection() as db:
         db.execute("BEGIN")
         check = "integrity_check" if full else "quick_check"
@@ -31,16 +37,48 @@ def verify_store(
                 if digest.hexdigest() != row["sha256"]:
                     raise ValueError("preserved source checksum mismatch")
                 verified += 1
-        return {
-            "schema_version": db.execute("PRAGMA user_version").fetchone()[0],
+        schema = db.execute("PRAGMA user_version").fetchone()[0]
+        summary: dict[str, object] = {
+            "schema_version": schema,
             "integrity": check,
             "foreign_keys": "verified",
             "source_checksums_verified": verified if verify_sources else None,
         }
+        if not verify_normalized:
+            return summary
+        datasets = tuple(row["id"] for row in db.execute("SELECT id FROM datasets ORDER BY id"))
+        quote_series = (
+            tuple(row["id"] for row in db.execute("SELECT id FROM quote_series ORDER BY id"))
+            if schema >= 13
+            else ()
+        )
+
+    blocked = 0
+    for dataset_id in datasets:
+        try:
+            audit = verify_dataset(store, dataset_id)
+        except ValueError as exc:
+            raise ValueError(f"dataset {dataset_id} failed normalization audit: {exc}") from exc
+        blocked += audit["replayable"] is False
+    for series_id in quote_series:
+        try:
+            verify_quote_series(store, series_id)
+        except ValueError as exc:
+            raise ValueError(f"quote series {series_id} failed normalization audit: {exc}") from exc
+    summary["normalized"] = {
+        "datasets_verified": len(datasets),
+        "quote_series_verified": len(quote_series),
+        "datasets_blocked_for_replay": blocked,
+    }
+    return summary
 
 
 def backup_store(
-    store: DatasetStore, destination: Path, *, timeout_seconds: float = 120
+    store: DatasetStore,
+    destination: Path,
+    *,
+    timeout_seconds: float = 120,
+    verify_normalized: bool = False,
 ) -> dict[str, object]:
     """Publish a validated private snapshot without replacing an existing file."""
     if not 0 < timeout_seconds <= 3600:
@@ -60,7 +98,7 @@ def backup_store(
             source.backup(target, pages=256, sleep=0.025, progress=check_time)
             if target.execute("PRAGMA journal_mode = DELETE").fetchone()[0] != "delete":
                 raise ValueError("backup could not be made self-contained")
-        verified = verify_store(DatasetStore(staging))
+        verified = verify_store(DatasetStore(staging), verify_normalized=verify_normalized)
         with staging.open("rb") as snapshot:
             os.fsync(snapshot.fileno())
             size = os.fstat(snapshot.fileno()).st_size

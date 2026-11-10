@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Whole-store normalization audit
+
+- Added optional normalized archive verification and a pre-publication check on staged backups.
+
+
 ## 2026-11-10 — Observation-time economic gate
 
 - Rechecked event risk at monitor observation for new alert and forward eligibility while preserving source-close research evidence.

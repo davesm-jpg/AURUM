@@ -45,10 +45,14 @@ def test_cli_backup_reopens_as_an_independent_verified_store(tmp_path: Path) -> 
     destination = tmp_path / "synthetic-backup.sqlite"
     cli = [str(Path(executable).with_name("aurum")), "--db", str(source.path)]
     result = subprocess.run(
-        [*cli, "backup", str(destination)], check=True, capture_output=True, text=True
+        [*cli, "backup", str(destination), "--verify-normalized"],
+        check=True,
+        capture_output=True,
+        text=True,
     )
     metadata = json.loads(result.stdout)
     assert metadata["schema_version"] == SCHEMA_VERSION
+    assert metadata["normalized"]["datasets_verified"] == 1
     assert metadata["sha256"] == sha256(destination.read_bytes()).hexdigest()
     assert metadata["bytes"] == destination.stat().st_size
     assert S_IMODE(destination.stat().st_mode) == 0o600
@@ -57,6 +61,24 @@ def test_cli_backup_reopens_as_an_independent_verified_store(tmp_path: Path) -> 
     assert list(copy.replay(dataset)) == list(source.replay(dataset))
     assert verify_store(copy, full=True, verify_sources=True)["source_checksums_verified"] == 1
     assert verify_dataset(copy, dataset)["verified"] is True
+    audit = subprocess.run(
+        [
+            str(Path(executable).with_name("aurum")),
+            "--db",
+            str(destination),
+            "verify-store",
+            "--verify-sources",
+            "--verify-normalized",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(audit.stdout)["normalized"] == {
+        "datasets_verified": 1,
+        "quote_series_verified": 0,
+        "datasets_blocked_for_replay": 0,
+    }
     with pytest.raises(ValueError, match="already exists"):
         backup_store(source, destination)
     assert metadata["sha256"] == sha256(destination.read_bytes()).hexdigest()
@@ -101,6 +123,13 @@ def test_cli_verifies_normalized_dataset_and_detects_tampered_values(tmp_path: P
     with sqlite3.connect(store.path) as db:
         db.execute("UPDATE candles SET volume = volume + 1 WHERE dataset_id = ?", (dataset,))
     assert verify_store(store, verify_sources=True)["source_checksums_verified"] == 1
+    with pytest.raises(ValueError, match=f"dataset {dataset} failed normalization audit"):
+        verify_store(store, verify_normalized=True)
+    backup = tmp_path / "synthetic-invalid-backup.sqlite"
+    with pytest.raises(ValueError, match="failed normalization audit"):
+        backup_store(store, backup, verify_normalized=True)
+    assert not backup.exists()
+    assert not list(tmp_path.glob(".aurum-backup-*"))
     rejected = subprocess.run(cli, check=False, capture_output=True, text=True)
     assert rejected.returncode == 1
     assert "stored normalized candle differs" in rejected.stderr
