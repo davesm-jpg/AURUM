@@ -10,6 +10,8 @@ AURUM researches COMEX Micro Gold futures and the Liquidity Sweep → Market Str
 
 Current user instructions take precedence, followed by the specification, source and tests, architecture and decisions, roadmap, handoff and prior conversation. Investigate conflicts.
 
+Progress feedback must include the roadmap-based total project completion percentage, calculated as DONE tasks divided by all roadmap tasks, plus the DONE count and total count. Mention blocked tasks separately so the percentage is not mistaken for production readiness.
+
 ## Implement and verify
 
 - Use focused, independently verifiable slices in the Python modular monolith. Keep critical algorithms deterministic and testable offline. Reuse the same detection path for replay and future monitoring.
