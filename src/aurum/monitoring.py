@@ -2,7 +2,7 @@ import json
 import sqlite3
 from base64 import b64encode
 from bisect import bisect_right
-from collections.abc import Collection, Iterator
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -30,6 +30,7 @@ from aurum.strategy import (
 from aurum.timestamps import MINUTE, source_timezone
 
 MONITOR_VERSION = 1
+MAX_REPLAY_BATCH = 256
 
 
 class MonitorState(StrEnum):
@@ -165,6 +166,20 @@ class MarketMonitor:
             )
 
     def ingest(self, frame: FeedFrame) -> dict[str, object]:
+        return self._ingest_batch((frame,))
+
+    def ingest_replay_batch(self, frames: Sequence[FeedFrame]) -> dict[str, object]:
+        """Apply a bounded synthetic or historical batch as one durable unit."""
+        if not 1 <= len(frames) <= MAX_REPLAY_BATCH:
+            raise ValueError(f"replay batches require 1 to {MAX_REPLAY_BATCH} frames")
+        if any(
+            frame.source_status not in (FeedStatus.HISTORICAL, FeedStatus.SIMULATED)
+            for frame in frames
+        ):
+            raise ValueError("live or delayed frames must be ingested individually")
+        return self._ingest_batch(frames)
+
+    def _validate_frame(self, frame: FeedFrame) -> None:
         candle = frame.candle
         if candle.contract != self.contract or not self.calendar.permits(candle.opened_at):
             raise ValueError("feed candle is outside the configured contract or schedule")
@@ -173,6 +188,10 @@ class MarketMonitor:
             and self.config.source_status in (FeedStatus.REAL_TIME, FeedStatus.DELAYED)
         ):
             raise ValueError("feed candle status is incompatible with monitor configuration")
+
+    def _ingest_batch(self, frames: Sequence[FeedFrame]) -> dict[str, object]:
+        for frame in frames:
+            self._validate_frame(frame)
         with self._ingest_lock:
             try:
                 while True:
@@ -180,16 +199,18 @@ class MarketMonitor:
                         row = _run(db, self.monitor_id)
                         checkpoint = row["last_applied"]
                         if checkpoint == self._checkpoint:
-                            return self._ingest(db, row, frame)
+                            pending = 0
+                            for frame in frames:
+                                pending = self._ingest(db, row, frame)
+                                row = _run(db, self.monitor_id)
+                            return _status(row, pending)
                     self._restore(checkpoint)
             except BaseException:
                 self._checkpoint = None
                 self._engine = self._new_engine()
                 raise
 
-    def _ingest(
-        self, db: sqlite3.Connection, row: sqlite3.Row, frame: FeedFrame
-    ) -> dict[str, object]:
+    def _ingest(self, db: sqlite3.Connection, row: sqlite3.Row, frame: FeedFrame) -> int:
         now = frame.received_at
         opened = frame.candle.opened_at.isoformat()
         normalized = canonical_json(frame.candle.as_dict())
@@ -213,13 +234,13 @@ class MarketMonitor:
                         "conflicting_raw_base64": b64encode(frame.raw).decode(),
                     },
                 )
-            return self._refresh(db, now)
+            return self._refresh_state(db, now)
         if row["fault"] is not None:
-            return self._refresh(db, now)
+            return self._refresh_state(db, now)
         pending = _pending_count(db, self.monitor_id)
         if opened != row["next_open"] and pending >= self.config.pending_limit:
             self._latch(db, now, "pending_buffer_limit")
-            return self._refresh(db, now)
+            return self._refresh_state(db, now)
         db.execute(
             """INSERT INTO monitor_minutes
                (run_id, opened_at, candle, raw, received_at, source_status, applied)
@@ -283,7 +304,7 @@ class MarketMonitor:
             (expected, last_applied, self.monitor_id),
         )
         self._checkpoint = last_applied
-        return self._refresh(db, now)
+        return self._refresh_state(db, now)
 
     def _restore(self, checkpoint: str | None) -> None:
         if checkpoint == self._checkpoint:
@@ -334,6 +355,10 @@ class MarketMonitor:
         return windows[index + 1].start.isoformat() if index + 1 < len(windows) else None
 
     def _refresh(self, db: sqlite3.Connection, now: datetime) -> dict[str, object]:
+        pending = self._refresh_state(db, now)
+        return _status(_run(db, self.monitor_id), pending)
+
+    def _refresh_state(self, db: sqlite3.Connection, now: datetime) -> int:
         row = _run(db, self.monitor_id)
         if row["checked_at"] is not None:
             now = max(now, datetime.fromisoformat(row["checked_at"]))
@@ -362,7 +387,7 @@ class MarketMonitor:
             "UPDATE monitor_runs SET state = ?, checked_at = ? WHERE id = ?",
             (state, now.isoformat(), self.monitor_id),
         )
-        return _status(_run(db, self.monitor_id), pending)
+        return pending
 
     def _state(self, row: sqlite3.Row, now: datetime, pending: int) -> MonitorState:
         if row["fault"] is not None:

@@ -12,7 +12,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_history
-from aurum.monitoring import MarketMonitor, MonitorState, describe_monitor
+from aurum.monitoring import MAX_REPLAY_BATCH, MarketMonitor, MonitorState, describe_monitor
 from aurum.providers import FeedStatus, HttpsHistorySource, SourceFormat
 
 
@@ -130,9 +130,13 @@ class HttpsGapBackfill:
         )
         dataset_id = monitor.store.save(prepare_history(source, config, calendar))
         received_at = clock()
-        for batch in monitor.store.replay_batches(dataset_id, span):
-            for candle in batch:
-                monitor.ingest(FeedFrame.from_replay(candle, FeedStatus.HISTORICAL, received_at))
+        for batch in monitor.store.replay_batches(dataset_id, span, MAX_REPLAY_BATCH):
+            monitor.ingest_replay_batch(
+                tuple(
+                    FeedFrame.from_replay(candle, FeedStatus.HISTORICAL, received_at)
+                    for candle in batch
+                )
+            )
         monitor.note(received_at, "feed_backfill_completed", dataset_id)
 
 

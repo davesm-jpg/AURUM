@@ -31,7 +31,7 @@ from aurum.market_data import (
     prepare_csv,
 )
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
-from aurum.monitoring import MarketMonitor, MonitorConfig
+from aurum.monitoring import MAX_REPLAY_BATCH, MarketMonitor, MonitorConfig
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG
@@ -92,7 +92,9 @@ def _digest(value: object) -> str:
     return sha256(canonical_json(value).encode()).hexdigest()
 
 
-def run(directory: Path, session_count: int, minutes: int, repetitions: int) -> dict[str, object]:
+def run(
+    directory: Path, session_count: int, minutes: int, repetitions: int, batch_size: int
+) -> dict[str, object]:
     path = directory / "synthetic.csv"
     calendar = _csv(path, session_count, minutes)
     store = DatasetStore(directory / "synthetic.sqlite")
@@ -131,12 +133,18 @@ def run(directory: Path, session_count: int, minutes: int, repetitions: int) -> 
 
     def ingest() -> int:
         count = 0
-        for batch in store.replay_batches(dataset_id, calendar.coverage):
-            for candle in batch:
-                active.ingest(
-                    FeedFrame.from_replay(candle, FeedStatus.SIMULATED, candle.available_at)
-                )
-                count += 1
+        for batch in store.replay_batches(dataset_id, calendar.coverage, MAX_REPLAY_BATCH):
+            frames = tuple(
+                FeedFrame.from_replay(candle, FeedStatus.SIMULATED, candle.available_at)
+                for candle in batch
+            )
+            for offset in range(0, len(frames), batch_size):
+                group = frames[offset : offset + batch_size]
+                if batch_size == 1:
+                    active.ingest(group[0])
+                else:
+                    active.ingest_replay_batch(group)
+                count += len(group)
         return count
 
     active = monitor()
@@ -182,6 +190,7 @@ def run(directory: Path, session_count: int, minutes: int, repetitions: int) -> 
         "sessions": session_count,
         "minutes_per_session": minutes,
         "ingested_minutes": ingested,
+        "ingestion_batch_size": batch_size,
         "repetitions_for_read_and_restart": repetitions,
         "event_counts": {
             "history_evidence": store.describe_structure_run(evidence_id)["event_count"],
@@ -202,11 +211,18 @@ def main() -> None:
     parser.add_argument("--sessions", type=int, default=20)
     parser.add_argument("--minutes", type=int, default=360)
     parser.add_argument("--repetitions", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=1)
     args = parser.parse_args()
     if not 1 <= args.sessions <= 250 or not 120 <= args.minutes <= 600 or args.repetitions < 1:
         parser.error("use 1–250 sessions, 120–600 minutes and at least one repetition")
+    if not 1 <= args.batch_size <= MAX_REPLAY_BATCH:
+        parser.error(f"batch size must be between 1 and {MAX_REPLAY_BATCH}")
     with TemporaryDirectory(prefix="aurum-synthetic-benchmark-") as temporary:
-        print(canonical_json(run(Path(temporary), args.sessions, args.minutes, args.repetitions)))
+        print(
+            canonical_json(
+                run(Path(temporary), args.sessions, args.minutes, args.repetitions, args.batch_size)
+            )
+        )
 
 
 if __name__ == "__main__":

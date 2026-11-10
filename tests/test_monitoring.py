@@ -172,6 +172,45 @@ def test_monitor_transaction_rollback_can_retry_a_failed_apply(tmp_path: Path) -
     assert monitor.ingest(frame(0))["last_applied_open"] == START.isoformat()
 
 
+def test_batched_synthetic_ingestion_matches_single_frames_and_rolls_back_atomically(
+    tmp_path: Path,
+) -> None:
+    first = DatasetStore(tmp_path / "synthetic-single.sqlite")
+    second = DatasetStore(tmp_path / "synthetic-batch.sqlite")
+    schedule = calendar((0, 12))
+    single = fixture_monitor(first, schedule, FeedStatus.SIMULATED)
+    batched = fixture_monitor(second, schedule, FeedStatus.SIMULATED)
+    single.set_connection(True, START)
+    batched.set_connection(True, START)
+    frames = tuple(
+        frame(index, received=max(index + 1, 3) if index else 1, mode=FeedStatus.SIMULATED)
+        for index in (0, 2, 1, *range(3, 12))
+    )
+    with pytest.raises(ValueError, match="individually"):
+        batched.ingest_replay_batch((frame(0),))
+    with sqlite3.connect(second.path) as db:
+        db.execute(
+            """CREATE TRIGGER fail_batch BEFORE UPDATE ON monitor_minutes
+               WHEN new.opened_at = '2025-03-10T13:04:00+00:00'
+               BEGIN SELECT RAISE(ABORT, 'synthetic batch failure'); END"""
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic batch failure"):
+        batched.ingest_replay_batch(frames)
+    with sqlite3.connect(second.path) as db:
+        assert db.execute("SELECT count(*) FROM monitor_minutes").fetchone() == (0,)
+        assert db.execute("SELECT count(*) FROM monitor_market_events").fetchone() == (0,)
+        db.execute("DROP TRIGGER fail_batch")
+    for minute in frames:
+        expected = single.ingest(minute)
+    assert batched.ingest_replay_batch(frames) == expected
+    reference = single.monitor_id
+    assert list(monitor_events(first, reference)) == list(monitor_events(second, reference))
+    assert market_events_page(first, reference) == market_events_page(second, reference)
+    with sqlite3.connect(first.path) as left, sqlite3.connect(second.path) as right:
+        query = "SELECT * FROM monitor_minutes ORDER BY opened_at"
+        assert left.execute(query).fetchall() == right.execute(query).fetchall()
+
+
 def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observation_times(
     tmp_path: Path,
 ) -> None:

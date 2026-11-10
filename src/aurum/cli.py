@@ -46,6 +46,7 @@ from aurum.market_structure import (
     StructureConfig,
 )
 from aurum.monitoring import (
+    MAX_REPLAY_BATCH,
     MarketMonitor,
     MonitorConfig,
     describe_monitor,
@@ -849,9 +850,10 @@ def _monitor_replay(store: DatasetStore, args: Namespace) -> dict[str, object]:
     start = datetime.fromisoformat(str(expected))
     end = datetime.fromisoformat(dataset["last_close"])
     instance.set_connection(True, start)
-    for batch in store.replay_batches(args.dataset_id, TradingWindow(start, end)):
-        for candle in batch:
-            instance.ingest(FeedFrame.from_replay(candle, mode, candle.available_at))
+    for batch in store.replay_batches(args.dataset_id, TradingWindow(start, end), MAX_REPLAY_BATCH):
+        instance.ingest_replay_batch(
+            tuple(FeedFrame.from_replay(candle, mode, candle.available_at) for candle in batch)
+        )
     return instance.set_connection(False, end)
 
 
