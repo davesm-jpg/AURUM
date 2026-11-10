@@ -245,6 +245,56 @@ function ValidationReport({ result }: { result: RecordData }) {
   );
 }
 
+function SpreadObservationsReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const definition = record(report.definition);
+  const anchors: [string, RecordData][] = Object.entries(
+    record(result.anchors),
+  ).map(([kind, row]) => [label(kind), record(row)]);
+  const ticks = (value: unknown) =>
+    number(value)?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ??
+    "—";
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {String(result.contract ?? "—")} ·{" "}
+        {utcDateTime(result.first_open)} to {utcDateTime(result.last_close)}
+      </p>
+      <p className="muted">
+        Price source {String(result.price_provider ?? "—")}. Quote source{" "}
+        {String(result.quote_provider ?? "—")}. The spread distribution uses
+        strictly preceding, same-window observations up to{" "}
+        {String(definition.maximum_age_ms ?? "—")} ms old. The backtest keeps
+        its recorded modeled fills and costs.
+      </p>
+      <DataTable
+        labelHeading="Paper reference"
+        items={anchors}
+        columns={[
+          { title: "References", value: (row) => String(row.references ?? 0) },
+          { title: "Fresh", value: (row) => percentage(row.fresh_fraction) },
+          {
+            title: "Median spread (ticks)",
+            value: (row) => ticks(record(row.spread_ticks).median),
+          },
+          {
+            title: "95th percentile (ticks)",
+            value: (row) => ticks(record(row.spread_ticks).p95),
+          },
+          {
+            title: "Stale",
+            value: (row) => String(record(row.statuses).stale ?? 0),
+          },
+          {
+            title: "Calendar mismatches",
+            value: (row) => String(record(row.statuses).calendar_mismatch ?? 0),
+          },
+        ]}
+      />
+    </>
+  );
+}
+
 function SensitivityReport({ report }: { report: RecordData }) {
   const result = record(report.result);
   const definition = record(report.definition);
@@ -708,6 +758,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <IntrabarComparisonReport result={result} />;
   if (report.kind === "parameter_sensitivity")
     return <SensitivityReport report={report} />;
+  if (report.kind === "quote_spread_observations")
+    return <SpreadObservationsReport report={report} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

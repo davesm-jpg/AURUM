@@ -43,8 +43,10 @@ from aurum.market_structure import (
 )
 from aurum.monitoring import MarketMonitor, MonitorConfig, market_events_page, monitor_events
 from aurum.providers import FeedStatus
+from aurum.quotes import QuoteImportConfig, import_quote_csv
 from aurum.research_reports import backtest_analytics, validate_runs
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
+from aurum.spread_reports import save_spread_report
 from aurum.statistics import ValidationConfig
 from aurum.storage import SCHEMA_VERSION, DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay, Variant
@@ -658,7 +660,7 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert validation["result"]["holdout"]["summary"]["trades"] == 0
 
 
-def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_path: Path) -> None:
+def prepare_synthetic_print_replay(tmp_path: Path) -> tuple[DatasetStore, str, str]:
     bars = [
         *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
         synthetic_bar(9, 81, 94, 85),
@@ -682,6 +684,11 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
         "synthetic ordered prints", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC
     )
     trades = store.save(prepare_trade_csv(raw, trade_config, calendar))
+    return store, minute_dataset, trades
+
+
+def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_path: Path) -> None:
+    store, minute_dataset, trades = prepare_synthetic_print_replay(tmp_path)
     aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
     args = [*aurum, "backtest", trades, "--internal-pivot", "1", "1"]
     default = json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
@@ -774,6 +781,82 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
         assert capped.status_code == 201
         assert capped.json()["result"]["examples"] == []
         assert capped.json()["result"]["resolved_dual_touch_exits"] == 1
+
+
+def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_path: Path) -> None:
+    store, _, trade_dataset = prepare_synthetic_print_replay(tmp_path)
+    run = store.build_strategy_run(
+        trade_dataset,
+        TIMEFRAME,
+        StructureConfig(PivotRule(1, 1)),
+        DEFAULT_STRATEGY_CONFIG,
+        execution=DEFAULT_EXECUTION_CONFIG,
+        resolve_with_trade_prints=True,
+    )
+    before = store.describe_backtest(run)
+    calendar = SessionCalendar.from_dict(store.describe(trade_dataset)["provenance"]["calendar"])
+    source = tmp_path / "synthetic-spread.csv"
+    source.write_text(
+        "observed_at,contract,sequence,bid,ask,bid_size,ask_size\n"
+        "2025-03-10T14:04:59.950Z,MGC-2025-04,1,10.9,11.1,1,1\n"
+        "2025-03-10T14:05:01.990Z,MGC-2025-04,2,17.7,17.9,1,1\n"
+        "2025-03-10T14:05:02Z,MGC-2025-04,3,17.0,18.0,1,1\n",
+        encoding="utf-8",
+    )
+    config = QuoteImportConfig("synthetic spread provider", CONTRACT, "UTC", DataKind.SYNTHETIC)
+    series = import_quote_csv(store, source, config, calendar)
+    command = [
+        str(Path(executable).with_name("aurum")),
+        "--db",
+        str(store.path),
+        "spread-observations",
+        run,
+        series,
+        "--maximum-age-ms",
+        "20",
+    ]
+    report = json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
+    result = report["result"]
+    assert result["data_kind"] == "synthetic"
+    decision = result["anchors"]["setup_decision"]
+    entry = result["anchors"]["modeled_entry_open"]
+    touch = result["anchors"]["ordered_bracket_touch"]
+    assert decision == entry
+    assert decision["references"] == 1 and decision["statuses"]["stale"] == 1
+    assert decision["spread_ticks"] is None
+    assert touch["fresh_fraction"] == 1
+    assert touch["spread_ticks"]["median"] == touch["spread_ticks"]["p95"] == 2
+    assert touch["examples"][0]["age_nanoseconds"] == 10_000_000
+    assert touch["examples"][0]["quote"]["sequence"] == 2
+    assert store.describe_backtest(run) == before
+
+    misdated = SessionCalendar(
+        "synthetic conflicting trade date",
+        "fixture-v2",
+        calendar.coverage,
+        sessions=(TradingSession(TRADE_DATE + timedelta(days=1), calendar.windows),),
+    )
+    incompatible = import_quote_csv(store, source, config, misdated)
+    mismatch = store.describe_analysis(save_spread_report(store, run, incompatible))["result"]
+    assert isinstance(mismatch, dict)
+    assert all(
+        row["statuses"]["calendar_mismatch"] == 1 and row["spread_ticks"] is None
+        for row in mismatch["anchors"].values()
+    )
+
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        response = client.post(
+            "/api/reports/spread-observations",
+            json={
+                "run_id": run,
+                "quote_series_id": series,
+                "maximum_age_ms": 20,
+            },
+        )
+        assert response.status_code == 201
+        assert response.json() == report
 
 
 def prepare_synthetic_research_sample(

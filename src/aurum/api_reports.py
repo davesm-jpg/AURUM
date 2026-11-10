@@ -18,9 +18,11 @@ from aurum.monte_carlo import (
     TrailingLossScenario,
     WinRateScenario,
 )
+from aurum.quotes import DEFAULT_QUOTE_MAX_AGE_MS, MAX_QUOTE_AGE_MS
 from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
+from aurum.spread_reports import save_spread_report
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.timestamps import minute_timestamp
@@ -41,6 +43,24 @@ class IntrabarComparisonRequest(BaseModel):
             store,
             self.stop_first_run_id,
             self.trade_print_run_id,
+            example_limit=self.example_limit,
+        )
+
+
+class SpreadObservationsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: _RunId
+    quote_series_id: _RunId
+    maximum_age_ms: int = Field(default=DEFAULT_QUOTE_MAX_AGE_MS, ge=0, le=MAX_QUOTE_AGE_MS)
+    example_limit: int = Field(default=10, ge=0, le=100)
+
+    def run(self, store: DatasetStore) -> str:
+        return save_spread_report(
+            store,
+            self.run_id,
+            self.quote_series_id,
+            maximum_age_ms=self.maximum_age_ms,
             example_limit=self.example_limit,
         )
 
@@ -209,6 +229,7 @@ def report_configuration() -> dict[str, object]:
         "matched_control": asdict(ControlConfig()),
         "control_strata": list(ControlStrata),
         "sensitivity_factors": list(SensitivityFactor),
+        "spread_maximum_age_ms": DEFAULT_QUOTE_MAX_AGE_MS,
         "monte_carlo": asdict(MonteCarloConfig()),
         "sampling_modes": list(SamplingMode),
         "assumed_scenarios": [asdict(WinRateScenario(rate)) for rate in REFERENCE_WIN_RATES_BPS],

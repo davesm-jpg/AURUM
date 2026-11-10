@@ -4,13 +4,13 @@ import json
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from hashlib import sha256
 from importlib.metadata import version
 from pathlib import Path
 
-from aurum.exchange_calendar import SessionCalendar
+from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MAX_SQLITE_INTEGER, MGC, MgcContract
 from aurum.market_data import DataKind, QualityIssue, canonical_json, csv_rows
 from aurum.storage import DatasetStore
@@ -239,21 +239,93 @@ def describe_quote_series(store: DatasetStore, series_id: str) -> dict[str, obje
     raise ValueError(f"unknown quote series: {series_id}")
 
 
+def quote_window(
+    calendar: SessionCalendar, at: EventTimestamp
+) -> tuple[date, TradingWindow] | None:
+    minute = at.time.replace(second=0, microsecond=0)
+    session = calendar.session_at(minute)
+    if session is None:
+        return None
+    return session.trade_date, next(
+        window for window in session.windows if window.start <= minute < window.end
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class QuoteAssessment:
+    status: QuoteStatus
+    quote: BookQuote | None = None
+    age_nanoseconds: int | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "age_nanoseconds": self.age_nanoseconds,
+            "quote": self.quote.as_dict() if self.quote is not None else None,
+        }
+
+
+class QuoteLookup:
+    def __init__(self, store: DatasetStore, series_id: str) -> None:
+        self.store = store
+        self.series_id = series_id
+        provenance = describe_quote_series(store, series_id)["provenance"]
+        assert isinstance(provenance, dict)
+        self.provenance = provenance
+        self.calendar = SessionCalendar.from_dict(provenance["calendar"])
+
+    def assess_many(
+        self, times: Iterable[EventTimestamp], maximum_age_ms: int
+    ) -> tuple[QuoteAssessment, ...]:
+        if not 0 <= maximum_age_ms <= MAX_QUOTE_AGE_MS:
+            raise ValueError("quote maximum age must be between zero and 86400000 ms")
+        with self.store.connection() as db:
+            return tuple(self._assess(db, at, maximum_age_ms) for at in times)
+
+    def _assess(
+        self, db: sqlite3.Connection, at: EventTimestamp, maximum_age_ms: int
+    ) -> QuoteAssessment:
+        active = quote_window(self.calendar, at)
+        if active is None:
+            status = (
+                QuoteStatus.CLOSED
+                if self.calendar.coverage.start <= at.time < self.calendar.coverage.end
+                else QuoteStatus.UNCOVERED
+            )
+            return QuoteAssessment(status)
+        _, window = active
+        lower = EventTimestamp(max(window.start, self.calendar.coverage.start))
+        row = db.execute(
+            """SELECT * FROM book_quotes
+               WHERE series_id = ? AND observed_at >= ? AND observed_at < ?
+               ORDER BY observed_at DESC, sequence DESC LIMIT 1""",
+            (self.series_id, lower.isoformat(), at.isoformat()),
+        ).fetchone()
+        if row is None:
+            return QuoteAssessment(QuoteStatus.NOT_OBSERVED)
+        observation = BookQuote(
+            event_timestamp(row["observed_at"]),
+            row["sequence"],
+            row["bid_ticks"],
+            row["ask_ticks"],
+            row["bid_size"],
+            row["ask_size"],
+        )
+        age = at.nanoseconds_since(observation.observed_at)
+        status = QuoteStatus.FRESH if age <= maximum_age_ms * 1_000_000 else QuoteStatus.STALE
+        return QuoteAssessment(status, observation, age)
+
+
 def quote_at(
     store: DatasetStore,
     series_id: str,
     at: EventTimestamp,
     maximum_age_ms: int = DEFAULT_QUOTE_MAX_AGE_MS,
 ) -> dict[str, object]:
-    if not 0 <= maximum_age_ms <= MAX_QUOTE_AGE_MS:
-        raise ValueError("quote maximum age must be between zero and 86400000 ms")
-    metadata = describe_quote_series(store, series_id)
-    provenance = metadata["provenance"]
-    assert isinstance(provenance, dict)
-    calendar = SessionCalendar.from_dict(provenance["calendar"])
-    minute = at.time.replace(second=0, microsecond=0)
-    session = calendar.session_at(minute)
-    response = {
+    lookup = QuoteLookup(store, series_id)
+    provenance = lookup.provenance
+    (assessment,) = lookup.assess_many((at,), maximum_age_ms)
+    return {
         "quote_lookup_version": QUOTE_LOOKUP_VERSION,
         "series_id": series_id,
         "contract": provenance["contract"],
@@ -262,42 +334,5 @@ def quote_at(
         "as_of": at.isoformat(),
         "maximum_age_ms": maximum_age_ms,
         "eligibility": "strictly_before_as_of_in_same_open_window",
-    }
-    if session is None:
-        status = (
-            QuoteStatus.CLOSED
-            if calendar.coverage.start <= at.time < calendar.coverage.end
-            else QuoteStatus.UNCOVERED
-        )
-        return {**response, "status": status, "age_nanoseconds": None, "quote": None}
-    window = next(window for window in session.windows if window.start <= minute < window.end)
-    lower = EventTimestamp(max(window.start, calendar.coverage.start))
-    with store.connection() as db:
-        row = db.execute(
-            """SELECT * FROM book_quotes
-               WHERE series_id = ? AND observed_at >= ? AND observed_at < ?
-               ORDER BY observed_at DESC, sequence DESC LIMIT 1""",
-            (series_id, lower.isoformat(), at.isoformat()),
-        ).fetchone()
-    if row is None:
-        return {
-            **response,
-            "status": QuoteStatus.NOT_OBSERVED,
-            "age_nanoseconds": None,
-            "quote": None,
-        }
-    observation = BookQuote(
-        event_timestamp(row["observed_at"]),
-        row["sequence"],
-        row["bid_ticks"],
-        row["ask_ticks"],
-        row["bid_size"],
-        row["ask_size"],
-    )
-    age = at.nanoseconds_since(observation.observed_at)
-    return {
-        **response,
-        "status": QuoteStatus.FRESH if age <= maximum_age_ms * 1_000_000 else QuoteStatus.STALE,
-        "age_nanoseconds": age,
-        "quote": observation.as_dict(),
+        **assessment.as_dict(),
     }

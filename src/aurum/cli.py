@@ -87,6 +87,7 @@ from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
+from aurum.spread_reports import save_spread_report
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.storage_admin import backup_store, verify_store
@@ -202,6 +203,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     intrabar.add_argument("stop_first_run_id")
     intrabar.add_argument("trade_print_run_id")
     intrabar.add_argument("--example-limit", type=int, default=20)
+    spread = commands.add_parser(
+        "spread-observations", help="audit quote coverage at saved paper references"
+    )
+    spread.add_argument("run_id")
+    spread.add_argument("quote_series_id")
+    spread.add_argument("--maximum-age-ms", type=int, default=DEFAULT_QUOTE_MAX_AGE_MS)
+    spread.add_argument("--example-limit", type=int, default=10)
     validation = commands.add_parser("validate", help="compare chronological backtest samples")
     validation.add_argument("run_ids", nargs="+")
     validation.add_argument("--validation-start", type=minute_timestamp, required=True)
@@ -566,6 +574,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 store,
                 args.stop_first_run_id,
                 args.trade_print_run_id,
+                example_limit=args.example_limit,
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "spread-observations":
+            report_id = save_spread_report(
+                store,
+                args.run_id,
+                args.quote_series_id,
+                maximum_age_ms=args.maximum_age_ms,
                 example_limit=args.example_limit,
             )
             print(canonical_json(store.describe_analysis(report_id)))

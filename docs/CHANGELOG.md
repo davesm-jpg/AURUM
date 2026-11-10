@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Historical spread observations
+
+- Added saved spread and quote coverage diagnostics for paper decision, entry and ordered bracket references.
+
+
 ## 2026-11-10 — Historical best bid and ask
 
 - Added separately versioned quote series with exact observation-time lookups and explicit freshness, calendar and closure states.

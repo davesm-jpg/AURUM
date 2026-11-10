@@ -27,6 +27,7 @@ from aurum.api_reports import (
     PaperAccountReportRequest,
     ParameterSensitivityRequest,
     ReconciliationRequest,
+    SpreadObservationsRequest,
     ValidationReportRequest,
     report_configuration,
 )
@@ -382,6 +383,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/intrabar-comparison", status_code=201)
     def create_intrabar_comparison(request: IntrabarComparisonRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/spread-observations", status_code=201)
+    def create_spread_observations(request: SpreadObservationsRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/reconciliation", status_code=201)

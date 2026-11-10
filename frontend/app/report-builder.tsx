@@ -7,6 +7,7 @@ type ReportKind =
   | "matched-control"
   | "intrabar-comparison"
   | "parameter-sensitivity"
+  | "spread-observations"
   | "reconciliation"
   | "monte-carlo"
   | "paper-account";
@@ -23,10 +24,15 @@ type DatasetChoice = {
   provider: string;
   data_kind: string;
 };
+type QuoteChoice = {
+  series_id: string;
+  provenance: { contract: string; provider: string; data_kind: string };
+};
 type Defaults = {
   matched_control: RecordData;
   control_strata: string[];
   sensitivity_factors: string[];
+  spread_maximum_age_ms: number;
   monte_carlo: RecordData;
   sampling_modes: string[];
   assumed_scenarios: RecordData[];
@@ -38,6 +44,7 @@ const TYPES: Record<ReportKind, string> = {
   "matched-control": "Matched random control",
   "intrabar-comparison": "Intrabar execution sensitivity",
   "parameter-sensitivity": "Parameter sensitivity",
+  "spread-observations": "Historical spread observations",
   reconciliation: "Historical data reconciliation",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
@@ -105,6 +112,8 @@ export function ReportBuilder({
   const [kind, setKind] = useState<ReportKind>("validation");
   const [primaryDatasetId, setPrimaryDatasetId] = useState("");
   const [stopFirstRunId, setStopFirstRunId] = useState("");
+  const [spreadRunId, setSpreadRunId] = useState("");
+  const [quoteSeries, setQuoteSeries] = useState<QuoteChoice[]>([]);
   const [sensitivityValidationId, setSensitivityValidationId] = useState("");
   const [sensitivityBaseline, setSensitivityBaseline] = useState("");
   const [candidateList, setCandidateList] = useState<{
@@ -148,6 +157,18 @@ export function ReportBuilder({
       });
     return () => controller.abort();
   }, [kind, sensitivityValidationId]);
+  useEffect(() => {
+    if (kind !== "spread-observations") return;
+    const controller = new AbortController();
+    api<QuoteChoice[]>("quote-series", { signal: controller.signal })
+      .then((items) => {
+        if (!controller.signal.aborted) setQuoteSeries(items);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError((failure as Error).message);
+      });
+    return () => controller.abort();
+  }, [kind]);
 
   async function selectedCalendar() {
     if (!datasetId) return;
@@ -188,6 +209,13 @@ export function ReportBuilder({
           walk_train_days: int("walk_train_days"),
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
+        };
+      } else if (kind === "spread-observations") {
+        request = {
+          run_id: spreadRunId,
+          quote_series_id: fields.get("quote_series_id"),
+          maximum_age_ms: int("maximum_age_ms"),
+          example_limit: int("example_limit"),
         };
       } else if (kind === "parameter-sensitivity") {
         const selected = fields.getAll("sensitivity_candidates");
@@ -297,6 +325,15 @@ export function ReportBuilder({
     candidateList?.validationId === sensitivityValidationId
       ? candidateList.ids
       : [];
+  const spreadRun = runs.find((run) => run.run_id === spreadRunId);
+  const spreadDataset = datasets.find(
+    (item) => item.dataset_id === spreadRun?.dataset_id,
+  );
+  const compatibleQuotes = quoteSeries.filter(
+    ({ provenance }) =>
+      provenance.contract === spreadDataset?.contract &&
+      provenance.data_kind === spreadDataset?.data_kind,
+  );
   const candidateLabel = (id: string) => {
     const run = runs.find((item) => item.run_id === id);
     return run
@@ -308,6 +345,7 @@ export function ReportBuilder({
     "intrabar-comparison": pairedRuns.length > 0,
     "parameter-sensitivity":
       sensitivityCandidates.length > 1 && !!sensitivityBaseline,
+    "spread-observations": compatibleQuotes.length > 0,
     "matched-control": runs.length > 0 && validationReports.length > 0,
     validation: runs.length > 0,
     "paper-account": true,
@@ -423,6 +461,56 @@ export function ReportBuilder({
                         required
                       />
                     </label>
+                  </div>
+                </>
+              )}
+              {kind === "spread-observations" && (
+                <>
+                  <p className="muted">
+                    Inspect preceding bid and ask observations at saved paper
+                    decision and execution reference times.
+                  </p>
+                  <label>
+                    Backtest with paper references
+                    <select
+                      value={spreadRunId}
+                      onChange={(event) => setSpreadRunId(event.target.value)}
+                      required
+                    >
+                      <option value="">Select a backtest</option>
+                      {runs.map((run) => (
+                        <option key={run.run_id} value={run.run_id}>
+                          {candidateLabel(run.run_id)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Historical quote series
+                    <select key={spreadRunId} name="quote_series_id" required>
+                      <option value="">Select a compatible quote series</option>
+                      {compatibleQuotes.map((item) => (
+                        <option key={item.series_id} value={item.series_id}>
+                          {item.provenance.contract} ·{" "}
+                          {item.provenance.provider} ·{" "}
+                          {item.series_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="fields">
+                    <IntegerInput
+                      name="maximum_age_ms"
+                      title="Maximum quote age (ms)"
+                      value={defaults.spread_maximum_age_ms}
+                      min={0}
+                    />
+                    <IntegerInput
+                      name="example_limit"
+                      title="Examples per reference type"
+                      value={10}
+                      min={0}
+                    />
                   </div>
                 </>
               )}
