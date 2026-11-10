@@ -375,6 +375,8 @@ def test_v1_sqlite_candle_reads_and_migration_preserve_existing_data(tmp_path: P
         db.execute("DROP TABLE monitor_minutes")
         db.execute("DROP TABLE monitor_runs")
         db.execute("DROP TABLE trade_prints")
+        db.execute("DROP TABLE book_quotes")
+        db.execute("DROP TABLE quote_series")
         db.execute("PRAGMA user_version = 1")
     assert list(store.replay(dataset_id)) == bars
     with sqlite3.connect(store.path) as db:

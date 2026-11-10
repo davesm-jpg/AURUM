@@ -75,6 +75,14 @@ from aurum.notifications import (
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, SourceFormat
+from aurum.quotes import (
+    DEFAULT_QUOTE_MAX_AGE_MS,
+    QuoteImportConfig,
+    describe_quote_series,
+    import_quote_csv,
+    list_quote_series,
+    quote_at,
+)
 from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
@@ -84,7 +92,7 @@ from aurum.storage import DatasetStore
 from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
-from aurum.timestamps import minute_timestamp, trade_timestamp
+from aurum.timestamps import event_timestamp, minute_timestamp, trade_timestamp
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -99,7 +107,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "import-trades", help="store dated MGC trade prints and derive unadjusted minute bars"
     )
     trade_importer.add_argument("csv", type=Path)
-    _import_options(trade_importer, trade_prints=True)
+    _import_options(trade_importer, candle_labels=False)
+    quote_importer = commands.add_parser(
+        "import-quotes", help="store normalized historical best bid and ask observations"
+    )
+    quote_importer.add_argument("csv", type=Path)
+    _import_options(quote_importer, candle_labels=False)
     parquet = commands.add_parser("import-parquet", help="validate and store Parquet MGC candles")
     parquet.add_argument("parquet", type=Path)
     _import_options(parquet)
@@ -137,6 +150,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     prints.add_argument("--after-timestamp", type=trade_timestamp)
     prints.add_argument("--after-sequence", type=int)
     prints.add_argument("--limit", type=int)
+    quote_series = commands.add_parser("quote-series", help="inspect saved quote provenance")
+    quote_series.add_argument("series_id", nargs="?")
+    quote_lookup = commands.add_parser("quote-at", help="read the prior quote at a UTC instant")
+    quote_lookup.add_argument("series_id")
+    quote_lookup.add_argument("--at", type=event_timestamp, required=True)
+    quote_lookup.add_argument("--maximum-age-ms", type=int, default=DEFAULT_QUOTE_MAX_AGE_MS)
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -369,6 +388,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command in ("import-csv", "import-parquet", "import-https", "import-trades"):
             print(canonical_json(store.describe(_import_history(store, args))))
+        elif args.command == "import-quotes":
+            calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
+            quote_config = QuoteImportConfig(
+                args.provider, MgcContract(args.contract), args.source_timezone, args.data_kind
+            )
+            series = import_quote_csv(store, args.csv, quote_config, calendar)
+            print(canonical_json(describe_quote_series(store, series)))
+        elif args.command == "quote-series":
+            print(
+                canonical_json(
+                    describe_quote_series(store, args.series_id)
+                    if args.series_id
+                    else list_quote_series(store)
+                )
+            )
+        elif args.command == "quote-at":
+            print(canonical_json(quote_at(store, args.series_id, args.at, args.maximum_age_ms)))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
             policy = RollPolicy(
@@ -891,17 +927,17 @@ def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
         signal.signal(signal.SIGTERM, previous)
 
 
-def _import_options(parser: ArgumentParser, *, trade_prints: bool = False) -> None:
+def _import_options(parser: ArgumentParser, *, candle_labels: bool = True) -> None:
     parser.add_argument("--calendar", type=Path, required=True)
     parser.add_argument("--provider", required=True)
     parser.add_argument("--contract", required=True)
     parser.add_argument("--source-timezone", required=True)
-    if trade_prints:
-        parser.set_defaults(timestamp_label=TimestampLabel.OPEN)
-    else:
+    if candle_labels:
         parser.add_argument(
             "--timestamp-label", type=TimestampLabel, choices=TimestampLabel, required=True
         )
+    else:
+        parser.set_defaults(timestamp_label=TimestampLabel.OPEN)
     parser.add_argument("--data-kind", type=DataKind, choices=DataKind, required=True)
     parser.add_argument("--price-basis", choices=("unadjusted",), required=True)
 

@@ -208,6 +208,8 @@ def test_trade_pages_and_timestamps_preserve_order_below_a_microsecond(tmp_path:
     with store.connection(write=True):
         pass
     with sqlite3.connect(store.path) as db:
+        db.execute("DROP TABLE book_quotes")
+        db.execute("DROP TABLE quote_series")
         db.execute("DROP TABLE trade_prints")
         db.execute("PRAGMA user_version = 11")
     path = _write(

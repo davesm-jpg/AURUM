@@ -171,7 +171,7 @@ def prepare_history(
 ) -> PreparedDataset:
     raw = source.read()
     if source.format is SourceFormat.CSV:
-        rows = _csv_rows(raw)
+        rows = csv_rows(raw)
         row_label = "CSV line"
     else:
         rows = parquet_rows(raw, COLUMNS)
@@ -232,7 +232,7 @@ def _prepared_history(
     )
 
 
-def _csv_rows(raw: bytes, columns: tuple[str, ...] = COLUMNS) -> Iterator[tuple[int, list[str]]]:
+def csv_rows(raw: bytes, columns: tuple[str, ...] = COLUMNS) -> Iterator[tuple[int, list[str]]]:
     reader = csv.reader(StringIO(raw.decode("utf-8-sig"), newline=""), strict=True)
     if tuple(next(reader, ())) != columns:
         raise ValueError(f"CSV header must be {','.join(columns)}")
@@ -248,7 +248,7 @@ def _parse_trade_prints(
     sequences: set[int] = set()
     latest: tuple[TradeTimestamp, int] | None = None
     out_of_order = 0
-    for line, row in _csv_rows(raw, TRADE_COLUMNS):
+    for line, row in csv_rows(raw, TRADE_COLUMNS):
         try:
             if len(row) != len(TRADE_COLUMNS):
                 raise ValueError("wrong number of CSV fields")

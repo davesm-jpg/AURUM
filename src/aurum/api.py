@@ -52,6 +52,13 @@ from aurum.monitoring import (
     operational_monitor_status,
 )
 from aurum.providers import FeedStatus
+from aurum.quotes import (
+    DEFAULT_QUOTE_MAX_AGE_MS,
+    MAX_QUOTE_AGE_MS,
+    describe_quote_series,
+    list_quote_series,
+    quote_at,
+)
 from aurum.research_reports import backtest_analytics
 from aurum.runtime_profiles import (
     describe_runtime_profile,
@@ -60,7 +67,7 @@ from aurum.runtime_profiles import (
 )
 from aurum.sensitivity_reports import sensitivity_candidate_ids
 from aurum.storage import DatasetStore
-from aurum.timestamps import MINUTE, minute_timestamp, trade_timestamp
+from aurum.timestamps import MINUTE, event_timestamp, minute_timestamp, trade_timestamp
 
 RecordId = Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")]
 PageLimit = Annotated[int, Query(ge=1, le=500)]
@@ -232,6 +239,22 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
                 limit=limit,
             )
         ]
+
+    @router.get("/quote-series")
+    def quote_series(limit: PageLimit = 100) -> list[dict[str, object]]:
+        return list_quote_series(store, limit)
+
+    @router.get("/quote-series/{series_id}")
+    def quote_provenance(series_id: RecordId) -> dict[str, object]:
+        return describe_quote_series(store, series_id)
+
+    @router.get("/quote-series/{series_id}/as-of")
+    def observed_quote(
+        series_id: RecordId,
+        at: str,
+        maximum_age_ms: Annotated[int, Query(ge=0, le=MAX_QUOTE_AGE_MS)] = DEFAULT_QUOTE_MAX_AGE_MS,
+    ) -> dict[str, object]:
+        return quote_at(store, series_id, event_timestamp(at), maximum_age_ms)
 
     @router.get("/runs")
     def runs(limit: PageLimit = 100) -> list[dict[str, object]]:

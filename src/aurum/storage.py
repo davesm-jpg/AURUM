@@ -30,7 +30,7 @@ from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 from aurum.timestamps import TradeTimestamp, trade_timestamp
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -252,6 +252,29 @@ SCHEMA_V12 = """CREATE TABLE trade_prints (
         PRIMARY KEY (dataset_id, executed_at, sequence),
         UNIQUE (dataset_id, sequence)
     ) STRICT, WITHOUT ROWID"""
+SCHEMA_V13 = (
+    """CREATE TABLE quote_series (
+        id TEXT PRIMARY KEY NOT NULL,
+        source_sha256 TEXT NOT NULL REFERENCES source_blobs(sha256),
+        provenance TEXT NOT NULL,
+        imported_at TEXT NOT NULL,
+        first_observed_at TEXT NOT NULL,
+        last_observed_at TEXT NOT NULL,
+        quote_count INTEGER NOT NULL CHECK (quote_count > 0),
+        issues TEXT NOT NULL
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE TABLE book_quotes (
+        series_id TEXT NOT NULL REFERENCES quote_series(id),
+        observed_at TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence >= 0),
+        bid_ticks INTEGER NOT NULL CHECK (bid_ticks > 0),
+        ask_ticks INTEGER NOT NULL CHECK (ask_ticks >= bid_ticks),
+        bid_size INTEGER CHECK (bid_size >= 0),
+        ask_size INTEGER CHECK (ask_size >= 0),
+        PRIMARY KEY (series_id, observed_at, sequence),
+        UNIQUE (series_id, sequence)
+    ) STRICT, WITHOUT ROWID""",
+)
 
 
 class DatasetDescription(TypedDict):
@@ -857,4 +880,7 @@ class DatasetStore:
             db.execute(SCHEMA_V11)
         if write and version < 12:
             db.execute(SCHEMA_V12)
-            db.execute("PRAGMA user_version = 12")
+        if write and version < 13:
+            for statement in SCHEMA_V13:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 13")

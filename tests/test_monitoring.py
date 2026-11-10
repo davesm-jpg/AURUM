@@ -265,6 +265,8 @@ def test_monitor_evidence_migration_keeps_legacy_identity_and_unknown_observatio
     for index in range(5):
         original.ingest(frame(index, mode=FeedStatus.SIMULATED))
     with sqlite3.connect(store.path) as db:
+        db.execute("DROP TABLE book_quotes")
+        db.execute("DROP TABLE quote_series")
         db.execute("DROP TABLE trade_prints")
         db.execute("DROP TABLE monitor_market_events")
         db.execute("DROP TABLE forward_report_publications")

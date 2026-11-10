@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Historical best bid and ask
+
+- Added separately versioned quote series with exact observation-time lookups and explicit freshness, calendar and closure states.
+
+
 ## 2026-11-10 — Parameter sensitivity
 
 - Added one-factor reports over saved development and validation candidates, with profile equality checks and a candidate metadata route that omits holdout outcomes.

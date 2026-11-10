@@ -220,3 +220,12 @@
 - Decision — Compare candidates only when all saved profiles agree after removing one declared setting. Reuse development and validation metrics, including original confidence and Holm adjustment.
 - Consequences — Users can isolate a subset without changing the original comparison family. Differences are descriptive against a chosen baseline. The candidate lookup returns IDs only and the sensitivity report has no holdout outcomes.
 - Files — `sensitivity_reports.py`, `api_reports.py`, `frontend/app/report-builder.tsx`, `tests/test_market_structure.py`.
+
+## ADR-024 — Separate asynchronous quote observations from candles
+
+- Date — 2026-11-10.
+- Context — Top-of-book observations have distinct timing, availability and provenance from executed prints or candle OHLCV.
+- Alternatives — Embed quotes in minute bars or persist a separate observed series.
+- Decision — Keep a separate immutable normalized quote series with exact timestamp and sequence. A point-in-time read uses a strictly earlier quote within the same reviewed open window and explicitly classifies freshness.
+- Consequences — Quotes stay out of candle construction and fill simulation. No observation is carried over a closure. A future spread experiment must report its source and sampling assumptions separately.
+- Files — `quotes.py`, `timestamps.py`, `storage.py`, `tests/test_quotes.py`.

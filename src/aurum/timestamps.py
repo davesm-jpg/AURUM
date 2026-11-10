@@ -37,30 +37,43 @@ def minute_timestamp(raw: str, source_zone: ZoneInfo | None = None) -> datetime:
 
 
 @dataclass(frozen=True, slots=True, order=True)
-class TradeTimestamp:
+class EventTimestamp:
     time: datetime
     nanosecond_tail: int = 0
 
     def __post_init__(self) -> None:
         if self.time.tzinfo is not UTC or not 0 <= self.nanosecond_tail <= 999:
-            raise ValueError("trade timestamp must use UTC and exact nanosecond precision")
+            raise ValueError("event timestamp must use UTC and exact nanosecond precision")
 
     def isoformat(self) -> str:
         micros = self.time.isoformat(timespec="microseconds").removesuffix("+00:00")
         return f"{micros}{self.nanosecond_tail:03d}+00:00"
 
+    def nanoseconds_since(self, previous: "EventTimestamp") -> int:
+        delta = self.time - previous.time
+        return (
+            (delta.days * 86_400 + delta.seconds) * 1_000_000_000
+            + delta.microseconds * 1_000
+            + self.nanosecond_tail
+            - previous.nanosecond_tail
+        )
 
-def trade_timestamp(raw: str, source_zone: ZoneInfo | None = None) -> TradeTimestamp:
+
+def event_timestamp(raw: str, source_zone: ZoneInfo | None = None) -> EventTimestamp:
     matched = fullmatch(
         r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
         r"(?P<fraction>\.[0-9]{1,9})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?",
         raw,
     )
     if matched is None:
-        raise ValueError("trade timestamp must include seconds and at most nine fractional digits")
+        raise ValueError("event timestamp must include seconds and at most nine fractional digits")
     fraction = matched["fraction"] or ""
     tail = int(fraction[7:].ljust(3, "0"))
-    return TradeTimestamp(_normalized_utc(datetime.fromisoformat(raw), source_zone), tail)
+    return EventTimestamp(_normalized_utc(datetime.fromisoformat(raw), source_zone), tail)
+
+
+TradeTimestamp = EventTimestamp
+trade_timestamp = event_timestamp
 
 
 def _normalized_utc(stamp: datetime, source_zone: ZoneInfo | None) -> datetime:
