@@ -245,6 +245,64 @@ function ValidationReport({ result }: { result: RecordData }) {
   );
 }
 
+function IntrabarComparisonReport({ result }: { result: RecordData }) {
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {String(result.provider ?? "—")} ·{" "}
+        {String(result.contract ?? "—")} · {utcDateTime(result.first_open)} to{" "}
+        {utcDateTime(result.last_close)} · Unpartitioned replay
+      </p>
+      <div className="metrics">
+        <Metric
+          title="Stop-first net P&L"
+          value={money(result.stop_first_net_cents)}
+          detail={`${String(result.paired_trades ?? 0)} paired trades`}
+        />
+        <Metric
+          title="Ordered-print net P&L"
+          value={money(result.trade_print_net_cents)}
+          detail={`${String(result.resolved_dual_touch_exits ?? 0)} dual-touch exits resolved`}
+        />
+        <Metric
+          title="Net difference"
+          value={money(result.net_difference_cents)}
+          detail={`${money(result.expectancy_difference_cents)} per paired trade`}
+        />
+      </div>
+      <p className="muted">
+        Stored prints crossed the target first in{" "}
+        {String(result.target_before_stop ?? 0)} cases and the stop first in{" "}
+        {String(result.stop_before_target ?? 0)} cases. Bracket prices and costs
+        are modeled in both runs.
+      </p>
+      <DataTable
+        labelHeading="Setup"
+        items={rows(result.examples).map((example, index) => [
+          `${index + 1}. ${String(example.setup_id).slice(0, 8)}`,
+          example,
+        ])}
+        columns={[
+          {
+            title: "First bracket",
+            value: (row) => label(row.trade_print_exit_reason),
+          },
+          {
+            title: "Source print (UTC)",
+            value: (row) =>
+              String(record(row.bracket_touch_print).executed_at ?? "—"),
+          },
+          {
+            title: "Net difference",
+            value: (row) => money(row.net_difference_cents),
+          },
+        ]}
+        empty="No dual-touch audit examples in this report."
+      />
+    </>
+  );
+}
+
 function ReconciliationReport({ report }: { report: RecordData }) {
   const result = record(report.result);
   const window = record(record(report.definition).window);
@@ -578,6 +636,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <MatchedControlReport report={report} />;
   if (report.kind === "dataset_reconciliation")
     return <ReconciliationReport report={report} />;
+  if (report.kind === "intrabar_ordering_comparison")
+    return <IntrabarComparisonReport result={result} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

@@ -36,6 +36,7 @@ type Run = {
   kind: string;
   timeframe: string;
   variant?: string;
+  intrabar_ordering?: string | null;
 };
 type Report = { report_id: string; kind: string; created_at: string };
 type Monitor = {

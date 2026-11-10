@@ -21,6 +21,7 @@ from aurum.api_config import (
 )
 from aurum.api_reports import (
     ForwardReportRequest,
+    IntrabarComparisonRequest,
     MatchedControlRequest,
     MonteCarloReportRequest,
     PaperAccountReportRequest,
@@ -346,6 +347,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     def create_matched_control(request: MatchedControlRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
+    @router.post("/reports/intrabar-comparison", status_code=201)
+    def create_intrabar_comparison(request: IntrabarComparisonRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
     @router.post("/reports/reconciliation", status_code=201)
     def create_reconciliation(request: ReconciliationRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
@@ -550,6 +555,7 @@ def _run_item(row: sqlite3.Row) -> dict[str, object]:
         "timeframe": definition["timeframe"],
         "created_at": row["created_at"],
         "variant": definition.get("strategy_config", {}).get("variant"),
+        "intrabar_ordering": definition.get("intrabar_ordering"),
     }
 
 

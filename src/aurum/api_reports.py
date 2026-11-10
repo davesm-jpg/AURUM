@@ -9,6 +9,7 @@ from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, AccountRules
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_data import canonical_json
 from aurum.monte_carlo import (
     REFERENCE_WIN_RATES_BPS,
@@ -25,6 +26,22 @@ from aurum.timestamps import minute_timestamp
 
 _RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 _AdditionalCost = Annotated[int, Field(ge=0, le=100_000)]
+
+
+class IntrabarComparisonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stop_first_run_id: _RunId
+    trade_print_run_id: _RunId
+    example_limit: int = Field(default=20, ge=0, le=100)
+
+    def run(self, store: DatasetStore) -> str:
+        return save_intrabar_comparison(
+            store,
+            self.stop_first_run_id,
+            self.trade_print_run_id,
+            example_limit=self.example_limit,
+        )
 
 
 class ReconciliationRequest(BaseModel):

@@ -7,10 +7,15 @@ from sys import executable
 
 import pytest
 
+from aurum.candles import Timeframe
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
+from aurum.execution import DEFAULT_EXECUTION_CONFIG
 from aurum.instruments import MgcContract
+from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_trade_csv
+from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
 from aurum.storage import SCHEMA_VERSION, DatasetStore
+from aurum.strategy import DEFAULT_STRATEGY_CONFIG
 from aurum.timestamps import MINUTE, minute_timestamp, source_timezone, trade_timestamp
 
 _START = minute_timestamp("2025-03-10T13:00Z")
@@ -157,6 +162,28 @@ def test_trade_import_audits_gaps_without_fabricating_bars(tmp_path: Path) -> No
     with pytest.raises(ValueError, match="expected candles are missing"):
         list(store.replay(dataset_id))
     assert len(list(store.trade_prints(dataset_id))) == 2
+
+
+def test_intrabar_comparison_retains_an_empty_sample(tmp_path: Path) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    source = _write(tmp_path / "synthetic-short.csv", _ROWS)
+    dataset = store.save(prepare_trade_csv(source, _CONFIG, _CALENDAR))
+    baseline, ordered = [
+        store.build_strategy_run(
+            dataset,
+            Timeframe.FIVE_MINUTES,
+            DEFAULT_STRUCTURE_CONFIG,
+            DEFAULT_STRATEGY_CONFIG,
+            execution=DEFAULT_EXECUTION_CONFIG,
+            resolve_with_trade_prints=enabled,
+        )
+        for enabled in (False, True)
+    ]
+    result = store.describe_analysis(save_intrabar_comparison(store, baseline, ordered))["result"]
+    assert isinstance(result, dict)
+    assert result["paired_trades"] == result["resolved_dual_touch_exits"] == 0
+    assert result["net_difference_cents"] == 0
+    assert result["expectancy_difference_cents"] is None
 
 
 @pytest.mark.parametrize(

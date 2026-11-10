@@ -31,6 +31,7 @@ from aurum.forward import (
 )
 from aurum.forward_reports import ForwardPeriod, publish_completed_periods, save_forward_report
 from aurum.instruments import MgcContract
+from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_context import Regime, ResearchSession
 from aurum.market_data import (
     DataKind,
@@ -175,6 +176,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "backtest-summary", help="read a persisted paper backtest summary"
     )
     backtest_summary.add_argument("run_id")
+    intrabar = commands.add_parser(
+        "compare-intrabar", help="pair stop-first and trade-print backtest outcomes"
+    )
+    intrabar.add_argument("stop_first_run_id")
+    intrabar.add_argument("trade_print_run_id")
+    intrabar.add_argument("--example-limit", type=int, default=20)
     validation = commands.add_parser("validate", help="compare chronological backtest samples")
     validation.add_argument("run_ids", nargs="+")
     validation.add_argument("--validation-start", type=minute_timestamp, required=True)
@@ -508,6 +515,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(store.describe_backtest(_strategy_run(store, args, execution))))
         elif args.command == "backtest-summary":
             print(canonical_json(store.describe_backtest(args.run_id)))
+        elif args.command == "compare-intrabar":
+            report_id = save_intrabar_comparison(
+                store,
+                args.stop_first_run_id,
+                args.trade_print_run_id,
+                example_limit=args.example_limit,
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "validate":
             validation_config = ValidationConfig(
                 validation_start=args.validation_start,

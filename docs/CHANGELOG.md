@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Intrabar ordering sensitivity
+
+- Added paired stop-first and ordered-print outcome comparisons with exact source-touch examples and immutable manifest checks.
+
+
 ## 2026-11-10 — Ordered print bracket resolution
 
 - Added an opt-in paper execution variant for dual-touch bars on trade-derived data, with exact source touch audit and separate comparison compatibility.

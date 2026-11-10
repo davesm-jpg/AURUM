@@ -22,6 +22,7 @@ from aurum.forward import ForwardPaper, forward_events, register_forward
 from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.imbalances import ImbalanceConfig
 from aurum.instruments import MgcContract
+from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.liquidity import LiquidityConfig
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv, prepare_trade_csv
 from aurum.market_structure import (
@@ -707,6 +708,34 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
     assert touch["executed_at"] == "2025-03-10T14:05:02.000000000+00:00"
     assert trade["exit_ticks"] == 176
     assert trade["recorded_at"] == "2025-03-10T14:06:00+00:00"
+    comparison = json.loads(
+        subprocess.run(
+            [*aurum, "compare-intrabar", default["run_id"], ordered["run_id"]],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    sensitivity = comparison["result"]
+    assert sensitivity["sample_kind"] == "unpartitioned_replay"
+    assert sensitivity["data_kind"] == "synthetic"
+    assert sensitivity["paired_trades"] == sensitivity["resolved_dual_touch_exits"] == 1
+    assert sensitivity["target_before_stop"] == 1
+    assert sensitivity["stop_before_target"] == 0
+    assert sensitivity["net_difference_cents"] == sensitivity["expectancy_difference_cents"] == 9900
+    assert sensitivity["examples"][0]["bracket_touch_print"] == touch
+    with pytest.raises(ValueError, match="one stop-first run"):
+        save_intrabar_comparison(store, ordered["run_id"], default["run_id"])
+    incompatible = store.build_strategy_run(
+        trades,
+        TIMEFRAME,
+        StructureConfig(PivotRule(2, 2)),
+        DEFAULT_STRATEGY_CONFIG,
+        execution=DEFAULT_EXECUTION_CONFIG,
+        resolve_with_trade_prints=True,
+    )
+    with pytest.raises(ValueError, match="differ only in their intrabar"):
+        save_intrabar_comparison(store, default["run_id"], incompatible)
     with pytest.raises(ValueError, match="execution assumptions"):
         validate_runs(
             store,
@@ -730,6 +759,18 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
             client.post(route, json={"dataset_id": minute_dataset, "profile": profile}).status_code
             == 422
         )
+        report_route = "/api/reports/intrabar-comparison"
+        request = {
+            "stop_first_run_id": default["run_id"],
+            "trade_print_run_id": ordered["run_id"],
+        }
+        saved_report = client.post(report_route, json=request)
+        assert saved_report.status_code == 201
+        assert saved_report.json() == comparison
+        capped = client.post(report_route, json={**request, "example_limit": 0})
+        assert capped.status_code == 201
+        assert capped.json()["result"]["examples"] == []
+        assert capped.json()["result"]["resolved_dual_touch_exits"] == 1
 
 
 def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_path: Path) -> None:

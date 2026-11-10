@@ -5,6 +5,7 @@ import { label, record, rows, utcDateTime } from "./format";
 type ReportKind =
   | "validation"
   | "matched-control"
+  | "intrabar-comparison"
   | "reconciliation"
   | "monte-carlo"
   | "paper-account";
@@ -13,6 +14,7 @@ type RunChoice = {
   variant?: string;
   timeframe: string;
   dataset_id: string;
+  intrabar_ordering?: string | null;
 };
 type DatasetChoice = {
   dataset_id: string;
@@ -32,6 +34,7 @@ type Defaults = {
 const TYPES: Record<ReportKind, string> = {
   validation: "Chronological validation",
   "matched-control": "Matched random control",
+  "intrabar-comparison": "Intrabar execution sensitivity",
   reconciliation: "Historical data reconciliation",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
@@ -98,6 +101,7 @@ export function ReportBuilder({
 }) {
   const [kind, setKind] = useState<ReportKind>("validation");
   const [primaryDatasetId, setPrimaryDatasetId] = useState("");
+  const [stopFirstRunId, setStopFirstRunId] = useState("");
   const [defaults, setDefaults] = useState<Defaults>();
   const [mode, setMode] = useState("scenario");
   const [trailing, setTrailing] = useState(false);
@@ -156,6 +160,12 @@ export function ReportBuilder({
           walk_train_days: int("walk_train_days"),
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
+        };
+      } else if (kind === "intrabar-comparison") {
+        request = {
+          stop_first_run_id: fields.get("stop_first_run_id"),
+          trade_print_run_id: fields.get("trade_print_run_id"),
+          example_limit: int("example_limit"),
         };
       } else if (kind === "reconciliation") {
         request = {
@@ -231,13 +241,30 @@ export function ReportBuilder({
       dataset.contract === primaryDataset?.contract &&
       dataset.data_kind === primaryDataset?.data_kind,
   );
-  const canRun =
-    kind === "reconciliation"
-      ? comparisonDatasets.length > 0
-      : kind === "paper-account" ||
-        (kind === "monte-carlo" && mode === "scenario") ||
-        (runs.length > 0 &&
-          (kind !== "matched-control" || validationReports.length > 0));
+  const compatible = (first: RunChoice, second: RunChoice) =>
+    first.dataset_id === second.dataset_id &&
+    first.timeframe === second.timeframe &&
+    first.variant === second.variant;
+  const orderedRuns = runs.filter(
+    (run) => run.intrabar_ordering === "trade_print_sequence_v1",
+  );
+  const stopFirstRuns = runs.filter(
+    (run) =>
+      !run.intrabar_ordering &&
+      orderedRuns.some((ordered) => compatible(run, ordered)),
+  );
+  const stopFirst = stopFirstRuns.find((run) => run.run_id === stopFirstRunId);
+  const pairedRuns = stopFirst
+    ? orderedRuns.filter((run) => compatible(stopFirst, run))
+    : [];
+  const canRun = {
+    reconciliation: comparisonDatasets.length > 0,
+    "intrabar-comparison": pairedRuns.length > 0,
+    "matched-control": runs.length > 0 && validationReports.length > 0,
+    validation: runs.length > 0,
+    "paper-account": true,
+    "monte-carlo": mode === "scenario" || runs.length > 0,
+  }[kind];
   return (
     <section className="panel lower sidebar-panel">
       <details className="report-builder">
@@ -349,6 +376,54 @@ export function ReportBuilder({
                       />
                     </label>
                   </div>
+                </>
+              )}
+              {kind === "intrabar-comparison" && (
+                <>
+                  <p className="muted">
+                    Compare two backtests built from the same trade-print
+                    dataset and settings. Only dual-touch ordering may differ.
+                  </p>
+                  <label>
+                    Stop-first backtest
+                    <select
+                      name="stop_first_run_id"
+                      value={stopFirstRunId}
+                      onChange={(event) =>
+                        setStopFirstRunId(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select a stop-first run</option>
+                      {stopFirstRuns.map((run) => (
+                        <option key={run.run_id} value={run.run_id}>
+                          {label(run.variant)} · {run.timeframe} ·{" "}
+                          {run.run_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Ordered trade-print backtest
+                    <select
+                      key={stopFirstRunId}
+                      name="trade_print_run_id"
+                      required
+                    >
+                      <option value="">Select an ordered run</option>
+                      {pairedRuns.map((run) => (
+                        <option key={run.run_id} value={run.run_id}>
+                          {run.run_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <IntegerInput
+                    name="example_limit"
+                    title="Dual-touch audit examples"
+                    value={20}
+                    min={0}
+                  />
                 </>
               )}
               {kind === "reconciliation" && (
