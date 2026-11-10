@@ -160,3 +160,14 @@ There were 218 Python and five frontend tests. Ruff, mypy, TypeScript and the
 production frontend build passed. Historical strategy performance is pending
 authorized data. Existing full backtests remain accessible, so predeclare
 rules and avoid viewing the final period before the selection is fixed.
+
+## Combined economic publications
+
+Local composition preserves source-specific original event IDs, versions,
+normalized SHA-256 hashes and any raw capture digests. Independent records
+with equal original IDs remain distinct. Explicit same-source revisions keep
+their publication clocks. Complete coverage claimed by an individual source
+does not certify that the composed bundle covers all relevant announcements.
+Two synthetic tests verified causal cancellation, separately known actual
+times, repeated deterministic CLI output, mixed-class rejection and provider
+profile use. The inputs remain local and independently reviewable.

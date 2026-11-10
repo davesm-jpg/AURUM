@@ -19,7 +19,8 @@ from aurum.contract_reports import save_contract_assessment
 from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.dataset_audit import verify_dataset
-from aurum.economic_events import EconomicCalendar, EconomicSourceKind
+from aurum.economic_composition import compose_economic_calendars
+from aurum.economic_events import MAX_ECONOMIC_PUBLICATIONS, EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
@@ -189,6 +190,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         economic_command.add_argument(
             "--data-kind", type=EconomicSourceKind, choices=EconomicSourceKind, required=True
         )
+    economic_bundle = commands.add_parser(
+        "compose-economic-calendars", help="combine separately reviewed local calendar snapshots"
+    )
+    economic_bundle.add_argument("snapshots", type=Path, nargs="+")
+    economic_bundle.add_argument("--source", required=True)
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -493,6 +499,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 title_prefixes=tuple(args.title_prefix),
             )
             print(canonical_json(snapshot.as_dict()))
+        elif args.command == "compose-economic-calendars":
+            if not 2 <= len(args.snapshots) <= MAX_ECONOMIC_PUBLICATIONS:
+                raise ValueError(f"provide between 2 and {MAX_ECONOMIC_PUBLICATIONS} snapshots")
+            snapshots = tuple(
+                EconomicCalendar.from_json(path.read_text(encoding="utf-8"))
+                for path in args.snapshots
+            )
+            print(
+                canonical_json(compose_economic_calendars(snapshots, source=args.source).as_dict())
+            )
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
             policy = RollPolicy(

@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Multiple reviewed economic publications
+
+- Added composition of reviewed calendar snapshots with per-publication evidence and isolated revision chains.
+
 ## 2026-11-10 — Staged chronological validation
 
 - Added a pre-holdout selection report and a separately opened final paper replay with a flat initial position, embargo and source-linked execution audit.

@@ -256,3 +256,12 @@
 - Decision — Bound selection reads to outcomes recorded strictly before the final boundary. Save that selection before separately opening a fresh paper executor for the chosen candidate after the embargo. Reuse the recorded causal strategy decisions and their original rule versions.
 - Consequences — Full-replay validation remains reproducible. The new report measures a flat execution start with warmed strategy context. Existing raw data and other reports remain accessible to the operator, so analyst discipline still determines whether the period was unseen.
 - Files — `statistics.py`, `research_reports.py`, `holdout.py`, `paper_replay.py`, CLI, API and Reports.
+
+## ADR-028 — Isolate economic publication evidence when composing
+
+- Date — 2026-11-10.
+- Context — Relevant US releases are spread across publishers. Their event IDs, source clocks and coverage claims are independent.
+- Alternatives — Infer matches by title and time or preserve separate publication namespaces.
+- Decision — Compose a partial envelope with matching source classes. Attach original event IDs and normalized snapshot hashes. Retain individual coverage and capture provenance. Require revisions to stay within one publication.
+- Consequences — A cancellation cannot suppress another source. Duplicate observations of the same release may remain separate. Bundle coverage establishes known event risk and leaves other windows unknown.
+- Files — `economic_composition.py`, `economic_events.py`, `cli.py`, `tests/test_economic_composition.py`.

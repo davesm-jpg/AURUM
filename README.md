@@ -122,6 +122,15 @@ recurrence and inconsistent supplied sequence numbers on schedule changes
 require source review. Keep the original files with their capture records.
 [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html)
 
+Use `compose-economic-calendars A.json B.json --source "Reviewed US releases"`
+to combine separately reviewed publications. Provide 2–16 original
+snapshots with matching explicit source classes and distinct source names.
+The combined snapshot retains each publication's coverage, normalized hash,
+capture history and original event IDs. Rescheduling and cancellation remain
+specific to the originating publication. The combined coverage is partial,
+including inside the overlapping source windows. Keep the original snapshots
+to reproduce the bundle.
+
 
 Backtest replay accepts the strategy options and simulates a single position at a time. It uses the next eligible minute open after a signal, applies the structural bracket and rechecks sizing at the fill price. Use `--latency-minutes`, `--entry-timeout-minutes`, `--round-trip-spread-ticks`, `--commission-cents` and `--slippage-ticks` to set execution assumptions. It uses stop-first for ambiguous same-minute touches, adverse opening prices for stop gaps and the target price for favorable opening gaps. On a trade-print dataset, `--resolve-with-trade-prints` creates a separate run that uses the first ordered trade print crossing either bracket in a dual-touch minute. The audit includes the print timestamp and sequence. Modeled bracket prices, observation at minute close and costs retain the minute paper assumptions. The execution sensitivity report pairs the saved runs and quantifies the net difference attributable to dual-touch ordering across the unpartitioned replay. It flattens at scheduled window close unless `--carry-across-closures` is set. Backtest audit distinguishes forced end-of-data exits. The summary reports actual sample size, net returns and closed-trade equity drawdown.
 
