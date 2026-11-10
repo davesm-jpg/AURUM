@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Archived economic snapshot review
+
+- Added local capture previews in provider Settings and included archive receipt and byte validation in verified backups.
+
 ## 2026-11-10 — Official economic capture archive
 
 - Added explicit BEA and BLS iCalendar retrieval, immutable SQLite receipts, raw export and point-in-time normalization using archived receipt clocks.

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from aurum.api_config import (
     BacktestRequest,
     DeliveryProfileRequest,
+    EconomicCapturePreview,
     ForwardStartRequest,
     ProviderProfileRequest,
     backtest_configuration,
@@ -38,6 +39,7 @@ from aurum.api_reports import (
 from aurum.candles import CandleAggregator, Timeframe, completed_bar_start
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
 from aurum.continuous import replay_series
+from aurum.economic_archive import economic_receipt, economic_receipts
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
     ForwardPaper,
@@ -197,6 +199,18 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
                     (limit,),
                 )
             ]
+
+    @router.get("/economic-captures")
+    def archived_economic_receipts(limit: PageLimit = 100) -> list[dict[str, object]]:
+        return [receipt.as_dict() for receipt in economic_receipts(store, limit)]
+
+    @router.get("/economic-captures/{capture_id}")
+    def archived_economic_receipt(capture_id: RecordId) -> dict[str, object]:
+        return economic_receipt(store, capture_id).as_dict()
+
+    @router.post("/economic-calendar/preview")
+    def economic_calendar_preview(request: EconomicCapturePreview) -> dict[str, object]:
+        return request.preview(store).as_dict()
 
     @router.get("/datasets/{dataset_id}")
     def dataset(dataset_id: RecordId) -> dict[str, object]:

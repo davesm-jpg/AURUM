@@ -26,7 +26,7 @@ from aurum.economic_ics import MAX_ECONOMIC_ICS_BYTES
 from aurum.exchange_calendar import TradingWindow
 from aurum.providers import NoRedirect
 from aurum.storage import SCHEMA_VERSION, DatasetStore
-from aurum.storage_admin import verify_store
+from aurum.storage_admin import backup_store, verify_store
 from aurum.timestamps import minute_timestamp
 
 pytest.importorskip("icalendar")
@@ -180,6 +180,12 @@ def test_archive_preserves_receipts_and_bytes_across_schema_migration(
     )
     assert single.version.startswith(f"archive-v1/{changed}/")
     assert single.events[0].published_at == REVISION
+    destination = tmp_path / "synthetic-verified.sqlite"
+    backed_up = backup_store(store, destination, verify_normalized=True)
+    normalized_audit = backed_up["normalized"]
+    assert isinstance(normalized_audit, dict)
+    assert normalized_audit["economic_captures_verified"] == 3
+    assert economic_receipt(DatasetStore(destination), first) == inspected
 
     with store.connection(write=True) as db:
         db.execute(
@@ -190,6 +196,10 @@ def test_archive_preserves_receipts_and_bytes_across_schema_migration(
         economic_capture_bytes(store, inspected)
     with pytest.raises(ValueError, match="preserved source checksum mismatch"):
         verify_store(store, verify_sources=True)
+    rejected = tmp_path / "synthetic-rejected.sqlite"
+    with pytest.raises(ValueError, match="failed archive audit"):
+        backup_store(store, rejected, verify_normalized=True)
+    assert not rejected.exists()
 
 
 @pytest.mark.parametrize(
@@ -235,5 +245,46 @@ def test_receipt_metadata_tampering_and_cross_source_replay_are_rejected(
         )
     with pytest.raises(ValueError, match="metadata does not match"):
         economic_receipt(store, bea.capture_id)
+    with pytest.raises(ValueError, match="failed archive audit"):
+        verify_store(store, verify_normalized=True)
     with sqlite3.connect(store.path) as db:
         assert db.execute("SELECT count(*) FROM source_blobs").fetchone() == (1,)
+
+
+def test_archive_api_previews_local_receipts_without_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    store = DatasetStore(tmp_path / "synthetic-economic.sqlite")
+    route_synthetic(
+        monkeypatch, EconomicPublisher.BEA, SyntheticResponse(synthetic_ics("20250310T123000Z"))
+    )
+    receipt = capture_official_ics(store, EconomicPublisher.BEA, clock=lambda: EARLY)
+    expected = normalize_archived_ics(
+        store, (receipt.capture_id,), coverage=WINDOW, title_prefixes=("Synthetic release",)
+    )
+    checksum = sha256(store.path.read_bytes()).hexdigest()
+    request = {
+        "capture_ids": [receipt.capture_id],
+        "start": WINDOW.start.isoformat(),
+        "end": WINDOW.end.isoformat(),
+        "title_prefixes": ["Synthetic release"],
+    }
+    with http.TestClient(api.create_app(store)) as client:
+        assert client.get("/api/economic-captures").json() == [receipt.as_dict()]
+        assert (
+            client.get(f"/api/economic-captures/{receipt.capture_id}").json() == receipt.as_dict()
+        )
+        preview = client.post("/api/economic-calendar/preview", json=request)
+        assert preview.status_code == 200
+        assert preview.json() == expected.as_dict()
+        absent = client.post(
+            "/api/economic-calendar/preview", json={**request, "capture_ids": ["0" * 64]}
+        )
+        assert absent.status_code == 404
+        extra = client.post(
+            "/api/economic-calendar/preview", json={**request, "observed_at": LATER.isoformat()}
+        )
+        assert extra.status_code == 422
+    assert sha256(store.path.read_bytes()).hexdigest() == checksum

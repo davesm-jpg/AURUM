@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 
 from aurum.dataset_audit import verify_dataset
+from aurum.economic_archive import verify_economic_capture
 from aurum.quotes import verify_quote_series
 from aurum.storage import DatasetStore
 
@@ -52,6 +53,11 @@ def verify_store(
             if schema >= 13
             else ()
         )
+        economic_captures = (
+            tuple(row["id"] for row in db.execute("SELECT id FROM economic_captures ORDER BY id"))
+            if schema >= 14
+            else ()
+        )
 
     blocked = 0
     for dataset_id in datasets:
@@ -65,10 +71,16 @@ def verify_store(
             verify_quote_series(store, series_id)
         except ValueError as exc:
             raise ValueError(f"quote series {series_id} failed normalization audit: {exc}") from exc
+    for capture_id in economic_captures:
+        try:
+            verify_economic_capture(store, capture_id)
+        except ValueError as exc:
+            raise ValueError(f"economic capture {capture_id} failed archive audit: {exc}") from exc
     summary["normalized"] = {
         "datasets_verified": len(datasets),
         "quote_series_verified": len(quote_series),
         "datasets_blocked_for_replay": blocked,
+        **({"economic_captures_verified": len(economic_captures)} if economic_captures else {}),
     }
     return summary
 

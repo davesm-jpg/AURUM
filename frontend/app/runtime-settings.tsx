@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type RecordData } from "./client";
+import { EconomicCapturePicker } from "./economic-capture-picker";
 import { label, utcDateTime } from "./format";
 
 type Dataset = {
@@ -79,6 +80,7 @@ export function RuntimeSettings({
     datasets.length ? "dataset" : "snapshot",
   );
   const [channel, setChannel] = useState("telegram");
+  const [economicCalendar, setEconomicCalendar] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -345,6 +347,11 @@ export function RuntimeSettings({
             </div>
             <details className="settings-group">
               <summary>Economic event risk</summary>
+              <EconomicCapturePicker
+                onUse={(snapshot) =>
+                  setEconomicCalendar(JSON.stringify(snapshot, null, 2))
+                }
+              />
               <label>
                 Reviewed economic snapshot JSON
                 <textarea
@@ -352,6 +359,8 @@ export function RuntimeSettings({
                   rows={5}
                   spellCheck={false}
                   placeholder="Optional point-in-time calendar"
+                  value={economicCalendar}
+                  onChange={(event) => setEconomicCalendar(event.target.value)}
                 />
               </label>
               <label className="checkbox-setting">

@@ -197,6 +197,12 @@ def economic_capture_bytes(store: DatasetStore, receipt: EconomicReceipt) -> byt
     raise ValueError("economic capture source bytes do not match their receipt")
 
 
+def verify_economic_capture(store: DatasetStore, capture_id: str) -> EconomicReceipt:
+    receipt = economic_receipt(store, capture_id)
+    parse_economic_ics(economic_capture_bytes(store, receipt))
+    return receipt
+
+
 def normalize_archived_ics(
     store: DatasetStore,
     capture_ids: tuple[str, ...],

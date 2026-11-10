@@ -1,11 +1,14 @@
 from dataclasses import replace
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aurum.candles import Timeframe
+from aurum.economic_archive import normalize_archived_ics
 from aurum.economic_events import EconomicCalendar
+from aurum.economic_ics import MAX_ECONOMIC_CAPTURES
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
+from aurum.exchange_calendar import TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
 from aurum.instruments import MGC
 from aurum.market_context import DEFAULT_CONTEXT_CONFIG, ContextConfig, Regime, ResearchSession
@@ -18,7 +21,30 @@ from aurum.market_structure import (
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.runtime_profiles import DeliveryProfile, ProviderProfile
+from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, StrategyConfig, Variant
+from aurum.timestamps import minute_timestamp
+
+
+class EconomicCapturePreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    capture_ids: tuple[Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")], ...] = Field(
+        min_length=1, max_length=MAX_ECONOMIC_CAPTURES
+    )
+    start: str
+    end: str
+    title_prefixes: tuple[Annotated[str, Field(min_length=1, max_length=256)], ...] = Field(
+        min_length=1, max_length=32
+    )
+
+    def preview(self, store: DatasetStore) -> EconomicCalendar:
+        return normalize_archived_ics(
+            store,
+            self.capture_ids,
+            coverage=TradingWindow(minute_timestamp(self.start), minute_timestamp(self.end)),
+            title_prefixes=self.title_prefixes,
+        )
 
 
 class BacktestProfile(BaseModel):

@@ -189,3 +189,9 @@ establishes current public release access for BEA. Historical publication
 availability and authorized MGC research remain separate.
 [BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar) ·
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm)
+
+The archived preview API matched offline normalization and left the SQLite
+file checksum unchanged. Tests altered archive bytes and receipt metadata
+and verified audit rejection and no backup publication. The Settings picker
+compiled in the production frontend build. Interactive browser verification
+of that picker remains open.

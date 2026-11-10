@@ -131,6 +131,10 @@ Normalize a receipt with `aurum normalize-economic-captures CAPTURE_ID`
 and the same `--start`, `--end` and `--title-prefix` options. Provide
 multiple same-publisher IDs in increasing receipt order to compare captures.
 The commands establish partial evidence and retain the actual receipt clocks.
+In provider Settings, expand **Economic event risk** to preview archived
+captures and copy the reviewed snapshot into the profile. Profile saving is
+a separate action. `verify-store --verify-normalized` and verified backups
+also check archived receipt metadata, raw checksums and iCalendar structure.
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm) ·
 [BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar)
 
