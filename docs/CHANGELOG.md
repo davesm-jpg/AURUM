@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Verified local backups
+
+- Added private, non-overwriting SQLite snapshots and structural, foreign-key and source-checksum validation.
+
 ## 2026-11-10 — Bounded recovery transactions
 
 - Batched historical backfill and simulated replay while preserving individual frame audit and live eligibility rules.

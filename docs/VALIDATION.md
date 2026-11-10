@@ -10,6 +10,8 @@
 - `.venv/bin/mypy .` passed across 61 source/test and benchmark files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
+Three storage operations tests verified a private snapshot with identical source and replay bytes, rejection of an existing output, cleanup on timeout and detection of modified preserved source data. [SQLite Online Backup API](https://sqlite.org/backup.html)
+
 The bounded-replay test matched single-frame journal, context and minute rows through synthetic out-of-order recovery, verified batch rollback, and re-ran the larger benchmark with all projection digests unchanged.
 
 A concurrent restart test held strategy reconstruction open while the original writer committed, then verified the resumed instance replayed only the new durable tail. Historical lookup matched the full journal across an indexed migration, and all five timeframe lookbacks matched aggregation across shortened and clipped windows.

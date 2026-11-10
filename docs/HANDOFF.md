@@ -3,9 +3,9 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — O01 is in progress. The synthetic baseline, bounded charts, nonblocking restart reconstruction and batched historical recovery are verified.
+- Current milestone — O01 is in progress. The synthetic baseline, bounded charts, nonblocking restart reconstruction batched historical recovery and verified local backups are complete.
 - Current branch — `main`.
-- Last verified commit — `3db7c581ed4349b2a925b5f9ccdde190ea68f2ee`.
+- Last verified commit — `ef2ac86d935041bed67f62cc77c601d14ac6495b`.
 
 ## Current Objective
 
@@ -53,7 +53,7 @@
 
 ## Test Status
 
-- Latest targeted check — 40 API, monitor and market-structure tests passed. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
+- Latest targeted check — Three backup and source-integrity tests and mypy across 63 files passed. Before that, 40 API, monitor and market-structure tests passed. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
 - Passed — `.venv/bin/python -m pytest -q` (159), Ruff lint/format, mypy (61 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
@@ -68,8 +68,8 @@
 
 ## Immediate Next Actions
 
-1. Add verified local SQLite backup and integrity commands with non-overwrite publication.
-2. Add a matched research control for the strategy hypothesis without using future market information for selection.
+1. Add a matched research control using a saved chronological validation and a comparable broader opportunity run. Fit admission rates only on development decisions.
+2. Verify both arms use the same paper execution path and start the holdout flat. Label the comparison as conditional on the control opportunities.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat

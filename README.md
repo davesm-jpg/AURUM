@@ -155,3 +155,19 @@ The **Settings** tab saves provider and notification profiles. Set their
 Use the command shown with the saved profile, or list profiles with
 `aurum runtime-profiles`. The existing CLI flags remain available for an
 independently supplied reviewed calendar or direct transport configuration.
+
+## Local backups and integrity
+
+Use a new output path on a local filesystem that supports hard links. The
+backup is checked before publication, has private file permissions and includes
+a SHA-256 digest in the command output. The snapshot contains original source
+data. Handle it under the same access and licensing requirements as the store.
+
+```sh
+.venv/bin/aurum --db data/aurum.sqlite backup data/aurum-backup.sqlite
+.venv/bin/aurum --db data/aurum-backup.sqlite verify-store --full --verify-sources
+```
+
+For a restore rehearsal, point `--db` at the verified snapshot and inspect or
+replay a known dataset before switching workers. Keep the original store for
+comparison. The command uses the [SQLite Online Backup API](https://sqlite.org/backup.html).
