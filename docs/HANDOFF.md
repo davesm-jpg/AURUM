@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03–Q05, D06–D08, B03–B05 and L04–L05 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q05, D06–D08, B03–B06 and L04–L05 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `d9fdf806e90d3be9ce83a0aacf0cbd723c6f68e4`.
+- Last verified commit — `d4ea48b38684d34c9c4fcdbe6ed932400c07b042`.
 
 ## Current Objective
 
-- Task ID — B06.
-- Objective — Add an opt-in fixed-fill spread cost sensitivity over completed trades with paired fresh quotes.
-- Acceptance criteria — Use a preceding fresh quote at entry and an identifiable exit reference. Exclude ambiguous exit time or inadequate quote evidence, show the paired subset and preserve original fills, sizing, commissions and slippage.
+- Task ID — L06.
+- Objective — Recover from bounded transient SQLite writer contention during streaming without losing the held frame.
+- Acceptance criteria — Retry only SQLite busy/locked errors, preserve source receipt and actual processing times, suspend affected alerts and verify exactly-once journal application.
 
 ## Completed Work
 
@@ -21,6 +21,7 @@
 - D06 — Data reconciliation compares two immutable imports with bounded samples of missing minutes, calendar differences and exact OHLCV mismatches. It preserves replay eligibility and distinguishes synthetic inputs.
 - S01–S03 — Causal structure, liquidity, imbalances and mirrored paper strategy with contextual measurements, score and integer sizing. Versioned runs and evidence are persisted.
 - B01/Q01/Q02 — Conservative paper backtest, chronological validation, conditional Monte Carlo and separate LucidFlex paper ledger. No empirical strategy performance has been measured.
+- B06 — Optional fixed-fill sensitivity replaces only recorded spread cost for a subset with fresh paired quotes and identifiable exit reference. Unavailable pairs are explicit.
 - B05 — The spread report samples strictly preceding same-window quotes at decisions, entry opens and exact ordered touches. It labels stale and inconsistent calendar evidence and preserves the backtest.
 - B04 — The saved paired execution sensitivity report validates manifests and unchanged trade identity before reporting net differences and precise touch evidence.
 - B03 — Separate opt-in paper backtests use stored source prints to order dual-touch bars while retaining bracket-price and cost assumptions.
@@ -65,8 +66,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 195 Python tests, Ruff lint/format and mypy across 72 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (195), Ruff lint/format, mypy (72 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 195 Python tests, Ruff lint/format and mypy across 73 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (195), Ruff lint/format, mypy (73 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -80,8 +81,8 @@
 
 ## Immediate Next Actions
 
-1. Reuse quote-window checks and add an opt-in paired-cost projection to the existing spread report.
-2. Test exact half-spread charges, insufficient observation exclusions, stable default IDs and matching CLI/API output.
+1. Classify SQLite lock errors consistently and retry bounded streaming storage actions.
+2. Preserve actual live processing timestamps without changing deterministic replay. Exercise rollback, exact-once retry, invalid-error behavior and forward/alert eligibility.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
