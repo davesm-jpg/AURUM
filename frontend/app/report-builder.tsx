@@ -5,6 +5,7 @@ import { label, record, rows, utcDateTime } from "./format";
 type ReportKind =
   | "validation"
   | "matched-control"
+  | "reconciliation"
   | "monte-carlo"
   | "paper-account";
 type RunChoice = {
@@ -12,6 +13,12 @@ type RunChoice = {
   variant?: string;
   timeframe: string;
   dataset_id: string;
+};
+type DatasetChoice = {
+  dataset_id: string;
+  contract: string;
+  provider: string;
+  data_kind: string;
 };
 type Defaults = {
   matched_control: RecordData;
@@ -25,6 +32,7 @@ type Defaults = {
 const TYPES: Record<ReportKind, string> = {
   validation: "Chronological validation",
   "matched-control": "Matched random control",
+  reconciliation: "Historical data reconciliation",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
 };
@@ -77,16 +85,19 @@ function objectJson(value: string, title: string) {
 
 export function ReportBuilder({
   runs,
+  datasets,
   validationReports,
   datasetId,
   onComplete,
 }: {
   runs: RunChoice[];
+  datasets: DatasetChoice[];
   validationReports: { report_id: string; created_at: string }[];
   datasetId: string;
   onComplete: (reportId: string) => Promise<void>;
 }) {
   const [kind, setKind] = useState<ReportKind>("validation");
+  const [primaryDatasetId, setPrimaryDatasetId] = useState("");
   const [defaults, setDefaults] = useState<Defaults>();
   const [mode, setMode] = useState("scenario");
   const [trailing, setTrailing] = useState(false);
@@ -146,6 +157,14 @@ export function ReportBuilder({
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
         };
+      } else if (kind === "reconciliation") {
+        request = {
+          primary_dataset_id: fields.get("primary_dataset_id"),
+          comparison_dataset_id: fields.get("comparison_dataset_id"),
+          start: fields.get("start") || null,
+          end: fields.get("end") || null,
+          example_limit: int("example_limit"),
+        };
       } else if (kind === "matched-control") {
         request = {
           validation_id: fields.get("validation_id"),
@@ -203,11 +222,22 @@ export function ReportBuilder({
   }
 
   const assumed = rows(defaults?.assumed_scenarios)[0] ?? {};
+  const primaryDataset = datasets.find(
+    (dataset) => dataset.dataset_id === primaryDatasetId,
+  );
+  const comparisonDatasets = datasets.filter(
+    (dataset) =>
+      dataset.dataset_id !== primaryDatasetId &&
+      dataset.contract === primaryDataset?.contract &&
+      dataset.data_kind === primaryDataset?.data_kind,
+  );
   const canRun =
-    kind === "paper-account" ||
-    (kind === "monte-carlo" && mode === "scenario") ||
-    (runs.length > 0 &&
-      (kind !== "matched-control" || validationReports.length > 0));
+    kind === "reconciliation"
+      ? comparisonDatasets.length > 0
+      : kind === "paper-account" ||
+        (kind === "monte-carlo" && mode === "scenario") ||
+        (runs.length > 0 &&
+          (kind !== "matched-control" || validationReports.length > 0));
   return (
     <section className="panel lower sidebar-panel">
       <details className="report-builder">
@@ -318,6 +348,64 @@ export function ReportBuilder({
                         required
                       />
                     </label>
+                  </div>
+                </>
+              )}
+              {kind === "reconciliation" && (
+                <>
+                  <p className="muted">
+                    Compare imported minute bars for the same dated contract.
+                    Leave both times blank to use shared calendar coverage.
+                  </p>
+                  <label>
+                    Primary dataset
+                    <select
+                      name="primary_dataset_id"
+                      required
+                      value={primaryDatasetId}
+                      onChange={(event) =>
+                        setPrimaryDatasetId(event.target.value)
+                      }
+                    >
+                      <option value="">Select a dataset</option>
+                      {datasets.map((item) => (
+                        <option key={item.dataset_id} value={item.dataset_id}>
+                          {item.contract} · {item.provider} ·{" "}
+                          {item.dataset_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Comparison dataset
+                    <select
+                      key={primaryDatasetId}
+                      name="comparison_dataset_id"
+                      required
+                    >
+                      <option value="">Select a compatible dataset</option>
+                      {comparisonDatasets.map((item) => (
+                        <option key={item.dataset_id} value={item.dataset_id}>
+                          {item.provider} · {item.dataset_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="fields">
+                    <label>
+                      Start in UTC
+                      <input name="start" placeholder="2025-03-10T13:00Z" />
+                    </label>
+                    <label>
+                      End in UTC
+                      <input name="end" placeholder="2025-03-10T14:00Z" />
+                    </label>
+                    <IntegerInput
+                      name="example_limit"
+                      title="Examples per discrepancy"
+                      value={20}
+                      min={0}
+                    />
                   </div>
                 </>
               )}

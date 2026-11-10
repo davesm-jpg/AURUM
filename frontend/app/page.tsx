@@ -812,6 +812,7 @@ export default function Dashboard() {
           </section>
           <ReportBuilder
             datasetId={datasetId}
+            datasets={datasets}
             runs={runs.filter((item) => item.kind === "backtest")}
             validationReports={reports.filter(
               (item) => item.kind === "chronological_validation",

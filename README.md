@@ -48,6 +48,7 @@ This **synthetic schema example** covers two minutes of a full session.
   --contract MGC-2025-04 --source-timezone UTC --timestamp-label open \
   --data-kind historical --price-basis unadjusted
 .venv/bin/aurum --db data/aurum.sqlite inspect DATASET_ID
+.venv/bin/aurum --db data/aurum.sqlite reconcile-datasets PRIMARY_ID COMPARISON_ID
 .venv/bin/aurum --db data/aurum.sqlite replay DATASET_ID
 .venv/bin/aurum --db data/aurum.sqlite aggregate DATASET_ID --timeframe 5m --timeframe 1d
 .venv/bin/aurum --db data/aurum.sqlite structure DATASET_ID --break-mode close
@@ -77,6 +78,8 @@ This **synthetic schema example** covers two minutes of a full session.
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
+
+Dataset reconciliation compares two distinct imports for the same dated contract and data kind. It audits normalized UTC minute opens, both reviewed schedules and exact integer OHLCV values. Use `--start` and `--end` together to scope the comparison inside shared calendar coverage. Bounded discrepancy examples and source checksums are saved in the report. Inspect an incomplete import through reconciliation while its ordinary replay gate remains enforced.
 
 Aggregation requires a dated calendar. Omit `--timeframe` to emit all supported intervals (5m, 15m, 1h, 4h and 1d). Intraday buckets start at each open window and restart after closures. When an open window ends inside a bucket, a complete shorter bar is emitted with `shortened: true`. Daily bars combine all open windows on the trade date. Every published aggregate contains all expected source minutes and is emitted at its scheduled close. Export boundaries do not shorten a bucket.
 

@@ -13,6 +13,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
 | `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
 | `storage_admin.py` | Local validated SQLite snapshots and optional preserved-source checksum verification |
+| `reconciliation.py` | Bounded read-only inspection of two normalized imports, schedule and OHLCV reconciliation, and saved discrepancy report |
 | `storage.py` | Versioned transactional SQLite schema, immutable dataset records and chronological candle iterator |
 | `candles.py` | Incremental aggregation of chronological minute closes into exchange-aligned intraday and daily bars |
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |

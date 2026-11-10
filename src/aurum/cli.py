@@ -72,6 +72,7 @@ from aurum.notifications import (
 )
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, TargetMode
 from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, SourceFormat
+from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.statistics import ValidationConfig
@@ -120,6 +121,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     inspect = commands.add_parser("inspect", help="show provenance and quality findings")
     inspect.add_argument("dataset_id")
+    reconcile = commands.add_parser(
+        "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
+    )
+    reconcile.add_argument("primary_dataset_id")
+    reconcile.add_argument("comparison_dataset_id")
+    reconcile.add_argument("--start", type=minute_timestamp)
+    reconcile.add_argument("--end", type=minute_timestamp)
+    reconcile.add_argument("--example-limit", type=int, default=20)
     replay = commands.add_parser("replay", help="emit chronological candle-close events as JSONL")
     replay.add_argument("dataset_id")
     aggregate = commands.add_parser("aggregate", help="emit completed higher-timeframe candles")
@@ -436,6 +445,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(canonical_json(event))
         elif args.command == "inspect":
             print(canonical_json(store.describe(args.dataset_id)))
+        elif args.command == "reconcile-datasets":
+            if (args.start is None) != (args.end is None):
+                raise ValueError("specify both comparison boundaries or neither")
+            span = TradingWindow(args.start, args.end) if args.start is not None else None
+            report_id = save_reconciliation(
+                store,
+                args.primary_dataset_id,
+                args.comparison_dataset_id,
+                span=span,
+                example_limit=args.example_limit,
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "structure":
             evidence = _evidence_config(args) if args.evidence else None
             if evidence is None and (

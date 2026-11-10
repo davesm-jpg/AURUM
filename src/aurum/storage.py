@@ -332,6 +332,17 @@ class DatasetStore:
         self, dataset_id: str, span: TradingWindow, batch_size: int = 1_000
     ) -> Iterator[tuple[Candle, ...]]:
         """Read immutable batches without holding a reader open during consumer writes."""
+        yield from self._candle_batches(dataset_id, span, batch_size, require_replayable=True)
+
+    def inspection_batches(
+        self, dataset_id: str, span: TradingWindow, batch_size: int = 1_000
+    ) -> Iterator[tuple[Candle, ...]]:
+        """Read stored rows for comparison, including imports blocked for missing candles."""
+        yield from self._candle_batches(dataset_id, span, batch_size, require_replayable=False)
+
+    def _candle_batches(
+        self, dataset_id: str, span: TradingWindow, batch_size: int, *, require_replayable: bool
+    ) -> Iterator[tuple[Candle, ...]]:
         if batch_size < 1:
             raise ValueError("replay batch size must be positive")
         start = span.start
@@ -343,6 +354,7 @@ class DatasetStore:
                         self._dataset(db, dataset_id),
                         span=TradingWindow(start, span.end),
                         limit=batch_size,
+                        require_replayable=require_replayable,
                     )
                 )
             if not batch:
@@ -641,8 +653,9 @@ class DatasetStore:
         *,
         span: TradingWindow | None = None,
         limit: int | None = None,
+        require_replayable: bool = True,
     ) -> Iterator[Candle]:
-        if not dataset["replayable"]:
+        if require_replayable and not dataset["replayable"]:
             raise ValueError("replay blocked because expected candles are missing")
         contract = MgcContract(json.loads(dataset["provenance"])["contract"])
         query = """SELECT opened_at, open_ticks, high_ticks, low_ticks, close_ticks, volume

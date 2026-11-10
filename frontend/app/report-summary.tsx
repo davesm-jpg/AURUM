@@ -245,6 +245,78 @@ function ValidationReport({ result }: { result: RecordData }) {
   );
 }
 
+function ReconciliationReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const window = record(record(report.definition).window);
+  const primary = record(result.primary);
+  const comparison = record(result.comparison);
+  const counts = record(result.counts);
+  const mismatches = record(result.ohlcv_field_mismatches);
+  const count = (value: unknown) => number(value)?.toLocaleString() ?? "—";
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {String(primary.contract ?? "—")} ·{" "}
+        {utcDateTime(window.start)} to {utcDateTime(window.end)}
+      </p>
+      <div className="metrics">
+        <Metric
+          title="Comparison window"
+          value={result.exact_on_window ? "Exact match" : "Review required"}
+          detail={`${count(counts.compared_ohlcv)} paired minute bars`}
+        />
+        <Metric
+          title="Expected minutes missing"
+          value={`${count(counts.primary_missing)} / ${count(counts.comparison_missing)}`}
+          detail="Primary / comparison"
+        />
+        <Metric
+          title="Bars with OHLCV differences"
+          value={count(counts.ohlcv_mismatch)}
+          detail={`${count(counts.exact_ohlcv_matches)} exact value matches`}
+        />
+      </div>
+      <p className="muted">
+        {count(counts.calendar_open_disagreement)} minutes differ in open
+        status.{" "}
+        {result.trade_dates_comparable
+          ? `${count(counts.trade_date_disagreement)} minutes differ in exchange date.`
+          : "One or both calendar snapshots lack dated sessions."}{" "}
+        {result.identical_raw_checksum === true &&
+          "Both exports have the same checksum. "}
+        Replay eligibility applies to each full import.
+      </p>
+      <DataTable
+        labelHeading="Import"
+        items={[
+          ["Primary", primary],
+          ["Comparison", comparison],
+        ]}
+        columns={[
+          { title: "Provider", value: (item) => String(item.provider ?? "—") },
+          {
+            title: "Source timezone",
+            value: (item) => String(item.source_timezone ?? "—"),
+          },
+          { title: "Label", value: (item) => label(item.timestamp_label) },
+          {
+            title: "Replay",
+            value: (item) => (item.replayable ? "Eligible" : "Blocked"),
+          },
+        ]}
+      />
+      <DataTable
+        labelHeading="Field"
+        items={Object.entries(mismatches).map(([field, value]) => [
+          label(field),
+          { value },
+        ])}
+        columns={[{ title: "Differences", value: (item) => count(item.value) }]}
+      />
+    </>
+  );
+}
+
 function MatchedControlReport({ report }: { report: RecordData }) {
   const result = record(report.result);
   const definition = record(report.definition);
@@ -504,6 +576,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <ValidationReport result={result} />;
   if (report.kind === "matched_random_control")
     return <MatchedControlReport report={report} />;
+  if (report.kind === "dataset_reconciliation")
+    return <ReconciliationReport report={report} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

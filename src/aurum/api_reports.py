@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from aurum.account_reports import simulate_account_document
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, AccountRules
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
-from aurum.exchange_calendar import SessionCalendar
+from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.market_data import canonical_json
 from aurum.monte_carlo import (
@@ -17,6 +17,7 @@ from aurum.monte_carlo import (
     TrailingLossScenario,
     WinRateScenario,
 )
+from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
@@ -24,6 +25,32 @@ from aurum.timestamps import minute_timestamp
 
 _RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 _AdditionalCost = Annotated[int, Field(ge=0, le=100_000)]
+
+
+class ReconciliationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    primary_dataset_id: _RunId
+    comparison_dataset_id: _RunId
+    start: str | None = None
+    end: str | None = None
+    example_limit: int = Field(default=20, ge=0, le=100)
+
+    def run(self, store: DatasetStore) -> str:
+        if (self.start is None) != (self.end is None):
+            raise ValueError("specify both comparison boundaries or neither")
+        span = (
+            TradingWindow(minute_timestamp(self.start), minute_timestamp(self.end))
+            if self.start is not None and self.end is not None
+            else None
+        )
+        return save_reconciliation(
+            store,
+            self.primary_dataset_id,
+            self.comparison_dataset_id,
+            span=span,
+            example_limit=self.example_limit,
+        )
 
 
 class ValidationReportRequest(BaseModel):

@@ -24,6 +24,7 @@ from aurum.api_reports import (
     MatchedControlRequest,
     MonteCarloReportRequest,
     PaperAccountReportRequest,
+    ReconciliationRequest,
     ValidationReportRequest,
     report_configuration,
 )
@@ -306,6 +307,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/matched-control", status_code=201)
     def create_matched_control(request: MatchedControlRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/reconciliation", status_code=201)
+    def create_reconciliation(request: ReconciliationRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/monte-carlo", status_code=201)

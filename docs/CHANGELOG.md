@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Historical data reconciliation
+
+- Added normalized minute and schedule comparison with bounded discrepancy examples, preserved replay gates and CLI, API and dashboard entry points.
+
+
 ## 2026-11-10 — Matched structural control
 
 - Added seeded control replays with development-only admission, flat-start holdout fills, CLI/API parity and a dashboard report.
