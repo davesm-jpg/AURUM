@@ -1,10 +1,11 @@
+import { useState } from "react";
 import {
   CostTable,
   DataTable,
   OutcomeTable,
   TrendPlot,
 } from "./backtest-analytics";
-import type { RecordData } from "./client";
+import { api, type RecordData } from "./client";
 import {
   label,
   money,
@@ -240,6 +241,148 @@ function ValidationReport({ result }: { result: RecordData }) {
           />
           <CostTable evidence={holdout.cost_sensitivity_fixed_fills} />
         </>
+      )}
+    </>
+  );
+}
+
+function ContractRollReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const catalog = record(record(report.definition).catalog);
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {String(catalog.source ?? "—")} ·{" "}
+        {String(catalog.version ?? "—")} · {utcDateTime(result.as_of)}
+      </p>
+      <div className="metrics">
+        <Metric
+          title="Research-selected contract"
+          value={String(result.selected ?? "—")}
+          detail={label(result.reason)}
+        />
+        <Metric
+          title="Current contract supplied"
+          value={String(result.current ?? "—")}
+          detail="Dated MGC contract"
+        />
+      </div>
+      <DataTable
+        labelHeading="Available contract"
+        items={rows(result.available).map((row) => [String(row.contract), row])}
+        columns={[
+          { title: "Listing known", value: (row) => utcDateTime(row.known_at) },
+          {
+            title: "Last trade",
+            value: (row) => utcDateTime(row.last_trade_at),
+          },
+        ]}
+      />
+      <DataTable
+        labelHeading="Activity evidence"
+        items={rows(result.evidence).map((row) => [String(row.contract), row])}
+        columns={[
+          { title: "Period end", value: (row) => utcDateTime(row.period_end) },
+          { title: "Available", value: (row) => utcDateTime(row.available_at) },
+          { title: "Volume", value: (row) => String(row.volume ?? "—") },
+          {
+            title: "Open interest",
+            value: (row) => String(row.open_interest ?? "—"),
+          },
+        ]}
+        empty="The saved decision has no comparable activity evidence."
+      />
+    </>
+  );
+}
+
+function ContinuousSeriesReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const source = record(result.source);
+  const [preview, setPreview] = useState<RecordData[]>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadPreview() {
+    setLoading(true);
+    setError("");
+    try {
+      const values = await api<RecordData[]>(
+        `reports/${String(report.report_id)}/continuous-bars?limit=12`,
+      );
+      setPreview(values);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <>
+      <p className="muted">
+        {label(source.data_kind)} · {String(source.provider ?? "—")} ·{" "}
+        {label(result.price_basis)} research prices
+      </p>
+      <p className="muted">
+        Each segment retains its dated source. The research offset applies only
+        to the continuous series.
+      </p>
+      <DataTable
+        labelHeading="Dated contract"
+        items={rows(result.segments).map((row) => [String(row.contract), row])}
+        columns={[
+          {
+            title: "Dataset",
+            value: (row) => String(row.dataset_id).slice(0, 12),
+          },
+          { title: "Start", value: (row) => utcDateTime(row.start) },
+          { title: "End (exclusive)", value: (row) => utcDateTime(row.end) },
+          {
+            title: "Research offset (ticks)",
+            value: (row) => String(row.offset_ticks ?? "—"),
+          },
+          {
+            title: "Overlap reference",
+            value: (row) => utcDateTime(row.reference_open),
+          },
+        ]}
+      />
+      <button
+        type="button"
+        onClick={() => void loadPreview()}
+        disabled={loading}
+      >
+        {loading ? "Loading research bars…" : "Preview first 12 research bars"}
+      </button>
+      {error && (
+        <p className="notice" role="alert">
+          {error}
+        </p>
+      )}
+      {preview && (
+        <DataTable
+          labelHeading="Minute open (UTC)"
+          items={preview.map((row) => [
+            utcDateTime(record(row.dated_source).opened_at),
+            row,
+          ])}
+          columns={[
+            {
+              title: "Dated contract",
+              value: (row) => String(record(row.dated_source).contract ?? "—"),
+            },
+            {
+              title: "Dated close (ticks)",
+              value: (row) =>
+                String(record(row.dated_source).close_ticks ?? "—"),
+            },
+            {
+              title: "Research close (ticks)",
+              value: (row) =>
+                String(record(row.research_ohlc_ticks).close ?? "—"),
+            },
+          ]}
+        />
       )}
     </>
   );
@@ -799,6 +942,12 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <SensitivityReport report={report} />;
   if (report.kind === "quote_spread_observations")
     return <SpreadObservationsReport report={report} />;
+  if (report.kind === "contract_roll_assessment")
+    return <ContractRollReport report={report} />;
+  if (report.kind === "continuous_series")
+    return (
+      <ContinuousSeriesReport key={String(report.report_id)} report={report} />
+    );
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

@@ -149,7 +149,10 @@ class ContractCatalog:
 
     @classmethod
     def from_json(cls, raw: str) -> Self:
-        payload = json.loads(raw)
+        return cls.from_dict(json.loads(raw))
+
+    @classmethod
+    def from_dict(cls, payload: object) -> Self:
         if (
             not isinstance(payload, dict)
             or not {"source", "version", "data_kind", "listings"}

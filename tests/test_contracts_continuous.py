@@ -70,6 +70,45 @@ def test_open_interest_is_explicit_and_future_listing_is_ineligible() -> None:
     )
 
 
+def test_contract_assessment_cli_and_api_pin_reviewed_availability(tmp_path: Path) -> None:
+    catalog = ContractCatalog(
+        "synthetic publication",
+        "fixture-v1",
+        DataKind.SYNTHETIC,
+        (
+            ContractListing(FIRST, START - 10 * DAY, START + 10 * DAY, START - DAY),
+            ContractListing(NEXT, START - DAY, START + 20 * DAY, START + MINUTE),
+        ),
+    )
+    path = tmp_path / "synthetic-catalog.json"
+    path.write_text(json.dumps(catalog.as_dict()), encoding="utf-8")
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    output = subprocess.run(
+        [*aurum, "contracts", str(path), "--as-of", START.isoformat(), "--current", FIRST.code],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    report = json.loads(output.stdout)
+    assert report["result"]["data_kind"] == "synthetic"
+    assert report["result"]["selected"] == FIRST.code
+    assert [item["contract"] for item in report["result"]["available"]] == [FIRST.code]
+    assert report["definition"]["catalog"]["source"] == "synthetic publication"
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        route = "/api/reports/contract-roll"
+        payload = {"catalog": catalog.as_dict(), "as_of": START.isoformat(), "current": FIRST.code}
+        original = client.post(route, json=payload)
+        assert original.status_code == 201
+        assert original.json() == report
+        later = client.post(route, json={**payload, "as_of": (START + MINUTE).isoformat()})
+        assert later.status_code == 201
+        assert later.json()["report_id"] != report["report_id"]
+        assert len(later.json()["result"]["available"]) == 2
+
+
 def _save_source(
     store: DatasetStore,
     root: Path,
@@ -122,6 +161,10 @@ def test_continuous_forward_adjustment_preserves_actual_dated_prices(tmp_path: P
         assert dated["close_ticks"] == price
         assert research["close"] == 29000
         assert event["data_kind"] == "synthetic"
+    replay_output = subprocess.run(
+        [*aurum, "continuous-bars", series_id], check=True, capture_output=True, text=True
+    )
+    assert [json.loads(line) for line in replay_output.stdout.splitlines()] == events
 
     raw = save_series(
         store, SeriesPlan(PriceBasis.UNADJUSTED, (left, replace(right, reference_open=None)))
@@ -149,3 +192,24 @@ def test_continuous_forward_adjustment_preserves_actual_dated_prices(tmp_path: P
                 PriceBasis.FORWARD_ADJUSTED, (left, replace(right, dataset_id=different_day))
             ),
         )
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        created = client.post("/api/reports/continuous-series", json={"plan": plan.as_dict()})
+        assert created.status_code == 201
+        assert created.json() == json.loads(result.stdout)
+        route = f"/api/reports/{series_id}/continuous-bars"
+        first_page = client.get(route, params={"limit": 2})
+        assert first_page.status_code == 200
+        assert first_page.json() == events[:2]
+        bounded = client.get(
+            route,
+            params={
+                "start": (START + MINUTE).isoformat(),
+                "end": (START + 3 * MINUTE).isoformat(),
+            },
+        )
+        assert bounded.status_code == 200
+        assert bounded.json() == events[1:3]
+        assert client.get(route, params={"start": START.isoformat()}).status_code == 422
+        assert client.post("/api/backtests", json={"dataset_id": series_id}).status_code == 404

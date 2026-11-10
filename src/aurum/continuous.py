@@ -111,7 +111,9 @@ def save_series(store: DatasetStore, plan: SeriesPlan) -> str:
     )
 
 
-def replay_series(store: DatasetStore, report_id: str) -> Iterator[dict[str, object]]:
+def replay_series(
+    store: DatasetStore, report_id: str, *, span: TradingWindow | None = None
+) -> Iterator[dict[str, object]]:
     report = store.describe_analysis(report_id)
     definition = report["definition"]
     if not isinstance(definition, dict) or report["kind"] != "continuous_series":
@@ -122,11 +124,16 @@ def replay_series(store: DatasetStore, report_id: str) -> Iterator[dict[str, obj
     mapped, provenance = _map(store, plan)
     for item in mapped:
         segment = item.segment
+        start = max(span.start, segment.span.start) if span is not None else segment.span.start
+        end = min(span.end, segment.span.end) if span is not None else segment.span.end
+        if start >= end:
+            continue
         offset = item.offset_ticks
         calendar = SessionCalendar.from_dict(
             store.describe(segment.dataset_id)["provenance"]["calendar"]
         )
-        for candle in store.replay(segment.dataset_id, span=segment.span):
+        batches = store.replay_batches(segment.dataset_id, TradingWindow(start, end))
+        for candle in (minute for batch in batches for minute in batch):
             session = calendar.session_at(candle.opened_at)
             if session is None:
                 raise ValueError("continuous candle has no matching exchange session")

@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Contract research workspace
+
+- Added rollover assessment and continuous research plan creation in the dashboard, with bounded continuous previews showing dated and research prices separately.
+
+
 ## 2026-11-10 — Offline quote-series integrity
 
 - Added read-only reconstruction of normalized best bid and ask observations from preserved bytes.

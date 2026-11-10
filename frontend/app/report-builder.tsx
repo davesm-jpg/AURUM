@@ -8,6 +8,8 @@ type ReportKind =
   | "intrabar-comparison"
   | "parameter-sensitivity"
   | "spread-observations"
+  | "contract-roll"
+  | "continuous-series"
   | "reconciliation"
   | "monte-carlo"
   | "paper-account";
@@ -33,6 +35,7 @@ type Defaults = {
   control_strata: string[];
   sensitivity_factors: string[];
   spread_maximum_age_ms: number;
+  roll_policy: RecordData;
   monte_carlo: RecordData;
   sampling_modes: string[];
   assumed_scenarios: RecordData[];
@@ -45,6 +48,8 @@ const TYPES: Record<ReportKind, string> = {
   "intrabar-comparison": "Intrabar execution sensitivity",
   "parameter-sensitivity": "Parameter sensitivity",
   "spread-observations": "Historical spread observations",
+  "contract-roll": "Contract rollover assessment",
+  "continuous-series": "Continuous research series",
   reconciliation: "Historical data reconciliation",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
@@ -210,6 +215,28 @@ export function ReportBuilder({
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
         };
+      } else if (kind === "contract-roll") {
+        const openInterest = fields.get("open_interest_lead_bps");
+        request = {
+          catalog: objectJson(
+            String(fields.get("catalog") ?? ""),
+            "Contract catalog",
+          ),
+          as_of: fields.get("as_of"),
+          current: fields.get("current_contract") || null,
+          policy: {
+            expiry_lead_days: int("expiry_lead_days"),
+            volume_lead_bps: int("volume_lead_bps"),
+            open_interest_lead_bps: openInterest ? Number(openInterest) : null,
+          },
+        };
+      } else if (kind === "continuous-series") {
+        request = {
+          plan: objectJson(
+            String(fields.get("series_plan") ?? ""),
+            "Continuous series plan",
+          ),
+        };
       } else if (kind === "spread-observations") {
         request = {
           run_id: spreadRunId,
@@ -347,6 +374,8 @@ export function ReportBuilder({
     "parameter-sensitivity":
       sensitivityCandidates.length > 1 && !!sensitivityBaseline,
     "spread-observations": compatibleQuotes.length > 0,
+    "contract-roll": true,
+    "continuous-series": datasets.length > 0,
     "matched-control": runs.length > 0 && validationReports.length > 0,
     validation: runs.length > 0,
     "paper-account": true,
@@ -463,6 +492,79 @@ export function ReportBuilder({
                       />
                     </label>
                   </div>
+                </>
+              )}
+              {kind === "contract-roll" && (
+                <>
+                  <p className="muted">
+                    Supply a reviewed catalog. The assessment uses only listings
+                    and activity available at the as-of time.
+                  </p>
+                  <label>
+                    Reviewed contract catalog JSON
+                    <textarea
+                      name="catalog"
+                      rows={7}
+                      spellCheck={false}
+                      required
+                    />
+                  </label>
+                  <div className="fields">
+                    <label>
+                      Assessment time in UTC
+                      <input
+                        name="as_of"
+                        placeholder="2025-03-10T13:00Z"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Current dated contract, if known
+                      <input
+                        name="current_contract"
+                        placeholder="MGC-YYYY-MM"
+                        pattern="MGC-[1-9][0-9]{3}-(0[1-9]|1[0-2])"
+                      />
+                    </label>
+                    <IntegerInput
+                      name="expiry_lead_days"
+                      title="Expiry lead days"
+                      value={defaults.roll_policy.expiry_lead_days}
+                      min={0}
+                    />
+                    <IntegerInput
+                      name="volume_lead_bps"
+                      title="Volume threshold (basis points)"
+                      value={defaults.roll_policy.volume_lead_bps}
+                      min={10000}
+                    />
+                    <label>
+                      Open-interest threshold (basis points)
+                      <input
+                        name="open_interest_lead_bps"
+                        type="number"
+                        min={10000}
+                        step={1}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+              {kind === "continuous-series" && (
+                <>
+                  <p className="muted">
+                    Use ordered segments from compatible dated datasets. Forward
+                    adjustment requires an earlier completed overlap reference.
+                  </p>
+                  <label>
+                    Continuous research plan JSON
+                    <textarea
+                      name="series_plan"
+                      rows={8}
+                      spellCheck={false}
+                      required
+                    />
+                  </label>
                 </>
               )}
               {kind === "spread-observations" && (

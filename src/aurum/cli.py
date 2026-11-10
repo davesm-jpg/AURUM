@@ -5,7 +5,7 @@ import sqlite3
 import sys
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from importlib import import_module
 from pathlib import Path
@@ -15,7 +15,8 @@ from aurum.account_reports import simulate_account_ledger
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, BreachMetric
 from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.continuous import SeriesPlan, replay_series, save_series
-from aurum.contracts import CONTRACT_VERSION, ContractCatalog, RollPolicy
+from aurum.contract_reports import save_contract_assessment
+from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind
@@ -457,18 +458,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             policy = RollPolicy(
                 args.expiry_lead_days, args.volume_lead_bps, args.open_interest_lead_bps
             )
-            decision = inventory.decide(args.as_of, args.current, policy)
-            report_id = store.save_analysis(
-                "contract_roll_assessment",
-                {
-                    "contract_version": CONTRACT_VERSION,
-                    "catalog": inventory.as_dict(),
-                    "policy": asdict(policy),
-                    "as_of": args.as_of.isoformat(),
-                    "current": args.current.code if args.current else None,
-                },
-                {"data_kind": inventory.data_kind, **decision.as_dict()},
-            )
+            report_id = save_contract_assessment(store, inventory, args.as_of, args.current, policy)
             print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "continuous":
             plan = SeriesPlan.from_json(args.plan.read_text(encoding="utf-8"))

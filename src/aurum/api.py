@@ -4,6 +4,7 @@ import sqlite3
 from collections import Counter, deque
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from secrets import compare_digest
 from typing import Annotated, Literal
 
@@ -20,6 +21,8 @@ from aurum.api_config import (
     backtest_configuration,
 )
 from aurum.api_reports import (
+    ContinuousSeriesRequest,
+    ContractRollRequest,
     ForwardReportRequest,
     IntrabarComparisonRequest,
     MatchedControlRequest,
@@ -33,6 +36,7 @@ from aurum.api_reports import (
 )
 from aurum.candles import CandleAggregator, Timeframe, completed_bar_start
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
+from aurum.continuous import replay_series
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
     ForwardPaper,
@@ -365,6 +369,22 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     def sensitivity_candidates(report_id: RecordId) -> dict[str, list[str]]:
         return {"run_ids": sensitivity_candidate_ids(store, report_id)}
 
+    @router.get("/reports/{report_id}/continuous-bars")
+    def continuous_bars(
+        report_id: RecordId,
+        start: str | None = None,
+        end: str | None = None,
+        limit: PageLimit = 100,
+    ) -> list[dict[str, object]]:
+        if (start is None) != (end is None):
+            raise ValueError("specify both continuous preview boundaries or neither")
+        span = (
+            TradingWindow(minute_timestamp(start), minute_timestamp(end))
+            if start is not None and end is not None
+            else None
+        )
+        return list(islice(replay_series(store, report_id, span=span), limit))
+
     @router.get("/configuration/reports")
     def default_report_configuration() -> dict[str, object]:
         return report_configuration()
@@ -383,6 +403,14 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/intrabar-comparison", status_code=201)
     def create_intrabar_comparison(request: IntrabarComparisonRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/contract-roll", status_code=201)
+    def create_contract_assessment(request: ContractRollRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/continuous-series", status_code=201)
+    def create_continuous_series(request: ContinuousSeriesRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/spread-observations", status_code=201)

@@ -6,9 +6,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aurum.account_reports import simulate_account_document
 from aurum.account_simulation import LUCIDFLEX_25K, AccountPhase, AccountRules
+from aurum.continuous import SeriesPlan, save_series
+from aurum.contract_reports import save_contract_assessment
+from aurum.contracts import DEFAULT_ROLL_POLICY, ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.instruments import MgcContract
 from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_data import canonical_json
 from aurum.monte_carlo import (
@@ -29,6 +33,42 @@ from aurum.timestamps import minute_timestamp
 
 _RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 _AdditionalCost = Annotated[int, Field(ge=0, le=100_000)]
+
+
+class ContractRollRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    catalog: dict[str, object]
+    as_of: str
+    current: str | None = None
+    policy: RollPolicy = DEFAULT_ROLL_POLICY
+
+    def run(self, store: DatasetStore) -> str:
+        for field, maximum in (("listings", 1000), ("activity", 100_000)):
+            values = self.catalog.get(field)
+            if isinstance(values, list) and len(values) > maximum:
+                raise ValueError(f"contract assessment supports at most {maximum} {field} rows")
+        if self.policy.expiry_lead_days > 3650:
+            raise ValueError("contract expiry lead cannot exceed 3650 days")
+        return save_contract_assessment(
+            store,
+            ContractCatalog.from_dict(self.catalog),
+            minute_timestamp(self.as_of),
+            MgcContract(self.current) if self.current is not None else None,
+            self.policy,
+        )
+
+
+class ContinuousSeriesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan: dict[str, object]
+
+    def run(self, store: DatasetStore) -> str:
+        segments = self.plan.get("segments")
+        if isinstance(segments, list) and len(segments) > 1000:
+            raise ValueError("continuous series supports at most 1000 segments")
+        return save_series(store, SeriesPlan.from_dict(self.plan))
 
 
 class IntrabarComparisonRequest(BaseModel):
@@ -232,6 +272,7 @@ def report_configuration() -> dict[str, object]:
         "control_strata": list(ControlStrata),
         "sensitivity_factors": list(SensitivityFactor),
         "spread_maximum_age_ms": DEFAULT_QUOTE_MAX_AGE_MS,
+        "roll_policy": asdict(DEFAULT_ROLL_POLICY),
         "monte_carlo": asdict(MonteCarloConfig()),
         "sampling_modes": list(SamplingMode),
         "assumed_scenarios": [asdict(WinRateScenario(rate)) for rate in REFERENCE_WIN_RATES_BPS],
