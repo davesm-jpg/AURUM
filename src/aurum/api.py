@@ -41,11 +41,13 @@ from aurum.forward import (
 from aurum.instruments import MAX_SQLITE_INTEGER, MGC, MgcContract
 from aurum.market_data import canonical_json
 from aurum.monitoring import (
+    HeartbeatStatus,
     applied_minute_batches,
     describe_monitor,
     market_chart_sequence_bounds,
     market_events_page,
     market_evidence_started_at,
+    operational_monitor_status,
 )
 from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics
@@ -88,6 +90,7 @@ class MonitorChart(BaseModel):
     state: str
     connected: bool
     checked_at: str | None
+    heartbeat_status: HeartbeatStatus
     last_applied_close: str | None
     last_received: str | None
     pending_minutes: int
@@ -341,7 +344,8 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.get("/monitors/{monitor_id}")
     def monitor(monitor_id: RecordId) -> dict[str, object]:
-        return describe_monitor(store, monitor_id)
+        status = describe_monitor(store, monitor_id)
+        return operational_monitor_status(status, datetime.now(UTC))
 
     @router.get("/monitors/{monitor_id}/chart")
     def applied_chart(
@@ -404,6 +408,7 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
             while not await request.is_disconnected():
                 if mode == "checkpoint":
                     status = await asyncio.to_thread(describe_monitor, store, monitor_id)
+                    status = operational_monitor_status(status, datetime.now(UTC))
                     state = {
                         field: status[field]
                         for field in (
@@ -412,6 +417,7 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
                             "pending_minutes",
                             "connected",
                             "fault",
+                            "heartbeat_status",
                         )
                     }
                     if state != previous:
@@ -725,7 +731,7 @@ def _monitor_chart(
         market = "open" if calendar.permits(now.replace(second=0, microsecond=0)) else "closed"
     return MonitorChart.model_validate(
         {
-            **status,
+            **operational_monitor_status(status, now),
             "contract": contract.code,
             "source": config["source"],
             "configured_status": config["source_status"],

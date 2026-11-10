@@ -276,10 +276,15 @@ export default function Dashboard() {
   const actualSources = Object.entries(monitorBar?.source_minutes ?? {})
     .map(([kind, count]) => `${count} ${label(kind)}`)
     .join(" · ");
-  const heartbeatOverdue = feed?.checked_at
-    ? Date.now() - Date.parse(feed.checked_at) >
-      Math.max(feed.stale_after_seconds * 2, 30) * 1000
-    : false;
+  const heartbeat = feed?.heartbeat_status;
+  const heartbeatProblem =
+    heartbeat === "overdue"
+      ? "Status overdue"
+      : heartbeat === "clock_ahead"
+        ? "Monitor clock ahead"
+        : heartbeat === "unobserved"
+          ? "Awaiting first check"
+          : undefined;
   const contract = showMonitor ? monitor?.contract : dataset?.contract;
   const summary = runDetail?.key === runId ? runDetail.data : undefined;
   const report = reportDetail?.key === reportId ? reportDetail.data : undefined;
@@ -465,8 +470,8 @@ export default function Dashboard() {
                   value={
                     monitorError
                       ? "Read unavailable"
-                      : heartbeatOverdue
-                        ? "Status overdue"
+                      : heartbeatProblem
+                        ? heartbeatProblem
                         : feed
                           ? label(feed.state)
                           : "Unavailable"
@@ -620,7 +625,7 @@ export default function Dashboard() {
                       <dd>{stamp(feed?.checked_at)} UTC</dd>
                       <dt>Alerts</dt>
                       <dd>
-                        {monitorError || heartbeatOverdue || !feed
+                        {monitorError || !feed
                           ? "Status unavailable"
                           : feed.alerts_suspended
                             ? "Suspended"

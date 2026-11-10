@@ -12,6 +12,12 @@ type MonitorChart = {
   state: string;
   connected: boolean;
   checked_at: string | null;
+  heartbeat_status:
+    | "current"
+    | "overdue"
+    | "clock_ahead"
+    | "unobserved"
+    | "not_applicable";
   last_applied_close: string | null;
   last_received: string | null;
   pending_minutes: number;

@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Protocol
 
 from aurum.market_data import canonical_json
-from aurum.monitoring import MonitorState
+from aurum.monitoring import HeartbeatStatus, MonitorState, heartbeat_status
 from aurum.storage import DatasetStore
 from aurum.timestamps import source_timezone
 
@@ -175,13 +175,9 @@ class DeliveryWorker:
         if monitor is None:
             raise ValueError("unknown monitor")
         max_age = json.loads(monitor["definition"])["monitor_config"]["stale_seconds"]
-        last_check = monitor["checked_at"]
         ready = (
             monitor["state"] == MonitorState.READY
-            and last_check is not None
-            and timedelta(0)
-            <= now - datetime.fromisoformat(last_check)
-            <= timedelta(seconds=max_age)
+            and heartbeat_status(monitor["checked_at"], now, max_age) is HeartbeatStatus.CURRENT
         )
         self._prepare(db, now)
         if self.preferences.quiet(now):

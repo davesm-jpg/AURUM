@@ -85,3 +85,5 @@ Three synthetic tests verified UTC/open versus Prague/close normalization, raw c
 ## Monitoring economic risk
 
 Two synthetic restart cases replayed a partially applied monitor through a paper decision with a fictional release published before or after the decision. Historical setup transitions matched the monitor payloads apart from journal-specific identity. The clear-risk filter admitted the setup only when no release was known near the decision under the supplied coverage. Provider settings reject a malformed snapshot and retain the prior manifest shape without a snapshot. The direct monitor uses the same constructor. Automated retrieval from an authorized calendar source remains pending.
+
+The operational monitor read distinguishes current, overdue, clock-ahead and unobserved heartbeats for real-time and delayed configurations. Historical and synthetic replay have no wall-clock heartbeat. A synthetic regression verified the inclusive deadline, suspension immediately after expiry, clock skew, API and chart parity and an unchanged journal. Delivery uses the same heartbeat function.

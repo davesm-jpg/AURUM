@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Operational heartbeat status
+
+- Shared the notification freshness deadline with CLI, API and dashboard monitor status. Overdue or clock-ahead heartbeats suspend operational eligibility while preserving the durable state.
+
+
 ## 2026-11-10 — Economic context in monitoring
 
 - Added reviewed point-in-time economic snapshots and a clear-risk filter to monitoring, replay and provider settings. Existing definitions retain their IDs.

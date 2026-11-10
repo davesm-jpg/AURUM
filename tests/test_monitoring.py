@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from threading import Event, Thread
@@ -16,12 +16,15 @@ from aurum.instruments import MgcContract
 from aurum.market_data import Candle
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
 from aurum.monitoring import (
+    HeartbeatStatus,
     MarketMonitor,
     MonitorConfig,
     MonitorState,
+    describe_monitor,
     market_events_page,
     market_evidence_started_at,
     monitor_events,
+    operational_monitor_status,
 )
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
@@ -112,6 +115,48 @@ def test_market_closure_disconnection_staleness_and_unknown_coverage(tmp_path: P
     monitor.set_connection(True, START + 60 * MINUTE)
     assert monitor.refresh(START + 63 * MINUTE)["state"] == MonitorState.STALE
     assert monitor.refresh(START + 70 * MINUTE)["state"] == MonitorState.UNAVAILABLE
+
+
+def test_operational_read_fails_closed_after_heartbeat_deadline(tmp_path: Path) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 10)))
+    unobserved = describe_monitor(store, monitor.monitor_id)
+    assert operational_monitor_status(unobserved, START)["heartbeat_status"] == (
+        HeartbeatStatus.UNOBSERVED
+    )
+    monitor.set_connection(True, START)
+    ready = monitor.ingest(frame(0))
+    assert ready["state"] == MonitorState.READY
+    close = START + MINUTE
+    deadline = close + timedelta(seconds=90)
+    current = operational_monitor_status(ready, deadline)
+    assert current["heartbeat_status"] == HeartbeatStatus.CURRENT
+    assert current["alerts_suspended"] is False
+    overdue = operational_monitor_status(ready, deadline + timedelta(microseconds=1))
+    assert overdue["heartbeat_status"] == HeartbeatStatus.OVERDUE
+    assert overdue["alerts_suspended"] is True
+    assert overdue["state"] == MonitorState.READY
+    future = operational_monitor_status(ready, close - timedelta(microseconds=1))
+    assert future["heartbeat_status"] == HeartbeatStatus.CLOCK_AHEAD
+    assert future["alerts_suspended"] is True
+    assert describe_monitor(store, monitor.monitor_id) == ready
+
+    replay = fixture_monitor(store, calendar((0, 10)), FeedStatus.SIMULATED)
+    simulated = operational_monitor_status(describe_monitor(store, replay.monitor_id), deadline)
+    assert simulated["heartbeat_status"] == HeartbeatStatus.NOT_APPLICABLE
+    assert simulated["alerts_suspended"] is True
+
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        prefix = f"/api/monitors/{monitor.monitor_id}"
+        for route in (prefix, f"{prefix}/chart"):
+            response = client.get(route)
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["heartbeat_status"] == "overdue"
+            assert payload["alerts_suspended"] is True
+    assert describe_monitor(store, monitor.monitor_id) == ready
 
 
 def test_monitor_restart_rebuilds_without_blocking_ingestion_and_catches_up_once(

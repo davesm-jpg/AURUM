@@ -53,6 +53,7 @@ from aurum.monitoring import (
     describe_monitor,
     monitor_alerts,
     monitor_events,
+    operational_monitor_status,
 )
 from aurum.monte_carlo import (
     REFERENCE_WIN_RATES_BPS,
@@ -434,7 +435,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "monitor-replay":
             print(canonical_json(_monitor_replay(store, args)))
         elif args.command == "monitor-status":
-            print(canonical_json(describe_monitor(store, args.monitor_id)))
+            status = describe_monitor(store, args.monitor_id)
+            print(canonical_json(operational_monitor_status(status, datetime.now(UTC))))
         elif args.command in ("monitor-events", "monitor-alerts"):
             reader = monitor_events if args.command == "monitor-events" else monitor_alerts
             for event in reader(store, args.monitor_id):

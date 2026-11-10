@@ -4,7 +4,7 @@ from base64 import b64encode
 from bisect import bisect_right
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from hashlib import sha256
 from threading import Lock
@@ -43,6 +43,28 @@ class MonitorState(StrEnum):
     CLOSED = "market_closed"
     UNAVAILABLE = "calendar_unavailable"
     INVALID = "integrity_fault"
+
+
+class HeartbeatStatus(StrEnum):
+    CURRENT = "current"
+    OVERDUE = "overdue"
+    CLOCK_AHEAD = "clock_ahead"
+    UNOBSERVED = "unobserved"
+    NOT_APPLICABLE = "not_applicable"
+
+
+def heartbeat_status(
+    checked_at: str | None, now: datetime, maximum_age_seconds: int
+) -> HeartbeatStatus:
+    _utc(now)
+    if checked_at is None:
+        return HeartbeatStatus.UNOBSERVED
+    age = now - datetime.fromisoformat(checked_at)
+    if age < timedelta(0):
+        return HeartbeatStatus.CLOCK_AHEAD
+    if age > timedelta(seconds=maximum_age_seconds):
+        return HeartbeatStatus.OVERDUE
+    return HeartbeatStatus.CURRENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,6 +542,23 @@ def describe_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
     with store.connection() as db:
         db.execute("BEGIN")
         return _status(_run(db, monitor_id), _pending_count(db, monitor_id))
+
+
+def operational_monitor_status(status: dict[str, object], now: datetime) -> dict[str, object]:
+    definition = status["definition"]
+    assert isinstance(definition, dict)
+    config = definition["monitor_config"]
+    heartbeat = HeartbeatStatus.NOT_APPLICABLE
+    if config["source_status"] in (FeedStatus.REAL_TIME, FeedStatus.DELAYED):
+        checked_at = status["checked_at"]
+        assert checked_at is None or isinstance(checked_at, str)
+        heartbeat = heartbeat_status(checked_at, now, config["stale_seconds"])
+    return {
+        **status,
+        "heartbeat_status": heartbeat,
+        "alerts_suspended": bool(status["alerts_suspended"])
+        or heartbeat not in (HeartbeatStatus.CURRENT, HeartbeatStatus.NOT_APPLICABLE),
+    }
 
 
 def applied_minute_batches(
