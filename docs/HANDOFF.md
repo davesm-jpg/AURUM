@@ -3,19 +3,20 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03–Q05, D06–D09, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q05, D06–D10, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `b2970f69dffb37395192b4e655049c9bdcdc2ec8`.
+- Last verified commit — `0f05669d5cc03afeaa9f0d17117996b51197ba64`.
 
 ## Current Objective
 
-- Task ID — D10.
-- Objective — Extend offline reconstruction and normalized integrity verification to quote series.
-- Acceptance criteria — Verify raw checksum, original configuration, bounds, warnings and every normalized quote observation without changing the store.
+- Task ID — U02.
+- Objective — Expose point-in-time rollover assessments and continuous research plans in the API and dashboard.
+- Acceptance criteria — Keep CLI report identities, disclose reviewed catalog provenance and decision time, and retain separately labeled dated and adjusted prices in bounded previews.
 
 ## Completed Work
 
 - D01–D05 — Immutable authorized-format CSV/Parquet/HTTPS history, reviewed dated schedules, completed candle aggregation, point-in-time contract selection and explicit continuous research mapping.
+- D10 — `verify-quote-series` verifies exact normalized bid and ask observations from stored source bytes and detects altered rows in a restored backup.
 - D09 — `verify-dataset` rebuilds CSV, Parquet and trade-derived imports from preserved bytes and checks exact normalized rows without reconnecting to a provider.
 - D08 — Schema v13 stores immutable historical top-of-book series with exact timestamps and strict preceding, same-window quote lookup.
 - D07 — Schema v12 preserves normalized trade prints and raw bytes with derived minute OHLCV. Exact nanosecond/sequence ordering and normal replay gates are verified.
@@ -69,8 +70,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 206 Python tests, Ruff lint/format and mypy across 76 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (206), Ruff lint/format, mypy (76 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 207 Python tests, Ruff lint/format and mypy across 76 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (207), Ruff lint/format, mypy (76 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -84,8 +85,8 @@
 
 ## Immediate Next Actions
 
-1. Reuse the quote normalizer to rebuild a series from its preserved input and immutable schedule.
-2. Compare the complete normalized quote journal in bounded read pages and test altered quotes and restored backups.
+1. Reuse existing contract catalog and continuous plan algorithms for report creation and bounded REST preview.
+2. Add dashboard forms and summaries with explicit as-of, contract and research price basis. Verify exact CLI/API identity and provenance separation.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
