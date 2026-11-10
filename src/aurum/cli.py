@@ -33,6 +33,7 @@ from aurum.forward import (
     register_forward,
 )
 from aurum.forward_reports import ForwardPeriod, publish_completed_periods, save_forward_report
+from aurum.holdout import save_holdout_evaluation
 from aurum.instruments import MgcContract
 from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_context import Regime, ResearchSession
@@ -254,6 +255,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     validation.add_argument("--walk-train-days", type=int, default=90)
     validation.add_argument("--walk-test-days", type=int, default=30)
     validation.add_argument("--extra-cost-cents", type=int, action="append")
+    validation.add_argument("--selection-only", action="store_true")
+    holdout = commands.add_parser(
+        "evaluate-holdout", help="replay a saved selection's final paper period from flat"
+    )
+    holdout.add_argument("selection_id")
     sensitivity = commands.add_parser(
         "parameter-sensitivity", help="compare one factor in pre-holdout validation"
     )
@@ -665,7 +671,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 walk_test_days=args.walk_test_days,
                 extra_cost_per_contract_cents=tuple(args.extra_cost_cents or (0, 50, 100, 200)),
             )
-            report_id = validate_runs(store, tuple(args.run_ids), validation_config)
+            report_id = validate_runs(
+                store, tuple(args.run_ids), validation_config, selection_only=args.selection_only
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "evaluate-holdout":
+            report_id = save_holdout_evaluation(store, args.selection_id)
             print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "matched-control":
             control_config = ControlConfig(

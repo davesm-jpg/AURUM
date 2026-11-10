@@ -127,6 +127,16 @@ Backtest replay accepts the strategy options and simulates a single position at 
 
 Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report. Use `parameter-sensitivity` for a set of saved candidates varying just one setting. The report contains only development and validation outcomes. For a subset, supply `--candidate` once per included run, including the baseline.
 
+To stage the final evaluation, run `aurum validate RUN_ID ... --selection-only`
+with the usual boundaries and options. The selection report reads only
+completed outcomes from before the final boundary. When the plan is fixed,
+run `aurum evaluate-holdout SELECTION_ID`. This starts paper execution flat
+after the recorded embargo and uses qualified decisions from the selected
+run's causal journal. The final report records each source decision and
+modeled fill. The dashboard defaults to saving the pre-holdout selection and
+offers a separate **Evaluate final holdout** form. The original combined
+report remains available for comparing slices of existing full replays.
+
 For a matched random control, choose a broader opportunity variant before inspecting holdout results. Build its backtest with the same settings as the reference except for the variant, such as `mss` in place of `sweep_mss_ifvg`. The control fits admission rates on development decisions, then replays all arms from flat after the holdout embargo. The comparison describes sampled structural opportunities on one shared period. Record the opportunity rule, strata and seed in the research plan before evaluation.
 
 Monte Carlo defaults to the reference assumed win rates of 30%, 35%, 40%, 45%, 50% and 60%. Set `--mode block_bootstrap --backtest RUN_ID` to resample net backtest outcomes, or use `shuffle` with a trade count at or below the observed sample size. Simulated paths use a generic fixed floor at trade closes. They are conditional on the source and assumptions.

@@ -24,6 +24,7 @@ from aurum.api_reports import (
     ContinuousSeriesRequest,
     ContractRollRequest,
     ForwardReportRequest,
+    HoldoutEvaluationRequest,
     IntrabarComparisonRequest,
     MatchedControlRequest,
     MonteCarloReportRequest,
@@ -391,6 +392,10 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
 
     @router.post("/reports/validation", status_code=201)
     def create_validation(request: ValidationReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/holdout", status_code=201)
+    def create_holdout(request: HoldoutEvaluationRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/parameter-sensitivity", status_code=201)

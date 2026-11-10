@@ -12,6 +12,7 @@ from aurum.contracts import DEFAULT_ROLL_POLICY, ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.holdout import save_holdout_evaluation
 from aurum.instruments import MgcContract
 from aurum.intrabar_reports import save_intrabar_comparison
 from aurum.market_data import canonical_json
@@ -149,6 +150,7 @@ class ValidationReportRequest(BaseModel):
     extra_cost_per_contract_cents: tuple[_AdditionalCost, ...] = Field(
         default=(0, 50, 100, 200), min_length=1, max_length=20
     )
+    selection_only: bool = False
 
     def run(self, store: DatasetStore) -> str:
         config = ValidationConfig(
@@ -163,7 +165,16 @@ class ValidationReportRequest(BaseModel):
             walk_test_days=self.walk_test_days,
             extra_cost_per_contract_cents=self.extra_cost_per_contract_cents,
         )
-        return validate_runs(store, self.run_ids, config)
+        return validate_runs(store, self.run_ids, config, selection_only=self.selection_only)
+
+
+class HoldoutEvaluationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selection_id: _RunId
+
+    def run(self, store: DatasetStore) -> str:
+        return save_holdout_evaluation(store, self.selection_id)
 
 
 class MatchedControlRequest(BaseModel):

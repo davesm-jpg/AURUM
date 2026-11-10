@@ -773,7 +773,9 @@ export default function Dashboard() {
         <ForwardWorkspace
           monitors={monitors}
           baselines={reports.filter(
-            (report) => report.kind === "chronological_validation",
+            (report) =>
+              report.kind === "chronological_validation" ||
+              report.kind === "flat_holdout_evaluation",
           )}
           onReport={async (id) => {
             await selectCompletedReport(id);
@@ -827,7 +829,12 @@ export default function Dashboard() {
             datasets={datasets}
             runs={runs.filter((item) => item.kind === "backtest")}
             validationReports={reports.filter(
-              (item) => item.kind === "chronological_validation",
+              (item) =>
+                [
+                  "chronological_validation",
+                  "chronological_selection",
+                  "flat_holdout_evaluation",
+                ].includes(item.kind),
             )}
             onComplete={selectCompletedReport}
           />

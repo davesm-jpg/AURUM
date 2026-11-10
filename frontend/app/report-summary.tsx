@@ -111,8 +111,7 @@ function MonteCarloReport({ result }: { result: RecordData }) {
 }
 
 function ValidationReport({ result }: { result: RecordData }) {
-  const holdout = record(result.holdout);
-  const summary = record(holdout.summary);
+  const selectionOnly = result.sample_kind === "development_and_validation";
   const folds: [string, RecordData][] = rows(
     result.walk_forward_before_holdout,
   ).map((fold) => [
@@ -137,7 +136,9 @@ function ValidationReport({ result }: { result: RecordData }) {
   return (
     <>
       <section className="analytics-section">
-        <h3>Chronological validation</h3>
+        <h3>
+          {selectionOnly ? "Pre-holdout selection" : "Chronological validation"}
+        </h3>
         <p className="muted">
           {label(result.data_kind)} · {utcDateTime(result.first_open)} to{" "}
           {utcDateTime(result.last_close)}
@@ -198,8 +199,38 @@ function ValidationReport({ result }: { result: RecordData }) {
           ]}
         />
       </section>
+      {selectionOnly ? (
+        <section className="analytics-section">
+          <h3>Selected candidate</h3>
+          <p className="muted">
+            {typeof result.selected_run_id === "string"
+              ? `Run ${result.selected_run_id.slice(0, 8)}. The final period has not been evaluated in this report.`
+              : "No candidate met the validation selection threshold."}
+          </p>
+        </section>
+      ) : (
+        <HoldoutOutcomes result={result} />
+      )}
+    </>
+  );
+}
+
+function HoldoutOutcomes({ result }: { result: RecordData }) {
+  const holdout = record(result.holdout);
+  const summary = record(holdout.summary);
+  const flat = result.sample_kind === "out_of_sample_flat_execution";
+  return (
+    <>
       <section className="analytics-section">
-        <h3>Final holdout</h3>
+        <h3>{flat ? "Flat-start final holdout" : "Final holdout"}</h3>
+        {flat && (
+          <p className="muted">
+            {label(result.data_kind)} · Paper execution started flat after the
+            embargo. Eligible decisions from{" "}
+            {utcDateTime(result.first_eligible_decision)} to{" "}
+            {utcDateTime(result.last_close)}.
+          </p>
+        )}
         {holdout.used_for_selection === false ? (
           <div className="metrics contained">
             <Metric
@@ -930,8 +961,13 @@ export function ReportSummary({ report }: { report: RecordData }) {
   const result = record(report.result);
   if (report.kind === "monte_carlo")
     return <MonteCarloReport result={result} />;
-  if (report.kind === "chronological_validation")
+  if (
+    report.kind === "chronological_validation" ||
+    report.kind === "chronological_selection"
+  )
     return <ValidationReport result={result} />;
+  if (report.kind === "flat_holdout_evaluation")
+    return <HoldoutOutcomes result={result} />;
   if (report.kind === "matched_random_control")
     return <MatchedControlReport report={report} />;
   if (report.kind === "dataset_reconciliation")

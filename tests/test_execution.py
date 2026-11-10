@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,7 @@ from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWind
 from aurum.execution import (
     ExecutionConfig,
     ExitReason,
+    JournalSignal,
     OrderEvent,
     OrderKind,
     PaperExecution,
@@ -16,10 +18,19 @@ from aurum.execution import (
 )
 from aurum.instruments import MgcContract
 from aurum.market_context import ContextSnapshot, Regime, ResearchSession
-from aurum.market_data import Candle, TradePrint
+from aurum.market_data import (
+    Candle,
+    DataKind,
+    ImportConfig,
+    TimestampLabel,
+    TradePrint,
+    prepare_csv,
+)
 from aurum.market_structure import Direction, Trend
+from aurum.paper_replay import PaperReplayPath, replay_scheduled_paths
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, size_paper_setup
 from aurum.performance import summarize
+from aurum.storage import DatasetStore
 from aurum.strategy import SetupEvent, SetupState, Variant
 from aurum.timestamps import MINUTE, TradeTimestamp, minute_timestamp
 
@@ -287,3 +298,50 @@ def test_performance_uses_closed_trade_equity_and_actual_sample_count() -> None:
     empty = summarize([], 2_500_000)
     assert empty["expectancy_cents"] is None
     assert empty["win_rate_wilson_95_iid"] is None
+
+
+def test_flat_paper_path_does_not_inherit_an_open_position(tmp_path: Path) -> None:
+    calendar = synthetic_calendar((0, 6))
+    candles = (
+        synthetic_minute(0),
+        synthetic_minute(1),
+        synthetic_minute(2),
+        synthetic_minute(3, high=210),
+        synthetic_minute(4, high=260),
+        synthetic_minute(5),
+    )
+    source = tmp_path / "synthetic-positions.csv"
+    rows = ["timestamp,contract,open,high,low,close,volume"]
+    for candle in candles:
+        rows.append(
+            f"{candle.opened_at.isoformat()},{CONTRACT.code},{candle.open_ticks / 10:.1f},"
+            f"{candle.high_ticks / 10:.1f},{candle.low_ticks / 10:.1f},"
+            f"{candle.close_ticks / 10:.1f},{candle.volume}"
+        )
+    source.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    store = DatasetStore(tmp_path / "synthetic-positions.sqlite")
+    data = ImportConfig("synthetic", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC)
+    dataset = store.save(prepare_csv(source, data, calendar))
+    prior = JournalSignal.from_setup_payload(
+        synthetic_signal(candles[0], setup_id="synthetic-prior").as_dict()
+    )
+    final = JournalSignal.from_setup_payload(
+        synthetic_signal(candles[2], Direction.BEARISH, "synthetic-final").as_dict()
+    )
+
+    full = PaperReplayPath(PaperExecution(calendar, CONTRACT, DEFAULT_RISK_CONFIG), audit=True)
+    flat = PaperReplayPath(PaperExecution(calendar, CONTRACT, DEFAULT_RISK_CONFIG), audit=True)
+    replay_scheduled_paths(
+        store,
+        dataset,
+        (full, flat),
+        {prior.confirmed_at: {0: [prior]}, final.confirmed_at: {0: [final], 1: [final]}},
+        candles[-1].available_at,
+    )
+    assert full.cancellations == {"position_or_order_open": 1}
+    assert [trade.signal.setup_id for trade in full.trades] == [prior.setup_id]
+    assert full.trades[0].net_cents == 9740
+    assert not flat.cancellations
+    assert [trade.signal.setup_id for trade in flat.trades] == [final.setup_id]
+    assert flat.trades[0].entry_at == final.confirmed_at
+    assert flat.trades[0].net_cents == -5260

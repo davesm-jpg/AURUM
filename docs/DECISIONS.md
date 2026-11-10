@@ -247,3 +247,12 @@
 - Decision — Follow a selected UID within one reviewed publication. Append changed titles and times at first observation. Require explicit cancellation of a known UID, and reject ambiguous UID or sequence evidence. Preserve all input checksums and observation times in the partial snapshot.
 - Consequences — The prior schedule still informs earlier assessments. The last observed schedule remains possible after omission. Publishers with unstable UIDs may produce independent schedule entries. Comparison is local and does not attest capture times or refresh a running monitor.
 - Files — `economic_ics.py`, `economic_events.py`, `cli.py`, `tests/test_economic_ics.py`.
+
+## ADR-027 — Separate final holdout execution from selection
+
+- Date — 2026-11-10.
+- Context — Cutting trades from a full replay can leave holdout opportunities suppressed by orders or positions from earlier periods.
+- Alternatives — Keep filtering completed full-path trades or save selection before running final execution independently.
+- Decision — Bound selection reads to outcomes recorded strictly before the final boundary. Save that selection before separately opening a fresh paper executor for the chosen candidate after the embargo. Reuse the recorded causal strategy decisions and their original rule versions.
+- Consequences — Full-replay validation remains reproducible. The new report measures a flat execution start with warmed strategy context. Existing raw data and other reports remain accessible to the operator, so analyst discipline still determines whether the period was unseen.
+- Files — `statistics.py`, `research_reports.py`, `holdout.py`, `paper_replay.py`, CLI, API and Reports.

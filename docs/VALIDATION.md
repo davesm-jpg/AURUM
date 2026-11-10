@@ -139,3 +139,24 @@ clock is authentic or that the selected publication covers other releases.
 Eleven synthetic iCalendar tests passed, including six comparison cases covering
 a changed release time, unchanged repeat, omission, explicit cancellation,
 duplicate UID, stale or conflicting sequence and out-of-order captures.
+
+## Staged final holdout
+
+The optional staged workflow saves only outcomes recorded strictly before the
+final boundary. Candidate selection, pre-holdout walk-forward windows and
+validation multiplicity adjustment reuse the established policy. The final
+report references the immutable selection and starts without an open order or
+position. Qualified decisions at the embargo boundary are eligible. A decision
+at the dataset's last close is excluded because no next minute exists.
+Strategy detection carries causal context from the source replay. The final
+paper executor uses the selected run's fill rules and optional trade-print
+ordering, including the ordinary end-of-data position mark.
+
+The synthetic tests compare normal CLI and API results, exact embargo
+inclusion, empty final samples, a prior position blocking a later order in a
+full replay, and matching reference and forward baselines. The dashboard was
+tested on a temporary synthetic loopback store through both saved reports.
+There were 218 Python and five frontend tests. Ruff, mypy, TypeScript and the
+production frontend build passed. Historical strategy performance is pending
+authorized data. Existing full backtests remain accessible, so predeclare
+rules and avoid viewing the final period before the selection is fixed.

@@ -39,6 +39,7 @@ _COMPARABLE_FIELDS = (
     "intrabar_ordering",
 )
 BACKTEST_ANALYTICS_VERSION = 2
+VALIDATION_SELECTION_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,15 +61,22 @@ class _BacktestEvidence:
     trade_diagnostics: tuple[_TradeDiagnostics, ...]
 
 
-def validate_runs(store: DatasetStore, run_ids: tuple[str, ...], config: ValidationConfig) -> str:
+def validate_runs(
+    store: DatasetStore,
+    run_ids: tuple[str, ...],
+    config: ValidationConfig,
+    *,
+    selection_only: bool = False,
+) -> str:
     if not run_ids or len(set(run_ids)) != len(run_ids):
         raise ValueError("provide distinct backtest run IDs")
-    runs = {run_id: store.describe_backtest(run_id) for run_id in sorted(run_ids)}
+    describe_run = store.backtest_manifest if selection_only else store.describe_backtest
+    runs = {run_id: describe_run(run_id) for run_id in sorted(run_ids)}
     first = next(iter(runs.values()))
     if any(not _comparable(first, run) for run in runs.values()):
         raise ValueError("candidate backtests must share data, evidence and execution assumptions")
     dataset = store.describe(str(first["dataset_id"]))
-    definition = {
+    definition: dict[str, object] = {
         **asdict(config),
         "validation_start": config.validation_start.isoformat(),
         "holdout_start": config.holdout_start.isoformat(),
@@ -76,11 +84,13 @@ def validate_runs(store: DatasetStore, run_ids: tuple[str, ...], config: Validat
         "candidate_run_ids": sorted(run_ids),
         "dataset": _source(dataset["provenance"], str(dataset["dataset_id"])),
     }
+    cutoff = config.holdout_start if selection_only else None
     report = evaluate(
-        [load_candidate(store, run_id) for run_id in runs],
+        [_load_backtest_evidence(store, run_id, before=cutoff).candidate for run_id in runs],
         datetime.fromisoformat(dataset["first_open"]),
         datetime.fromisoformat(dataset["last_close"]),
         config,
+        selection_only=selection_only,
     )
     report["data_kind"] = dataset["provenance"]["data_kind"]
     report["dataset"] = definition["dataset"]
@@ -92,6 +102,11 @@ def validate_runs(store: DatasetStore, run_ids: tuple[str, ...], config: Validat
         for run_id, run in runs.items()
     }
     report["execution_config"] = first["execution_config"]
+    if selection_only:
+        definition["validation_selection_version"] = VALIDATION_SELECTION_VERSION
+        report["validation_selection_version"] = VALIDATION_SELECTION_VERSION
+        report["sample_kind"] = "development_and_validation"
+        return store.save_analysis("chronological_selection", definition, report)
     return store.save_analysis("chronological_validation", definition, report)
 
 
@@ -176,14 +191,32 @@ def backtest_analytics(store: DatasetStore, run_id: str, window: int) -> dict[st
 
 
 def _load_backtest_evidence(
-    store: DatasetStore, run_id: str, *, include_diagnostics: bool = False
+    store: DatasetStore,
+    run_id: str,
+    *,
+    include_diagnostics: bool = False,
+    before: datetime | None = None,
 ) -> _BacktestEvidence:
     signals: dict[str, tuple[datetime, int | None]] = {}
     observations = []
     by_date: Counter[str] = Counter()
     by_session: Counter[str] = Counter()
     diagnostics = []
-    for item in store.structure_events(run_id):
+    items = (
+        store.structure_events(run_id)
+        if before is None
+        else (
+            payload
+            for _, payload in store.timed_structure_payloads(
+                run_id,
+                None,
+                before,
+                end_exclusive=True,
+                kinds=("paper_setup_transition", "paper_trade_completed", "paper_entry_canceled"),
+            )
+        )
+    )
+    for item in items:
         if item["event"] == "paper_setup_transition" and item["state"] == "paper_signal":
             score = item["score"]
             total = score["total"] if isinstance(score, dict) else None

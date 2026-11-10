@@ -4,6 +4,7 @@ import { label, record, rows, utcDateTime } from "./format";
 
 type ReportKind =
   | "validation"
+  | "holdout"
   | "matched-control"
   | "intrabar-comparison"
   | "parameter-sensitivity"
@@ -30,6 +31,7 @@ type QuoteChoice = {
   series_id: string;
   provenance: { contract: string; provider: string; data_kind: string };
 };
+type ValidationChoice = { report_id: string; created_at: string; kind: string };
 type Defaults = {
   matched_control: RecordData;
   control_strata: string[];
@@ -44,6 +46,7 @@ type Defaults = {
 };
 const TYPES: Record<ReportKind, string> = {
   validation: "Chronological validation",
+  holdout: "Evaluate final holdout",
   "matched-control": "Matched random control",
   "intrabar-comparison": "Intrabar execution sensitivity",
   "parameter-sensitivity": "Parameter sensitivity",
@@ -110,7 +113,7 @@ export function ReportBuilder({
 }: {
   runs: RunChoice[];
   datasets: DatasetChoice[];
-  validationReports: { report_id: string; created_at: string }[];
+  validationReports: ValidationChoice[];
   datasetId: string;
   onComplete: (reportId: string) => Promise<void>;
 }) {
@@ -214,7 +217,10 @@ export function ReportBuilder({
           walk_train_days: int("walk_train_days"),
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
+          selection_only: fields.has("selection_only"),
         };
+      } else if (kind === "holdout") {
+        request = { selection_id: fields.get("selection_id") };
       } else if (kind === "contract-roll") {
         const openInterest = fields.get("open_interest_lead_bps");
         request = {
@@ -368,6 +374,15 @@ export function ReportBuilder({
       ? `${label(run.variant)} · ${run.timeframe} · ${id.slice(0, 8)}`
       : id.slice(0, 8);
   };
+  const selections = validationReports.filter(
+    (report) => report.kind === "chronological_selection",
+  );
+  const evaluated = validationReports.filter(
+    (report) => report.kind !== "chronological_selection",
+  );
+  const sensitivitySources = validationReports.filter(
+    (report) => report.kind !== "flat_holdout_evaluation",
+  );
   const canRun = {
     reconciliation: comparisonDatasets.length > 0,
     "intrabar-comparison": pairedRuns.length > 0,
@@ -376,8 +391,9 @@ export function ReportBuilder({
     "spread-observations": compatibleQuotes.length > 0,
     "contract-roll": true,
     "continuous-series": datasets.length > 0,
-    "matched-control": runs.length > 0 && validationReports.length > 0,
+    "matched-control": runs.length > 0 && evaluated.length > 0,
     validation: runs.length > 0,
+    holdout: selections.length > 0,
     "paper-account": true,
     "monte-carlo": mode === "scenario" || runs.length > 0,
   }[kind];
@@ -415,8 +431,9 @@ export function ReportBuilder({
               {kind === "validation" && (
                 <>
                   <p className="muted">
-                    Use comparable runs. Choose the final holdout boundary
-                    before comparing results.
+                    Choose comparable runs and fix the final boundary before
+                    comparing results. Save the selection before opening the
+                    final period.
                   </p>
                   <label>
                     Candidate backtests
@@ -492,6 +509,34 @@ export function ReportBuilder({
                       />
                     </label>
                   </div>
+                  <label className="checkbox-setting">
+                    <input
+                      name="selection_only"
+                      type="checkbox"
+                      defaultChecked
+                    />
+                    Save pre-holdout selection only
+                  </label>
+                </>
+              )}
+              {kind === "holdout" && (
+                <>
+                  <p className="muted">
+                    Open the final period for the selected candidate. Paper
+                    execution starts flat after the saved embargo.
+                  </p>
+                  <label>
+                    Saved pre-holdout selection
+                    <select name="selection_id" required>
+                      <option value="">Select a report</option>
+                      {selections.map((item) => (
+                        <option key={item.report_id} value={item.report_id}>
+                          {item.report_id.slice(0, 8)} ·{" "}
+                          {utcDateTime(item.created_at)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </>
               )}
               {kind === "contract-roll" && (
@@ -638,7 +683,7 @@ export function ReportBuilder({
                       }}
                     >
                       <option value="">Select a report</option>
-                      {validationReports.map((item) => (
+                      {sensitivitySources.map((item) => (
                         <option key={item.report_id} value={item.report_id}>
                           {item.report_id.slice(0, 8)} ·{" "}
                           {utcDateTime(item.created_at)}
@@ -808,10 +853,10 @@ export function ReportBuilder({
                     signals.
                   </p>
                   <label>
-                    Chronological validation report
+                    Evaluated holdout report
                     <select name="validation_id" required>
                       <option value="">Select a report</option>
-                      {validationReports.map((item) => (
+                      {evaluated.map((item) => (
                         <option key={item.report_id} value={item.report_id}>
                           {item.report_id.slice(0, 8)} ·{" "}
                           {utcDateTime(item.created_at)}

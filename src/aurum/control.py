@@ -1,29 +1,26 @@
 """Development-fitted random admission controls for an independent paper holdout."""
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import StrEnum
 from hashlib import sha256
 from typing import Any
 
-from aurum.exchange_calendar import SessionCalendar, TradingWindow
+from aurum.exchange_calendar import SessionCalendar
 from aurum.execution import (
     EXECUTION_VERSION,
     TRADE_PRINT_ORDERING,
     ExecutionConfig,
-    ExecutionEvent,
     JournalSignal,
-    OrderKind,
     PaperExecution,
-    PaperTrade,
     TradePrintLookup,
 )
 from aurum.instruments import MgcContract
-from aurum.market_data import Candle, canonical_json
+from aurum.market_data import canonical_json
+from aurum.paper_replay import PaperReplayPath, replay_scheduled_paths
 from aurum.paper_risk import RiskConfig, TargetMode
-from aurum.performance import PERFORMANCE_VERSION, summarize
+from aurum.performance import PERFORMANCE_VERSION
 from aurum.statistics import bootstrap_expectancy, quantile
 from aurum.storage import DatasetStore
 from aurum.strategy import SetupState
@@ -107,71 +104,6 @@ class _Admission:
         }
 
 
-@dataclass(slots=True)
-class _Path:
-    engine: PaperExecution
-    audit: bool = False
-    trades: list[PaperTrade] = field(default_factory=list)
-    selected: list[dict[str, object]] = field(default_factory=list)
-    events: list[dict[str, object]] = field(default_factory=list)
-    cancellations: Counter[str] = field(default_factory=Counter)
-    admitted: int = 0
-
-    @property
-    def active(self) -> bool:
-        return self.engine.pending_setup_id is not None or self.engine.open_setup_id is not None
-
-    def record(self, event: ExecutionEvent) -> None:
-        if self.audit:
-            self.events.append(event.as_dict())
-        if isinstance(event, PaperTrade):
-            self.trades.append(event)
-        elif event.kind is OrderKind.CANCELED and event.reason is not None:
-            self.cancellations[event.reason] += 1
-
-    def advance(self, candle: Candle, signals: Iterable[JournalSignal]) -> None:
-        for event in self.engine.advance(candle):
-            self.record(event)
-        for signal in signals:
-            self.admitted += 1
-            if self.audit:
-                self.selected.append(
-                    {
-                        "setup_id": signal.setup_id,
-                        "decision_at": signal.confirmed_at.isoformat(),
-                        "direction": signal.direction,
-                        "session": signal.context.session,
-                        "regime": signal.context.regime,
-                        "plan": signal.plan.as_dict(),
-                    }
-                )
-            self.record(self.engine.submit(signal))
-
-    def summary(self, starting_equity: int) -> dict[str, object]:
-        stats = summarize(self.trades, starting_equity)
-        return {
-            "admitted_signals": self.admitted,
-            "cancellations": dict(sorted(self.cancellations.items())),
-            **{
-                key: stats[key]
-                for key in (
-                    "trades",
-                    "wins",
-                    "losses",
-                    "break_even",
-                    "win_rate",
-                    "net_profit_cents",
-                    "expectancy_cents",
-                    "max_drawdown_cents",
-                    "total_commission_cents",
-                    "total_slippage_cents",
-                    "total_spread_cents",
-                    "ambiguous_exits",
-                )
-            },
-        }
-
-
 def _qualified(
     store: DatasetStore,
     run_id: str,
@@ -206,9 +138,9 @@ def _paths(
     config: ControlConfig,
     end: datetime,
     lookup: TradePrintLookup | None,
-) -> list[_Path]:
+) -> list[PaperReplayPath]:
     paths = [
-        _Path(
+        PaperReplayPath(
             PaperExecution(calendar, contract, risk, execution, trade_prints=lookup),
             index < 2,
         )
@@ -227,24 +159,7 @@ def _paths(
             if rate.admits(signal, config.seed, replicate):
                 scheduled[signal.confirmed_at][replicate + 1].append(signal)
 
-    if scheduled:
-        first = min(scheduled) - MINUTE
-        active: set[int] = set()
-        for batch in store.replay_batches(dataset_id, TradingWindow(first, end)):
-            for candle in batch:
-                ready = scheduled.pop(candle.available_at, {})
-                for index in active | ready.keys():
-                    path = paths[index]
-                    path.advance(candle, ready.get(index, ()))
-                    if path.active:
-                        active.add(index)
-                    else:
-                        active.discard(index)
-        if scheduled:
-            raise ValueError("a stored control decision has no source minute close")
-    for path in paths:
-        for event in path.engine.finish():
-            path.record(event)
+    replay_scheduled_paths(store, dataset_id, paths, scheduled, end)
     return paths
 
 
@@ -287,7 +202,10 @@ def save_matched_control(
     config = config if config is not None else ControlConfig()
     validation = store.describe_analysis(validation_id)
     result = validation["result"]
-    if validation["kind"] != "chronological_validation" or not isinstance(result, dict):
+    if validation["kind"] not in (
+        "chronological_validation",
+        "flat_holdout_evaluation",
+    ) or not isinstance(result, dict):
         raise ValueError("matched control requires a chronological validation report")
     holdout = result.get("holdout")
     if not isinstance(holdout, dict) or holdout.get("used_for_selection") is not False:

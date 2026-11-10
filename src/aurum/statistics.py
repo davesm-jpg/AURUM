@@ -85,6 +85,8 @@ def evaluate(
     first_open: datetime,
     last_close: datetime,
     config: ValidationConfig,
+    *,
+    selection_only: bool = False,
 ) -> dict[str, object]:
     if not candidates or len({candidate.run_id for candidate in candidates}) != len(candidates):
         raise ValueError("validation requires distinct candidate runs")
@@ -95,24 +97,22 @@ def evaluate(
     ):
         raise ValueError("validation and holdout boundaries must be inside the sample period")
     if any(
-        item.decision_at < first_open or item.observed_at > last_close
+        item.decision_at < first_open
+        or item.observed_at > last_close
+        or (selection_only and item.observed_at >= config.holdout_start)
         for candidate in candidates
         for item in candidate.observations
     ):
-        raise ValueError("trade observation is outside the sample period")
+        raise ValueError("trade observation is outside the available sample period")
 
     embargo = timedelta(minutes=config.embargo_minutes)
     dev: dict[str, tuple[Observation, ...]] = {}
     validation: dict[str, tuple[Observation, ...]] = {}
-    holdout: dict[str, tuple[Observation, ...]] = {}
     for candidate in candidates:
         items = candidate.observations
         dev[candidate.run_id] = select_period(items, first_open, config.validation_start)
         validation[candidate.run_id] = select_period(
             items, config.validation_start + embargo, config.holdout_start
-        )
-        holdout[candidate.run_id] = select_period(
-            items, config.holdout_start + embargo, last_close, include_final_close=True
         )
 
     chosen = _choose(validation, config.minimum_selection_trades)
@@ -133,25 +133,7 @@ def evaluate(
             "validation": outcome_summary(observed),
             "validation_uncertainty": uncertainty.as_dict() if uncertainty else None,
         }
-    final = None
-    if chosen is not None:
-        sample = holdout[chosen]
-        uncertainty = bootstrap_expectancy(
-            [item.net_cents for item in sample],
-            config.bootstrap_draws,
-            config.block_length,
-            config.seed,
-        )
-        final = {
-            "run_id": chosen,
-            "used_for_selection": False,
-            "summary": outcome_summary(sample),
-            "uncertainty": uncertainty.as_dict() if uncertainty else None,
-            "cost_sensitivity_fixed_fills": cost_sensitivity(
-                sample, config.extra_cost_per_contract_cents
-            ),
-        }
-    return {
+    report: dict[str, object] = {
         "validation_version": VALIDATION_VERSION,
         "first_open": first_open.isoformat(),
         "last_close": last_close.isoformat(),
@@ -168,15 +150,53 @@ def evaluate(
         "selected_run_id": chosen,
         "candidates": candidate_reports,
         "validation_holm_adjusted_p": _holm(p_values),
-        "purged_or_embargoed": {
-            candidate.run_id: len(candidate.observations)
-            - len(dev[candidate.run_id])
-            - len(validation[candidate.run_id])
-            - len(holdout[candidate.run_id])
-            for candidate in candidates
-        },
-        "holdout": final,
         "walk_forward_before_holdout": _walk_forward(candidates, first_open, config, embargo),
+    }
+    excluded = {
+        candidate.run_id: len(candidate.observations)
+        - len(dev[candidate.run_id])
+        - len(validation[candidate.run_id])
+        for candidate in candidates
+    }
+    if selection_only:
+        report["purged_or_embargoed_pre_holdout"] = excluded
+        return report
+
+    holdout = {
+        candidate.run_id: select_period(
+            candidate.observations,
+            config.holdout_start + embargo,
+            last_close,
+            include_final_close=True,
+        )
+        for candidate in candidates
+    }
+    report["purged_or_embargoed"] = {
+        run_id: count - len(holdout[run_id]) for run_id, count in excluded.items()
+    }
+    report["holdout"] = (
+        holdout_statistics(chosen, holdout[chosen], config) if chosen is not None else None
+    )
+    return report
+
+
+def holdout_statistics(
+    run_id: str, sample: Sequence[Observation], config: ValidationConfig
+) -> dict[str, object]:
+    uncertainty = bootstrap_expectancy(
+        [item.net_cents for item in sample],
+        config.bootstrap_draws,
+        config.block_length,
+        config.seed,
+    )
+    return {
+        "run_id": run_id,
+        "used_for_selection": False,
+        "summary": outcome_summary(sample),
+        "uncertainty": uncertainty.as_dict() if uncertainty else None,
+        "cost_sensitivity_fixed_fills": cost_sensitivity(
+            sample, config.extra_cost_per_contract_cents
+        ),
     }
 
 

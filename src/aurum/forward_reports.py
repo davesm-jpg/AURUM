@@ -339,7 +339,10 @@ def _historical_baseline(
 ) -> dict[str, Any]:
     report = store.describe_analysis(report_id)
     result = report["result"]
-    if report["kind"] != "chronological_validation" or not isinstance(result, dict):
+    if report["kind"] not in (
+        "chronological_validation",
+        "flat_holdout_evaluation",
+    ) or not isinstance(result, dict):
         raise ValueError("forward comparison requires a chronological validation report")
     holdout = result.get("holdout")
     if not isinstance(holdout, dict) or holdout.get("used_for_selection") is not False:
@@ -386,6 +389,11 @@ def _historical_baseline(
         "used_for_selection": False,
         "outcomes": holdout["summary"],
         "uncertainty": holdout["uncertainty"],
+        **(
+            {"sample_kind": result["sample_kind"]}
+            if report["kind"] == "flat_holdout_evaluation"
+            else {}
+        ),
     }
 
 

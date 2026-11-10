@@ -74,7 +74,10 @@ def _outcomes(section: dict[str, object]) -> dict[str, object]:
 def _validation_result(store: DatasetStore, validation_id: str) -> dict[str, Any]:
     report = store.describe_analysis(validation_id)
     result = report["result"]
-    if report["kind"] != "chronological_validation" or not isinstance(result, dict):
+    if report["kind"] not in (
+        "chronological_validation",
+        "chronological_selection",
+    ) or not isinstance(result, dict):
         raise ValueError("parameter sensitivity requires a chronological validation report")
     return result
 

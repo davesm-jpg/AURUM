@@ -20,6 +20,7 @@ from aurum.execution import DEFAULT_EXECUTION_CONFIG
 from aurum.feed_frames import FeedFrame
 from aurum.forward import ForwardPaper, forward_events, register_forward
 from aurum.forward_reports import ForwardPeriod, save_forward_report
+from aurum.holdout import save_holdout_evaluation
 from aurum.imbalances import ImbalanceConfig
 from aurum.instruments import MgcContract
 from aurum.intrabar_reports import save_intrabar_comparison
@@ -1091,6 +1092,124 @@ def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_pat
     assert shifted_result["holdout_control_opportunities"] == 1
 
 
+def test_staged_selection_and_flat_holdout_have_distinct_causal_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, dataset, sessions = prepare_synthetic_research_sample(tmp_path)
+    run = build_synthetic_trial(store, dataset, Variant.SWEEP_MSS_IFVG)
+    start = sessions[3].start + 60 * MINUTE
+    config = ValidationConfig(
+        sessions[2].start - timedelta(hours=2),
+        start,
+        embargo_minutes=5,
+        minimum_selection_trades=1,
+        bootstrap_draws=10,
+    )
+    legacy_id = validate_runs(store, (run,), config)
+    old = store.describe_analysis(legacy_id)["result"]
+    assert isinstance(old, dict)
+    assert old["selected_run_id"] == run
+
+    def unexpected(_run_id: str) -> None:
+        pytest.fail("staged selection or evaluation read full-replay results")
+
+    monkeypatch.setattr(store, "describe_backtest", unexpected)
+    monkeypatch.setattr(store, "structure_events", unexpected)
+    selection_id = validate_runs(store, (run,), config, selection_only=True)
+    selection = store.describe_analysis(selection_id)
+    evidence = selection["result"]
+    assert isinstance(evidence, dict)
+    assert selection["kind"] == "chronological_selection"
+    assert evidence["data_kind"] == "synthetic"
+    assert evidence["selected_run_id"] == run
+    assert evidence["candidates"] == old["candidates"]
+    assert "holdout" not in evidence and "purged_or_embargoed" not in evidence
+    assert evidence["purged_or_embargoed_pre_holdout"] == {run: 0}
+    final_id = save_holdout_evaluation(store, selection_id)
+    final = store.describe_analysis(final_id)
+    evaluation = final["result"]
+    assert isinstance(evaluation, dict)
+    assert final["kind"] == "flat_holdout_evaluation"
+    assert evaluation["initial_state"] == "flat_without_pending_order"
+    assert evaluation["first_eligible_decision"] == (start + 5 * MINUTE).isoformat()
+    assert evaluation["holdout"]["summary"]["net_cents"] == -160
+    decisions = evaluation["audit"]["decisions"]
+    assert len(decisions) == 1
+    assert decisions[0]["decision_at"] == evaluation["first_eligible_decision"]
+    assert decisions[0]["source_event_id"].startswith(f"{run}/")
+    assert evaluation["audit"]["execution_events"][-1]["net_cents"] == -160
+    assert store.describe_analysis(selection_id) == selection
+    assert save_holdout_evaluation(store, selection_id) == final_id
+
+    empty_id = validate_runs(store, (run,), replace(config, embargo_minutes=6), selection_only=True)
+    empty = store.describe_analysis(save_holdout_evaluation(store, empty_id))["result"]
+    assert isinstance(empty, dict)
+    assert empty["holdout"]["summary"]["trades"] == 0
+    assert empty["audit"]["execution_events"] == []
+    insufficient = validate_runs(
+        store, (run,), replace(config, minimum_selection_trades=100), selection_only=True
+    )
+    with pytest.raises(ValueError, match="no eligible candidate"):
+        save_holdout_evaluation(store, insufficient)
+    with pytest.raises(ValueError, match="saved pre-holdout selection"):
+        save_holdout_evaluation(store, legacy_id)
+
+    prefix = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    command = subprocess.run(
+        [
+            *prefix,
+            "validate",
+            run,
+            "--validation-start",
+            config.validation_start.isoformat(),
+            "--holdout-start",
+            config.holdout_start.isoformat(),
+            "--embargo-minutes",
+            "5",
+            "--minimum-selection-trades",
+            "1",
+            "--bootstrap-draws",
+            "10",
+            "--selection-only",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(command.stdout) == selection
+    command = subprocess.run(
+        [*prefix, "evaluate-holdout", selection_id], check=True, capture_output=True, text=True
+    )
+    assert json.loads(command.stdout) == final
+
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        created = client.post(
+            "/api/reports/validation",
+            json={
+                "run_ids": [run],
+                "validation_start": config.validation_start.isoformat(),
+                "holdout_start": config.holdout_start.isoformat(),
+                "embargo_minutes": 5,
+                "minimum_selection_trades": 1,
+                "bootstrap_draws": 10,
+                "selection_only": True,
+            },
+        )
+        assert created.status_code == 201 and created.json() == selection
+        created = client.post("/api/reports/holdout", json={"selection_id": selection_id})
+        assert created.status_code == 201 and created.json() == final
+
+    unpatched = DatasetStore(store.path)
+    opportunity = build_synthetic_trial(unpatched, dataset, Variant.MSS)
+    control = unpatched.describe_analysis(
+        save_matched_control(unpatched, final_id, opportunity, ControlConfig(bootstrap_draws=10))
+    )["result"]
+    assert isinstance(control, dict)
+    assert control["reference"]["net_profit_cents"] == evaluation["holdout"]["summary"]["net_cents"]
+
+
 def test_parameter_sensitivity_is_one_factor_and_pre_holdout_only(tmp_path: Path) -> None:
     store, dataset, sessions = prepare_synthetic_research_sample(tmp_path)
     baseline = build_synthetic_trial(store, dataset, Variant.SWEEP_MSS_IFVG)
@@ -1150,6 +1269,11 @@ def test_parameter_sensitivity_is_one_factor_and_pre_holdout_only(tmp_path: Path
     assert other_row["validation_expectancy_difference_cents"] == (
         other_row["validation"]["expectancy_cents"] - base_row["validation"]["expectancy_cents"]
     )
+    selection = validate_runs(store, candidates, config, selection_only=True)
+    staged_id = save_parameter_sensitivity(
+        store, selection, baseline, SensitivityFactor.VARIANT, run_ids=(baseline, different)
+    )
+    assert store.describe_analysis(staged_id)["result"] == result
     api = pytest.importorskip("aurum.api")
     http = pytest.importorskip("fastapi.testclient")
     with http.TestClient(api.create_app(store)) as client:
@@ -1533,16 +1657,15 @@ def test_forward_paper_restores_after_observed_signal_and_handles_recovery(
             DEFAULT_STRATEGY_CONFIG,
             execution=DEFAULT_EXECUTION_CONFIG,
         )
-        baseline = validate_runs(
-            store,
-            (history,),
-            ValidationConfig(
-                START + 55 * MINUTE,
-                START + 72 * MINUTE,
-                minimum_selection_trades=1,
-                bootstrap_draws=10,
-            ),
+        config = ValidationConfig(
+            START + 55 * MINUTE,
+            START + 72 * MINUTE,
+            minimum_selection_trades=1,
+            bootstrap_draws=10,
         )
+        baseline = validate_runs(store, (history,), config)
+        selection = validate_runs(store, (history,), config, selection_only=True)
+        flat = save_holdout_evaluation(store, selection)
         with pytest.raises(ValueError, match="history ending before registration"):
             save_forward_report(
                 store, run, ForwardPeriod.DAILY, TRADE_DATE, baseline_validation_id=baseline
@@ -1555,3 +1678,9 @@ def test_forward_paper_restores_after_observed_signal_and_handles_recovery(
         assert isinstance(comparison, dict)
         assert comparison["historical_holdout"]["used_for_selection"] is False
         assert comparison["historical_holdout"]["backtest_run_id"] == history
+        compared = save_forward_report(
+            store, later, ForwardPeriod.DAILY, TRADE_DATE, baseline_validation_id=flat
+        )
+        comparison = store.describe_analysis(compared)["result"]
+        assert isinstance(comparison, dict)
+        assert comparison["historical_holdout"]["sample_kind"] == "out_of_sample_flat_execution"

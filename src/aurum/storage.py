@@ -674,6 +674,14 @@ class DatasetStore:
                 raise ValueError("invalid persisted backtest summary")
             return {**description, "summary": payload}
 
+    def backtest_manifest(self, run_id: str) -> dict[str, object]:
+        """Read the frozen rules without loading full-replay outcomes or counts."""
+        with self.connection() as db:
+            definition = json.loads(self._structure_run(db, run_id)["definition"])
+        if not isinstance(definition, dict) or "backtest_version" not in definition:
+            raise ValueError("run does not contain a paper backtest")
+        return definition
+
     def structure_events(self, run_id: str) -> Iterator[dict[str, object]]:
         with self.connection() as db:
             run = self._structure_run(db, run_id)
@@ -712,28 +720,42 @@ class DatasetStore:
             after = rows[-1]["sequence"]
 
     def timed_structure_payloads(
-        self, run_id: str, start: datetime | None, through: datetime
+        self,
+        run_id: str,
+        start: datetime | None,
+        through: datetime,
+        *,
+        end_exclusive: bool = False,
+        kinds: tuple[str, ...] = (),
     ) -> Iterator[tuple[int, dict[str, object]]]:
         """Read immutable evidence in availability order, retaining sequence on ties."""
         with self.connection() as db:
             indexed = db.execute("PRAGMA user_version").fetchone()[0] >= 11
-        if not indexed:
+        if not indexed and not end_exclusive and not kinds:
             for batch in self.structure_payload_batches(run_id):
                 yield from batch
             return
         stamp = start.isoformat() if start is not None else ""
         after = 0
         end = through.isoformat()
+        index = "INDEXED BY structure_event_available" if indexed else ""
+        comparison = "<" if end_exclusive else "<="
+        filter_kinds = (
+            f"AND json_extract(payload, '$.event') IN ({', '.join('?' for _ in kinds)})"
+            if kinds
+            else ""
+        )
         while True:
             with self.connection() as db:
                 rows = db.execute(
                     f"""SELECT sequence, payload, {_STRUCTURE_EVENT_AT} AS available
-                        FROM structure_events INDEXED BY structure_event_available
+                        FROM structure_events {index}
                         WHERE run_id = ? AND {_STRUCTURE_EVENT_AT} >= ?
                           AND ({_STRUCTURE_EVENT_AT}, sequence) > (?, ?)
-                          AND {_STRUCTURE_EVENT_AT} <= ?
+                          AND {_STRUCTURE_EVENT_AT} {comparison} ?
+                          {filter_kinds}
                         ORDER BY {_STRUCTURE_EVENT_AT}, sequence LIMIT 1000""",
-                    (run_id, stamp, stamp, after, end),
+                    (run_id, stamp, stamp, after, end, *kinds),
                 ).fetchall()
             for row in rows:
                 yield row["sequence"], json.loads(row["payload"])

@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Staged chronological validation
+
+- Added a pre-holdout selection report and a separately opened final paper replay with a flat initial position, embargo and source-linked execution audit.
+- The dashboard defaults to selection before evaluation. Existing combined validation remains available, and final flat-start results can feed matched controls and forward baseline comparisons.
+
 ## 2026-11-10 — Economic release capture comparison
 
 - Added causal schedule revisions and explicit cancellations from ordered local iCalendar publications, with checksums and observation times retained in the snapshot.
