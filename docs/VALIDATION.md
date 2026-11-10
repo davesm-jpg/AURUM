@@ -1,14 +1,16 @@
 # AURUM validation
 
-## Verified checkpoint — 2026-11-09
+## Verified checkpoint — 2026-11-10
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.
-- `.venv/bin/python -m pytest -q` passed 151 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
+- `.venv/bin/python -m pytest -q` passed 159 cases with PyArrow 26.0.1 and websockets 15.0.1 installed. New tests cover notification concurrency, retry timing, uncertain results, health, quiet hours, cancellation and fake Telegram/Discord payloads. Monitor tests cover local WebSocket, gaps, restart, source status, rollback and synthetic parity.
 - A synthetic SQLite database created by the v1 implementation was opened and migrated. `cmp` verified identical provenance and replay before and after the write migration. SQLite's integrity check passed. The original dataset ID is asserted in the CLI test.
 - `.venv/bin/ruff check .` passed.
 - `.venv/bin/ruff format --check .` passed.
-- `.venv/bin/mypy .` passed across 60 source/test files.
+- `.venv/bin/mypy .` passed across 61 source/test and benchmark files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
+
+A concurrent restart test held strategy reconstruction open while the original writer committed, then verified the resumed instance replayed only the new durable tail. Historical lookup matched the full journal across an indexed migration, and all five timeframe lookbacks matched aggregation across shortened and clipped windows.
 
 The November 10 performance checkpoint used 7,200 and 21,600 synthetic minutes. The monitor projection matched the full-journal fallback in recovery tests and retained the benchmark digest. See [performance measurements](PERFORMANCE.md).
 

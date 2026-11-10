@@ -37,3 +37,9 @@ Chart time grew with journal length for fixed-width views, even when the request
 At 21,600 synthetic minutes the recent monitor chart median decreased from 335.1 ms to 11.7 ms. The output retained the baseline digest. The monitor chart counts actual analyzed primary closes before the earliest observation in view, then starts no later than the maximum configured span lifetime plus two bars. Recovery can make a much earlier source bar available within the view. The lower bound follows that observation and the upper bound follows the pinned applied cursor. The v9 fallback still scans the relevant full journal.
 
 The 60-session simulated ingestion measurement moved from 32.87 s to 33.47 s after adding the indexes. These are single measurements and include SQLite commits per minute.
+
+## Indexed historical projection and restart lock scope
+
+On the same 21,600-minute workload, the first historical chart took 6.3 ms and the recent historical chart took 10.0 ms, compared with 144.9 and 143.1 ms in the baseline. The recent monitor chart took 11.8 ms. All three projection digests remained unchanged. Evidence replay and persistence measured 883.6 ms versus 845.3 ms before indexing. A historical backtest with carried positions still reads its earlier order prefix when the view might intersect an open bracket.
+
+Restart reconstruction still processes the applied prefix when a process has no in-memory state. The concurrency test verified that another writer commits while reconstruction is paused. Benchmark restart times above precede that lock-scope change.

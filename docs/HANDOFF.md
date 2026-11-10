@@ -3,9 +3,9 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — O01 is in progress. The synthetic baseline and bounded monitor chart are verified.
+- Current milestone — O01 is in progress. The synthetic baseline, bounded charts and lock-free restart reconstruction are verified.
 - Current branch — `main`.
-- Last verified commit — `a115039faa3919b33e1136de114e47526c11adcc`.
+- Last verified commit — `96974f1a2a9021a1863bfed3634cbccb23b21781`.
 
 ## Current Objective
 
@@ -30,7 +30,7 @@
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v10. The benchmark entry point is `benchmarks/synthetic_pipeline.py`. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v11. The benchmark entry point is `benchmarks/synthetic_pipeline.py`. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
 - Remaining portions — Monitor streams support native reconnect cursors and checkpoint-triggered chart refresh. Production feed and delivery remain unverified. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
@@ -53,8 +53,7 @@
 
 ## Test Status
 
-- Latest targeted check — 37 API, monitoring and market-structure tests passed. The 21,600-minute synthetic monitor chart fell from 335 ms to 12 ms with identical output digests.
-- Passed — `.venv/bin/python -m pytest -q` (151), Ruff lint/format, mypy (60 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
+- Passed — `.venv/bin/python -m pytest -q` (159), Ruff lint/format, mypy (61 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -68,8 +67,8 @@
 
 ## Immediate Next Actions
 
-1. Finish historical chart timestamp indexing and prove its window against the replay aggregator. Verify all projection hashes from [performance](PERFORMANCE.md).
-2. Move monitor restart reconstruction outside the SQLite write transaction and verify identical post-restart evidence.
+1. Batch historical backfill commits in bounded groups while preserving the single-frame journal outputs and recovery gate. Measure the synthetic workload again.
+2. Improve local storage reliability and add a matched research control for the strategy hypothesis.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat

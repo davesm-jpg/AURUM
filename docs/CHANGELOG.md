@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Indexed history and concurrent restart
+
+- Indexed historical chart availability and verified exact aggregate lookbacks across clipped schedules.
+- Released SQLite locks before replaying a monitor restart and applied only the committed tail when catching up.
+
 ## 2026-11-10 — Bounded monitor chart projection
 
 - Added a reproducible synthetic benchmark and indexed monitor evidence reads bounded by recorded primary closes.
