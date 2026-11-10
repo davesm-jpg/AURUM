@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03–Q05, D06–D08, B03–B06 and L04–L06 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q05, D06–D08, B03–B06 and L04–L07 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `7857faaf4ee9341b890d811302772a7710a5eb98`.
+- Last verified commit — `43c55e3b96a8d4190ae5ef6fc5bbcd5b356306ee`.
 
 ## Current Objective
 
-- Task ID — L07.
-- Objective — Normalize reviewed local iCalendar releases into point-in-time economic snapshots.
-- Acceptance criteria — Use explicit coverage, source class and observation time. Require timed, relevant releases and keep partial-source absence unknown.
+- Task ID — D09.
+- Objective — Verify immutable datasets by reconstructing normalized rows from preserved raw bytes.
+- Acceptance criteria — Validate original provenance, calendar, parser versions, warnings, bounds and exact persisted candle and trade values. Verify blocked imports without clearing replay gates.
 
 ## Completed Work
 
@@ -32,6 +32,7 @@
 - L01 transport — `streaming.py` accepts normalized WebSocket minute-close frames with explicit source status, reconnects with bounded backoff, can fill observed gaps using authorized HTTPS and gates stale or invalid data. The connector supports local synthetic transport. Known market closure and unavailable calendar coverage are separate states.
 - L01 verification — `monitor-replay` matches strategy replay events. Tests cover gap/restart, SQLite rollback, duplicates/conflicts, scheduled closures, staleness, backfill, local sockets and in-app alert gating.
 
+- L07 — Local iCalendar captures normalize to partial economic snapshots at their recorded observation time. Explicit synthetic snapshots cannot enter a production monitor or historical dataset run.
 - L06 — Streaming retries bounded transient SQLite locks and preserves receive versus in-transaction processing time. Retried frames are ineligible for alerts and forward fills.
 - L05 — Provider profiles can pin a standalone dated schedule and contract before historical import. Synthetic calendars stay restricted to simulated workers.
 - L04 — Monitor and replay share versioned economic snapshots. Linked revisions take effect at publication, cancellations retire earlier versions and partial coverage cannot yield clear risk. API/CLI health uses the same heartbeat cutoff as notification delivery.
@@ -67,8 +68,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 200 Python tests, Ruff lint/format and mypy across 73 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (200), Ruff lint/format, mypy (73 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 205 Python tests, Ruff lint/format and mypy across 75 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (205), Ruff lint/format, mypy (75 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -76,14 +77,14 @@
 ## Environment
 
 - Runtime — Python 3.12.7, macOS arm64, SQLite 3.45.3. SQLite 3.37+ required.
-- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev,parquet,stream,api]'`.
+- Setup — `python3.12 -m venv .venv`, then `.venv/bin/python -m pip install -e '.[dev,parquet,stream,api,calendar]'`.
 - Services — No external services for tests. Keep market-data files and local SQLite under ignored `data/`.
 - Missing configuration — Authorized production source, matching reviewed calendar, external channel destinations and authorized credentials.
 
 ## Immediate Next Actions
 
-1. Pin the optional iCalendar parser and convert local reviewed release captures into the existing EconomicCalendar JSON format.
-2. Verify capture-time causality, timezone offsets, partial coverage and rejection of unsupported event forms.
+1. Replay stored source bytes through the version-matched normalizer using the original provenance and schedule.
+2. Add a read-only verify-dataset command and regression tests for tampered normalized values, gaps, and original remote provenance without network access.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
