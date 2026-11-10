@@ -78,6 +78,7 @@ from aurum.providers import FeedStatus, FileHistorySource, HttpsHistorySource, S
 from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
+from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.storage_admin import backup_store, verify_store
@@ -194,6 +195,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     validation.add_argument("--walk-train-days", type=int, default=90)
     validation.add_argument("--walk-test-days", type=int, default=30)
     validation.add_argument("--extra-cost-cents", type=int, action="append")
+    sensitivity = commands.add_parser(
+        "parameter-sensitivity", help="compare one factor in pre-holdout validation"
+    )
+    sensitivity.add_argument("validation_id")
+    sensitivity.add_argument("baseline_run_id")
+    sensitivity.add_argument(
+        "--factor", type=SensitivityFactor, choices=SensitivityFactor, required=True
+    )
+    sensitivity.add_argument("--candidate", action="append")
     control = commands.add_parser(
         "matched-control", help="compare a holdout to development-fitted random admissions"
     )
@@ -544,6 +554,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             report_id = save_matched_control(
                 store, args.validation_id, args.opportunity_run_id, control_config
+            )
+            print(canonical_json(store.describe_analysis(report_id)))
+        elif args.command == "parameter-sensitivity":
+            report_id = save_parameter_sensitivity(
+                store,
+                args.validation_id,
+                args.baseline_run_id,
+                args.factor,
+                run_ids=tuple(args.candidate or ()),
             )
             print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "monte-carlo":

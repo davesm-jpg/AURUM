@@ -6,6 +6,7 @@ type ReportKind =
   | "validation"
   | "matched-control"
   | "intrabar-comparison"
+  | "parameter-sensitivity"
   | "reconciliation"
   | "monte-carlo"
   | "paper-account";
@@ -25,6 +26,7 @@ type DatasetChoice = {
 type Defaults = {
   matched_control: RecordData;
   control_strata: string[];
+  sensitivity_factors: string[];
   monte_carlo: RecordData;
   sampling_modes: string[];
   assumed_scenarios: RecordData[];
@@ -35,6 +37,7 @@ const TYPES: Record<ReportKind, string> = {
   validation: "Chronological validation",
   "matched-control": "Matched random control",
   "intrabar-comparison": "Intrabar execution sensitivity",
+  "parameter-sensitivity": "Parameter sensitivity",
   reconciliation: "Historical data reconciliation",
   "monte-carlo": "Monte Carlo simulation",
   "paper-account": "Paper account ledger",
@@ -102,6 +105,12 @@ export function ReportBuilder({
   const [kind, setKind] = useState<ReportKind>("validation");
   const [primaryDatasetId, setPrimaryDatasetId] = useState("");
   const [stopFirstRunId, setStopFirstRunId] = useState("");
+  const [sensitivityValidationId, setSensitivityValidationId] = useState("");
+  const [sensitivityBaseline, setSensitivityBaseline] = useState("");
+  const [candidateList, setCandidateList] = useState<{
+    validationId: string;
+    ids: string[];
+  }>();
   const [defaults, setDefaults] = useState<Defaults>();
   const [mode, setMode] = useState("scenario");
   const [trailing, setTrailing] = useState(false);
@@ -120,6 +129,25 @@ export function ReportBuilder({
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (kind !== "parameter-sensitivity" || !sensitivityValidationId) return;
+    const controller = new AbortController();
+    api<{ run_ids: string[] }>(
+      "reports/" + sensitivityValidationId + "/sensitivity-candidates",
+      { signal: controller.signal },
+    )
+      .then((report) => {
+        if (controller.signal.aborted) return;
+        setCandidateList({
+          validationId: sensitivityValidationId,
+          ids: report.run_ids,
+        });
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError((failure as Error).message);
+      });
+    return () => controller.abort();
+  }, [kind, sensitivityValidationId]);
 
   async function selectedCalendar() {
     if (!datasetId) return;
@@ -160,6 +188,14 @@ export function ReportBuilder({
           walk_train_days: int("walk_train_days"),
           walk_test_days: int("walk_test_days"),
           extra_cost_per_contract_cents: integerList(fields.get("extra_costs")),
+        };
+      } else if (kind === "parameter-sensitivity") {
+        const selected = fields.getAll("sensitivity_candidates");
+        request = {
+          validation_id: sensitivityValidationId,
+          baseline_run_id: sensitivityBaseline,
+          factor: fields.get("sensitivity_factor"),
+          run_ids: selected.length ? [sensitivityBaseline, ...selected] : [],
         };
       } else if (kind === "intrabar-comparison") {
         request = {
@@ -257,9 +293,21 @@ export function ReportBuilder({
   const pairedRuns = stopFirst
     ? orderedRuns.filter((run) => compatible(stopFirst, run))
     : [];
+  const sensitivityCandidates =
+    candidateList?.validationId === sensitivityValidationId
+      ? candidateList.ids
+      : [];
+  const candidateLabel = (id: string) => {
+    const run = runs.find((item) => item.run_id === id);
+    return run
+      ? `${label(run.variant)} · ${run.timeframe} · ${id.slice(0, 8)}`
+      : id.slice(0, 8);
+  };
   const canRun = {
     reconciliation: comparisonDatasets.length > 0,
     "intrabar-comparison": pairedRuns.length > 0,
+    "parameter-sensitivity":
+      sensitivityCandidates.length > 1 && !!sensitivityBaseline,
     "matched-control": runs.length > 0 && validationReports.length > 0,
     validation: runs.length > 0,
     "paper-account": true,
@@ -376,6 +424,78 @@ export function ReportBuilder({
                       />
                     </label>
                   </div>
+                </>
+              )}
+              {kind === "parameter-sensitivity" && (
+                <>
+                  <p className="muted">
+                    Compare candidates that vary a single setting. This report
+                    uses development and validation outcomes.
+                  </p>
+                  <label>
+                    Source validation report
+                    <select
+                      required
+                      value={sensitivityValidationId}
+                      onChange={(event) => {
+                        setSensitivityValidationId(event.target.value);
+                        setSensitivityBaseline("");
+                      }}
+                    >
+                      <option value="">Select a report</option>
+                      {validationReports.map((item) => (
+                        <option key={item.report_id} value={item.report_id}>
+                          {item.report_id.slice(0, 8)} ·{" "}
+                          {utcDateTime(item.created_at)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Baseline candidate
+                    <select
+                      value={sensitivityBaseline}
+                      onChange={(event) =>
+                        setSensitivityBaseline(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select the baseline</option>
+                      {sensitivityCandidates.map((id) => (
+                        <option key={id} value={id}>
+                          {candidateLabel(id)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Varied setting
+                    <select name="sensitivity_factor" required>
+                      {defaults.sensitivity_factors.map((factor) => (
+                        <option key={factor} value={factor}>
+                          {label(factor)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {!!sensitivityBaseline && (
+                    <label>
+                      Other candidates · leave blank to include all
+                      <select
+                        name="sensitivity_candidates"
+                        key={sensitivityBaseline}
+                        multiple
+                      >
+                        {sensitivityCandidates
+                          .filter((id) => id !== sensitivityBaseline)
+                          .map((id) => (
+                            <option key={id} value={id}>
+                              {candidateLabel(id)}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                 </>
               )}
               {kind === "intrabar-comparison" && (

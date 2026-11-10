@@ -25,6 +25,7 @@ from aurum.api_reports import (
     MatchedControlRequest,
     MonteCarloReportRequest,
     PaperAccountReportRequest,
+    ParameterSensitivityRequest,
     ReconciliationRequest,
     ValidationReportRequest,
     report_configuration,
@@ -57,6 +58,7 @@ from aurum.runtime_profiles import (
     list_runtime_profiles,
     save_runtime_profile,
 )
+from aurum.sensitivity_reports import sensitivity_candidate_ids
 from aurum.storage import DatasetStore
 from aurum.timestamps import MINUTE, minute_timestamp, trade_timestamp
 
@@ -335,12 +337,20 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     def report(report_id: RecordId) -> dict[str, object]:
         return store.describe_analysis(report_id)
 
+    @router.get("/reports/{report_id}/sensitivity-candidates")
+    def sensitivity_candidates(report_id: RecordId) -> dict[str, list[str]]:
+        return {"run_ids": sensitivity_candidate_ids(store, report_id)}
+
     @router.get("/configuration/reports")
     def default_report_configuration() -> dict[str, object]:
         return report_configuration()
 
     @router.post("/reports/validation", status_code=201)
     def create_validation(request: ValidationReportRequest) -> dict[str, object]:
+        return store.describe_analysis(request.run(store))
+
+    @router.post("/reports/parameter-sensitivity", status_code=201)
+    def create_parameter_sensitivity(request: ParameterSensitivityRequest) -> dict[str, object]:
         return store.describe_analysis(request.run(store))
 
     @router.post("/reports/matched-control", status_code=201)

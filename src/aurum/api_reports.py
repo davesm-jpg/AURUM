@@ -20,6 +20,7 @@ from aurum.monte_carlo import (
 )
 from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
+from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
 from aurum.timestamps import minute_timestamp
@@ -121,6 +122,20 @@ class MatchedControlRequest(BaseModel):
         return save_matched_control(store, self.validation_id, self.opportunity_run_id, config)
 
 
+class ParameterSensitivityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    validation_id: _RunId
+    baseline_run_id: _RunId
+    factor: SensitivityFactor
+    run_ids: tuple[_RunId, ...] = Field(default=(), max_length=16)
+
+    def run(self, store: DatasetStore) -> str:
+        return save_parameter_sensitivity(
+            store, self.validation_id, self.baseline_run_id, self.factor, run_ids=self.run_ids
+        )
+
+
 class MonteCarloReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -193,6 +208,7 @@ def report_configuration() -> dict[str, object]:
     return {
         "matched_control": asdict(ControlConfig()),
         "control_strata": list(ControlStrata),
+        "sensitivity_factors": list(SensitivityFactor),
         "monte_carlo": asdict(MonteCarloConfig()),
         "sampling_modes": list(SamplingMode),
         "assumed_scenarios": [asdict(WinRateScenario(rate)) for rate in REFERENCE_WIN_RATES_BPS],

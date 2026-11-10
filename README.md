@@ -63,6 +63,8 @@ This **synthetic schema example** covers two minutes of a full session.
 .venv/bin/aurum --db data/aurum.sqlite compare-intrabar STOP_FIRST_RUN_ID ORDERED_PRINT_RUN_ID
 .venv/bin/aurum --db data/aurum.sqlite validate RUN_A RUN_B \
   --validation-start 2025-04-01T00:00Z --holdout-start 2025-07-01T00:00Z
+.venv/bin/aurum --db data/aurum.sqlite parameter-sensitivity VALIDATION_ID BASELINE_RUN_ID \
+  --factor minimum_gap_ticks
 .venv/bin/aurum --db data/aurum.sqlite matched-control VALIDATION_ID MSS_RUN_ID \
   --replications 30 --strata session_direction --seed 42
 .venv/bin/aurum --db data/aurum.sqlite monte-carlo --paths 1000 --trades 1000
@@ -97,7 +99,7 @@ Supply `--economic-calendar` only when you have a reviewed point-in-time snapsho
 
 Backtest replay accepts the strategy options and simulates a single position at a time. It uses the next eligible minute open after a signal, applies the structural bracket and rechecks sizing at the fill price. Use `--latency-minutes`, `--entry-timeout-minutes`, `--round-trip-spread-ticks`, `--commission-cents` and `--slippage-ticks` to set execution assumptions. It uses stop-first for ambiguous same-minute touches, adverse opening prices for stop gaps and the target price for favorable opening gaps. On a trade-print dataset, `--resolve-with-trade-prints` creates a separate run that uses the first ordered trade print crossing either bracket in a dual-touch minute. The audit includes the print timestamp and sequence. Modeled bracket prices, observation at minute close and costs retain the minute paper assumptions. The execution sensitivity report pairs the saved runs and quantifies the net difference attributable to dual-touch ordering across the unpartitioned replay. It flattens at scheduled window close unless `--carry-across-closures` is set. Backtest audit distinguishes forced end-of-data exits. The summary reports actual sample size, net returns and closed-trade equity drawdown.
 
-Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report.
+Validation compares runs with the same input dataset, timeframe, cost profile and execution assumptions. Set the two UTC boundaries inside the observed dataset range before evaluating results. Use `--embargo-minutes` and `--minimum-selection-trades` to define eligibility. Only the selected candidate's holdout is reported. Candidate differences, walk-forward windows and uncertainty are recorded in the saved report. Use `parameter-sensitivity` for a set of saved candidates varying just one setting. The report contains only development and validation outcomes. For a subset, supply `--candidate` once per included run, including the baseline.
 
 For a matched random control, choose a broader opportunity variant before inspecting holdout results. Build its backtest with the same settings as the reference except for the variant, such as `mss` in place of `sweep_mss_ifvg`. The control fits admission rates on development decisions, then replays all arms from flat after the holdout embargo. The comparison describes sampled structural opportunities on one shared period. Record the opportunity rule, strata and seed in the research plan before evaluation.
 

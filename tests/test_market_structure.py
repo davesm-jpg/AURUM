@@ -44,6 +44,7 @@ from aurum.market_structure import (
 from aurum.monitoring import MarketMonitor, MonitorConfig, market_events_page, monitor_events
 from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics, validate_runs
+from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
 from aurum.statistics import ValidationConfig
 from aurum.storage import SCHEMA_VERSION, DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, SetupState, StrategyReplay, Variant
@@ -773,7 +774,9 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
         assert capped.json()["result"]["resolved_dual_touch_exits"] == 1
 
 
-def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_path: Path) -> None:
+def prepare_synthetic_research_sample(
+    tmp_path: Path,
+) -> tuple[DatasetStore, str, tuple[TradingSession, ...]]:
     # Five fictional sessions. The second develops an MSS without an IFVG retest.
     bars = [
         *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
@@ -813,17 +816,25 @@ def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_pat
     store = DatasetStore(tmp_path / "synthetic-control.sqlite")
     config = ImportConfig("synthetic", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC)
     dataset = store.save(prepare_csv(source, config, calendar))
+    return store, dataset, tuple(sessions)
 
-    def run(variant: Variant, pivot: int = 1) -> str:
-        return store.build_strategy_run(
-            dataset,
-            TIMEFRAME,
-            StructureConfig(PivotRule(pivot, pivot)),
-            replace(DEFAULT_STRATEGY_CONFIG, variant=variant),
-            execution=DEFAULT_EXECUTION_CONFIG,
-        )
 
-    reference, opportunity = run(Variant.SWEEP_MSS_IFVG), run(Variant.MSS)
+def build_synthetic_trial(
+    store: DatasetStore, dataset: str, variant: Variant, pivot: int = 1
+) -> str:
+    return store.build_strategy_run(
+        dataset,
+        TIMEFRAME,
+        StructureConfig(PivotRule(pivot, pivot)),
+        replace(DEFAULT_STRATEGY_CONFIG, variant=variant),
+        execution=DEFAULT_EXECUTION_CONFIG,
+    )
+
+
+def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_path: Path) -> None:
+    store, dataset, sessions = prepare_synthetic_research_sample(tmp_path)
+    reference = build_synthetic_trial(store, dataset, Variant.SWEEP_MSS_IFVG)
+    opportunity = build_synthetic_trial(store, dataset, Variant.MSS)
     opportunity_diagnostics = backtest_analytics(store, opportunity, 5)["execution_diagnostics"]
     assert isinstance(opportunity_diagnostics, dict)
     groups = opportunity_diagnostics["by_session"]
@@ -894,7 +905,7 @@ def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_pat
 
     with pytest.raises(ValueError, match="distinct"):
         save_matched_control(store, validation, reference)
-    incompatible = run(Variant.MSS, pivot=2)
+    incompatible = build_synthetic_trial(store, dataset, Variant.MSS, pivot=2)
     with pytest.raises(ValueError, match="share data, rules, risk and execution"):
         save_matched_control(store, validation, incompatible)
     moved = validate_runs(
@@ -934,6 +945,84 @@ def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_pat
     assert isinstance(shifted_result, dict)
     assert shifted_result["fit"] == result["fit"]
     assert shifted_result["holdout_control_opportunities"] == 1
+
+
+def test_parameter_sensitivity_is_one_factor_and_pre_holdout_only(tmp_path: Path) -> None:
+    store, dataset, sessions = prepare_synthetic_research_sample(tmp_path)
+    baseline = build_synthetic_trial(store, dataset, Variant.SWEEP_MSS_IFVG)
+    different = build_synthetic_trial(store, dataset, Variant.MSS)
+    incompatible = build_synthetic_trial(store, dataset, Variant.MSS, pivot=2)
+    config = ValidationConfig(
+        sessions[2].start - timedelta(hours=2),
+        sessions[3].start,
+        embargo_minutes=60,
+        minimum_selection_trades=1,
+        bootstrap_draws=10,
+    )
+    candidates = (baseline, different, incompatible)
+    validation_id = validate_runs(store, candidates, config)
+    validation = store.describe_analysis(validation_id)["result"]
+    assert isinstance(validation, dict)
+    assert validation["holdout"]["summary"]["trades"] > 0
+    with pytest.raises(ValueError, match="outside the selected factor"):
+        save_parameter_sensitivity(store, validation_id, baseline, SensitivityFactor.VARIANT)
+    with pytest.raises(ValueError, match="outside the selected factor"):
+        save_parameter_sensitivity(
+            store,
+            validation_id,
+            baseline,
+            SensitivityFactor.MIN_GAP_TICKS,
+            run_ids=(baseline, different),
+        )
+    args = [
+        str(Path(executable).with_name("aurum")),
+        "--db",
+        str(store.path),
+        "parameter-sensitivity",
+        validation_id,
+        baseline,
+        "--factor",
+        "strategy_variant",
+        "--candidate",
+        baseline,
+        "--candidate",
+        different,
+    ]
+    report = json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
+    result = report["result"]
+    assert result["sample_kind"] == "development_and_validation"
+    assert result["data_kind"] == "synthetic"
+    assert "holdout" not in result
+    assert result["validation_start"] == (config.validation_start + 60 * MINUTE).isoformat()
+    assert result["validation_end_exclusive"] == config.holdout_start.isoformat()
+    base_row, other_row = result["candidates"]
+    assert base_row["run_id"] == baseline and base_row["is_baseline"]
+    assert other_row["run_id"] == different and other_row["factor_value"] == "mss"
+    for row in (base_row, other_row):
+        source = validation["candidates"][row["run_id"]]
+        assert row["validation"]["expectancy_cents"] == source["validation"]["expectancy_cents"]
+        assert row["validation"]["last_outcome"] < result["validation_end_exclusive"]
+        assert "holdout" not in row
+    assert other_row["validation_expectancy_difference_cents"] == (
+        other_row["validation"]["expectancy_cents"] - base_row["validation"]["expectancy_cents"]
+    )
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    with http.TestClient(api.create_app(store)) as client:
+        assert client.get(f"/api/reports/{validation_id}/sensitivity-candidates").json() == {
+            "run_ids": sorted(candidates),
+        }
+        saved = client.post(
+            "/api/reports/parameter-sensitivity",
+            json={
+                "validation_id": validation_id,
+                "baseline_run_id": baseline,
+                "factor": "strategy_variant",
+                "run_ids": [different, baseline],
+            },
+        )
+        assert saved.status_code == 201
+        assert saved.json() == report
 
 
 def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(

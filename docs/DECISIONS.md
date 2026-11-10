@@ -211,3 +211,12 @@
 - Decision — Preserve stop-first as the default. The optional rule reconstructs the ambiguous minute from its source prints and applies the first bracket crossing, retaining the reference price, costs and logical observation clock.
 - Consequences — The rule uses a separate saved run identity. A chronological candidate comparison requires the same ordering policy, and a minute-only forward baseline excludes this policy. Observed prints establish touch order. Actual fills and queue priority remain outside the model.
 - Files — `execution.py`, `backtesting.py`, `storage.py`, `control.py`, `tests/test_execution.py`.
+
+## ADR-023 — Restrict sensitivity comparisons to one pre-holdout factor
+
+- Date — 2026-11-10.
+- Context — Research needs transparent comparison of deliberate parameter changes while preserving the final holdout.
+- Alternatives — Generate a new parameter search from the whole dataset or project selected candidates from saved chronological validation.
+- Decision — Compare candidates only when all saved profiles agree after removing one declared setting. Reuse development and validation metrics, including original confidence and Holm adjustment.
+- Consequences — Users can isolate a subset without changing the original comparison family. Differences are descriptive against a chosen baseline. The candidate lookup returns IDs only and the sensitivity report has no holdout outcomes.
+- Files — `sensitivity_reports.py`, `api_reports.py`, `frontend/app/report-builder.tsx`, `tests/test_market_structure.py`.

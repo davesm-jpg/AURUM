@@ -245,6 +245,74 @@ function ValidationReport({ result }: { result: RecordData }) {
   );
 }
 
+function SensitivityReport({ report }: { report: RecordData }) {
+  const result = record(report.result);
+  const definition = record(report.definition);
+  const dataset = record(result.dataset);
+  const factorValue = (value: unknown) => {
+    if (value === null) return "Unspecified";
+    if (Array.isArray(value))
+      return value.length ? value.map(label).join(", ") : "All";
+    if (value && typeof value === "object") return JSON.stringify(value);
+    return label(value);
+  };
+  return (
+    <>
+      <p className="muted">
+        {label(result.data_kind)} · {String(dataset.provider ?? "—")} ·{" "}
+        {String(dataset.contract ?? "—")}
+      </p>
+      <p className="muted">
+        Development {utcDateTime(result.development_start)} to{" "}
+        {utcDateTime(result.development_end_exclusive)}. Validation{" "}
+        {utcDateTime(result.validation_start)} to{" "}
+        {utcDateTime(result.validation_end_exclusive)}. Boundaries are UTC and
+        period ends are exclusive.
+      </p>
+      <DataTable
+        labelHeading={label(definition.factor)}
+        items={rows(result.candidates).map((row) => [
+          factorValue(row.factor_value) +
+            (row.is_baseline ? " · baseline" : ""),
+          row,
+        ])}
+        columns={[
+          {
+            title: "Development trades",
+            value: (row) => String(record(row.development).trades ?? 0),
+          },
+          {
+            title: "Validation trades",
+            value: (row) => String(record(row.validation).trades ?? 0),
+          },
+          {
+            title: "Validation expectancy",
+            value: (row) => money(record(row.validation).expectancy_cents),
+          },
+          {
+            title: "Difference vs baseline",
+            value: (row) => money(row.validation_expectancy_difference_cents),
+          },
+          {
+            title: "Expectancy interval",
+            value: (row) => interval(row.validation_uncertainty),
+          },
+          {
+            title: "Holm-adjusted p",
+            value: (row) =>
+              number(row.validation_holm_adjusted_p)?.toPrecision(3) ?? "—",
+          },
+        ]}
+      />
+      <p className="muted">
+        The confidence intervals and adjusted p values come from the source
+        validation comparison. The p values test each candidate’s expectancy
+        against zero.
+      </p>
+    </>
+  );
+}
+
 function IntrabarComparisonReport({ result }: { result: RecordData }) {
   return (
     <>
@@ -638,6 +706,8 @@ export function ReportSummary({ report }: { report: RecordData }) {
     return <ReconciliationReport report={report} />;
   if (report.kind === "intrabar_ordering_comparison")
     return <IntrabarComparisonReport result={result} />;
+  if (report.kind === "parameter_sensitivity")
+    return <SensitivityReport report={report} />;
   if (report.kind === "paper_account") return <AccountReport result={result} />;
   if (report.kind === "forward_paper_research")
     return <ForwardReport report={report} />;

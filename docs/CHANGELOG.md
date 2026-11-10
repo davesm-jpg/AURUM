@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Parameter sensitivity
+
+- Added one-factor reports over saved development and validation candidates, with profile equality checks and a candidate metadata route that omits holdout outcomes.
+
+
 ## 2026-11-10 — Intrabar ordering sensitivity
 
 - Added paired stop-first and ordered-print outcome comparisons with exact source-touch examples and immutable manifest checks.
