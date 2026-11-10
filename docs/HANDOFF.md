@@ -3,19 +3,20 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03 is complete. O01 has measured optimizations and local backups. D04 readiness can proceed with reconciliation tooling while authorized verification remains blocked.
+- Current milestone — Q03 and D06 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `9d74f87fd346ca35bdc66daf5a5a0d237acd6327`.
+- Last verified commit — `5bdc78f4351c10fbb0bf358bae77e4d2d55129da`.
 
 ## Current Objective
 
-- Task ID — D04 readiness.
-- Objective — Compare independent imported exports on shared reviewed schedule coverage.
-- Acceptance criteria — Persist exact normalized OHLCV, expected-minute and trade-date discrepancy counts. Keep quality-gated datasets blocked for strategy replay.
+- Task ID — L04.
+- Objective — Feed a reviewed point-in-time economic snapshot into the shared monitor strategy path.
+- Acceptance criteria — Monitor and replay use the same event-risk rules and preserve existing identities when no snapshot is supplied.
 
 ## Completed Work
 
 - D01–D05 — Immutable authorized-format CSV/Parquet/HTTPS history, reviewed dated schedules, completed candle aggregation, point-in-time contract selection and explicit continuous research mapping.
+- D06 — Data reconciliation compares two immutable imports with bounded samples of missing minutes, calendar differences and exact OHLCV mismatches. It preserves replay eligibility and distinguishes synthetic inputs.
 - S01–S03 — Causal structure, liquidity, imbalances and mirrored paper strategy with contextual measurements, score and integer sizing. Versioned runs and evidence are persisted.
 - B01/Q01/Q02 — Conservative paper backtest, chronological validation, conditional Monte Carlo and separate LucidFlex paper ledger. No empirical strategy performance has been measured.
 - Q03 — Matched controls fit admission on development decisions and replay identical paper costs from flat after embargo. CLI/API report parity and the dashboard build are verified on labeled synthetic evidence.
@@ -54,8 +55,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 164 Python tests, Ruff lint/format and mypy across 64 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (164), Ruff lint/format, mypy (64 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
+- Latest checkpoint — 167 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (167), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -69,8 +70,8 @@
 
 ## Immediate Next Actions
 
-1. Implement bounded diagnostic reading of immutable normalized candles, including flagged imports. Keep the ordinary replay gate.
-2. Add a versioned reconciliation CLI and tests for UTC labels, missing minutes, calendar differences and exact price/volume mismatches.
+1. Accept the existing reviewed economic snapshot in direct monitor, monitor-replay and saved provider profiles.
+2. Test prior-ID compatibility, causal event availability and restart/replay parity with the event-risk filter.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
