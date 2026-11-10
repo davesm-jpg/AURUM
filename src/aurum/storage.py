@@ -15,15 +15,16 @@ from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import EXECUTION_VERSION, ExecutionConfig
-from aurum.instruments import MgcContract
+from aurum.instruments import MAX_SQLITE_INTEGER, MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
-from aurum.market_data import Candle, PreparedDataset, canonical_json
+from aurum.market_data import Candle, PreparedDataset, TradePrint, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig, StructureEngine
 from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
+from aurum.timestamps import TradeTimestamp, trade_timestamp
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -236,6 +237,15 @@ _STRUCTURE_EVENT_AT = (
 SCHEMA_V11 = f"""CREATE INDEX structure_event_available
         ON structure_events(run_id, {_STRUCTURE_EVENT_AT}, sequence)
         WHERE {_STRUCTURE_EVENT_AT} IS NOT NULL"""
+SCHEMA_V12 = """CREATE TABLE trade_prints (
+        dataset_id TEXT NOT NULL REFERENCES datasets(id),
+        executed_at TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence >= 0),
+        price_ticks INTEGER NOT NULL CHECK (price_ticks > 0),
+        size INTEGER NOT NULL CHECK (size > 0),
+        PRIMARY KEY (dataset_id, executed_at, sequence),
+        UNIQUE (dataset_id, sequence)
+    ) STRICT, WITHOUT ROWID"""
 
 
 class DatasetDescription(TypedDict):
@@ -300,6 +310,20 @@ class DatasetStore:
                     for candle in dataset.candles
                 ),
             )
+            if dataset.trade_prints:
+                db.executemany(
+                    """INSERT INTO trade_prints VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        (
+                            dataset.dataset_id,
+                            trade.executed_at.isoformat(),
+                            trade.sequence,
+                            trade.price_ticks,
+                            trade.size,
+                        )
+                        for trade in dataset.trade_prints
+                    ),
+                )
         return dataset.dataset_id
 
     def describe(self, dataset_id: str) -> DatasetDescription:
@@ -327,6 +351,59 @@ class DatasetStore:
     def replay(self, dataset_id: str, *, span: TradingWindow | None = None) -> Iterator[Candle]:
         with self.connection() as db:
             yield from self._replay(db, self._dataset(db, dataset_id), span=span)
+
+    def trade_prints(
+        self,
+        dataset_id: str,
+        *,
+        start: TradeTimestamp | None = None,
+        end: TradeTimestamp | None = None,
+        after: tuple[TradeTimestamp, int] | None = None,
+        limit: int | None = None,
+    ) -> Iterator[TradePrint]:
+        if start is not None and end is not None and start >= end:
+            raise ValueError("trade print start must precede end")
+        if limit is not None and limit < 1:
+            raise ValueError("trade print limit must be positive")
+        if after is not None and not 0 <= after[1] <= MAX_SQLITE_INTEGER:
+            raise ValueError("trade print cursor sequence is outside the supported range")
+        provenance = self.describe(dataset_id)["provenance"]
+        if provenance.get("source_data_type") != "trade_prints":
+            return
+        contract = MgcContract(str(provenance["contract"]))
+        query = """SELECT executed_at, sequence, price_ticks, size FROM trade_prints
+                   WHERE dataset_id = ?"""
+        params: tuple[object, ...] = (dataset_id,)
+        if start is not None:
+            query += " AND executed_at >= ?"
+            params += (start.isoformat(),)
+        if end is not None:
+            query += " AND executed_at < ?"
+            params += (end.isoformat(),)
+        cursor = (after[0].isoformat(), after[1]) if after is not None else ("", -1)
+        remaining = limit
+        while remaining is None or remaining > 0:
+            count = 1000 if remaining is None else min(remaining, 1000)
+            with self.connection() as db:
+                batch = db.execute(
+                    query
+                    + """ AND (executed_at, sequence) > (?, ?)
+                          ORDER BY executed_at, sequence LIMIT ?""",
+                    (*params, *cursor, count),
+                ).fetchall()
+            for row in batch:
+                yield TradePrint(
+                    contract,
+                    trade_timestamp(row["executed_at"]),
+                    row["sequence"],
+                    row["price_ticks"],
+                    row["size"],
+                )
+            if len(batch) < count:
+                break
+            cursor = batch[-1]["executed_at"], batch[-1]["sequence"]
+            if remaining is not None:
+                remaining -= count
 
     def replay_batches(
         self, dataset_id: str, span: TradingWindow, batch_size: int = 1_000
@@ -748,4 +825,6 @@ class DatasetStore:
                 db.execute(statement)
         if write and version < 11:
             db.execute(SCHEMA_V11)
-            db.execute("PRAGMA user_version = 11")
+        if write and version < 12:
+            db.execute(SCHEMA_V12)
+            db.execute("PRAGMA user_version = 12")

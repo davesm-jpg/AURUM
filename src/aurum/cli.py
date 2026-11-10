@@ -38,6 +38,7 @@ from aurum.market_data import (
     TimestampLabel,
     canonical_json,
     prepare_history,
+    prepare_trade_csv,
 )
 from aurum.market_structure import (
     DEFAULT_STRUCTURE_CONFIG,
@@ -81,7 +82,7 @@ from aurum.storage import DatasetStore
 from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
-from aurum.timestamps import minute_timestamp
+from aurum.timestamps import minute_timestamp, trade_timestamp
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -92,6 +93,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     importer = commands.add_parser("import-csv", help="validate and store unadjusted MGC candles")
     importer.add_argument("csv", type=Path)
     _import_options(importer)
+    trade_importer = commands.add_parser(
+        "import-trades", help="store dated MGC trade prints and derive unadjusted minute bars"
+    )
+    trade_importer.add_argument("csv", type=Path)
+    _import_options(trade_importer, trade_prints=True)
     parquet = commands.add_parser("import-parquet", help="validate and store Parquet MGC candles")
     parquet.add_argument("parquet", type=Path)
     _import_options(parquet)
@@ -122,6 +128,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     inspect = commands.add_parser("inspect", help="show provenance and quality findings")
     inspect.add_argument("dataset_id")
+    prints = commands.add_parser("trade-prints", help="read preserved normalized trade prints")
+    prints.add_argument("dataset_id")
+    prints.add_argument("--start", type=trade_timestamp)
+    prints.add_argument("--end", type=trade_timestamp)
+    prints.add_argument("--after-timestamp", type=trade_timestamp)
+    prints.add_argument("--after-sequence", type=int)
+    prints.add_argument("--limit", type=int)
     reconcile = commands.add_parser(
         "reconcile-datasets", help="audit two dated imports over shared schedule coverage"
     )
@@ -336,7 +349,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     verify_store(store, full=args.full, verify_sources=args.verify_sources)
                 )
             )
-        elif args.command in ("import-csv", "import-parquet", "import-https"):
+        elif args.command in ("import-csv", "import-parquet", "import-https", "import-trades"):
             print(canonical_json(store.describe(_import_history(store, args))))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
@@ -443,6 +456,28 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(canonical_json(event))
         elif args.command == "inspect":
             print(canonical_json(store.describe(args.dataset_id)))
+        elif args.command == "trade-prints":
+            if (args.after_timestamp is None) != (args.after_sequence is None):
+                raise ValueError("trade cursor requires both timestamp and sequence")
+            cursor = (
+                (args.after_timestamp, args.after_sequence)
+                if args.after_timestamp is not None
+                else None
+            )
+            provenance = store.describe(args.dataset_id)["provenance"]
+            for trade in store.trade_prints(
+                args.dataset_id, start=args.start, end=args.end, after=cursor, limit=args.limit
+            ):
+                print(
+                    canonical_json(
+                        {
+                            **trade.as_dict(),
+                            "dataset_id": args.dataset_id,
+                            "data_kind": provenance["data_kind"],
+                            "event_id": f"{args.dataset_id}/{trade.sequence}",
+                        }
+                    )
+                )
         elif args.command == "reconcile-datasets":
             if (args.start is None) != (args.end is None):
                 raise ValueError("specify both comparison boundaries or neither")
@@ -818,14 +853,17 @@ def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
         signal.signal(signal.SIGTERM, previous)
 
 
-def _import_options(parser: ArgumentParser) -> None:
+def _import_options(parser: ArgumentParser, *, trade_prints: bool = False) -> None:
     parser.add_argument("--calendar", type=Path, required=True)
     parser.add_argument("--provider", required=True)
     parser.add_argument("--contract", required=True)
     parser.add_argument("--source-timezone", required=True)
-    parser.add_argument(
-        "--timestamp-label", type=TimestampLabel, choices=TimestampLabel, required=True
-    )
+    if trade_prints:
+        parser.set_defaults(timestamp_label=TimestampLabel.OPEN)
+    else:
+        parser.add_argument(
+            "--timestamp-label", type=TimestampLabel, choices=TimestampLabel, required=True
+        )
     parser.add_argument("--data-kind", type=DataKind, choices=DataKind, required=True)
     parser.add_argument("--price-basis", choices=("unadjusted",), required=True)
 
@@ -839,6 +877,8 @@ def _import_history(store: DatasetStore, args: Namespace) -> str:
         args.timestamp_label,
         args.data_kind,
     )
+    if args.command == "import-trades":
+        return store.save(prepare_trade_csv(args.csv, config, calendar))
     source: FileHistorySource | HttpsHistorySource
     if args.command == "import-csv":
         source = FileHistorySource(args.csv, SourceFormat.CSV)

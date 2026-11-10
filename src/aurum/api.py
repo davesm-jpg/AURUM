@@ -57,7 +57,7 @@ from aurum.runtime_profiles import (
     save_runtime_profile,
 )
 from aurum.storage import DatasetStore
-from aurum.timestamps import MINUTE, minute_timestamp
+from aurum.timestamps import MINUTE, minute_timestamp, trade_timestamp
 
 RecordId = Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")]
 PageLimit = Annotated[int, Query(ge=1, le=500)]
@@ -196,6 +196,39 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
         ] = None,
     ) -> list[dict[str, object]]:
         return _candles(store, dataset_id, timeframe, limit, through)
+
+    @router.get("/datasets/{dataset_id}/trade-prints")
+    def trades(
+        dataset_id: RecordId,
+        start: str | None = None,
+        end: str | None = None,
+        after_timestamp: str | None = None,
+        after_sequence: Annotated[int | None, Query(ge=0, le=MAX_SQLITE_INTEGER)] = None,
+        limit: PageLimit = 100,
+    ) -> list[dict[str, object]]:
+        if (after_timestamp is None) != (after_sequence is None):
+            raise ValueError("trade cursor requires both timestamp and sequence")
+        cursor = (
+            (trade_timestamp(after_timestamp), after_sequence)
+            if after_timestamp is not None and after_sequence is not None
+            else None
+        )
+        provenance = store.describe(dataset_id)["provenance"]
+        return [
+            {
+                **trade.as_dict(),
+                "dataset_id": dataset_id,
+                "data_kind": provenance["data_kind"],
+                "event_id": f"{dataset_id}/{trade.sequence}",
+            }
+            for trade in store.trade_prints(
+                dataset_id,
+                start=trade_timestamp(start) if start is not None else None,
+                end=trade_timestamp(end) if end is not None else None,
+                after=cursor,
+                limit=limit,
+            )
+        ]
 
     @router.get("/runs")
     def runs(limit: PageLimit = 100) -> list[dict[str, object]]:

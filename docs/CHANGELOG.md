@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Historical trade prints
+
+- Added normalized trade CSV import, exact nanosecond and sequence ordering, derived unadjusted minute bars and paged CLI/API print inspection.
+
+
 ## 2026-11-10 — Grouped paper execution diagnostics
 
 - Added holding time, favorable and adverse excursion, execution cost, ambiguous exit and sample net P&L dispersion to the backtest breakdown.

@@ -7,14 +7,14 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | Module | Current responsibility |
 | --- | --- |
 | `instruments.py` | CME-sourced MGC tick economics, exact decimal-to-integer tick conversion and dated contract identity |
-| `timestamps.py` | Aware UTC minute normalization, including rejection of ambiguous and nonexistent local times and source offset mismatches |
+| `timestamps.py` | Aware UTC minute and exact trade timestamp normalization, including local ambiguity and offset checks |
 | `exchange_calendar.py` | Validation and lookup of covered open windows and exchange trading dates in a supplied, versioned MGC schedule |
-| `market_data.py` | Import configuration, 1m candle model, CSV validation, provenance and gap detection |
+| `market_data.py` | Import configuration, 1m candles, normalized trade prints, minute derivation, provenance and gap detection |
 | `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
 | `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
 | `storage_admin.py` | Local validated SQLite snapshots and optional preserved-source checksum verification |
 | `reconciliation.py` | Bounded read-only inspection of two normalized imports, schedule and OHLCV reconciliation, and saved discrepancy report |
-| `storage.py` | Versioned transactional SQLite schema, immutable dataset records and chronological candle iterator |
+| `storage.py` | Versioned transactional SQLite schema, immutable datasets, chronological candles and keyset-paged trade prints |
 | `candles.py` | Incremental aggregation of chronological minute closes into exchange-aligned intraday and daily bars |
 | `market_structure.py` | Confirmed pivots, separate structure scopes, BOS and MSS with causal displacement evidence |
 | `liquidity.py`, `liquidity_map.py`, `sessions.py` | Price-derived proxies, elapsed-window reclaims and timezone-aware source periods |
@@ -38,7 +38,7 @@ The dashboard reads immutable dataset candles, paginated evidence, saved reports
 1. The caller supplies an authorized unadjusted single-contract CSV, source timezone, timestamp labeling, provider, data kind and reviewed schedule. Calendar coverage is the expected export interval. The dated snapshot groups full half-open open windows by exchange trade date. The calendar intersects those windows with coverage for candle validation. Closed intervals are represented by the absence of open windows, and split windows can share a trade date. Legacy snapshots keep their original clipped window representation.
 2. Ingestion reads the exact source bytes, validates the fixed CSV schema and every bar, converts UTC or source-local timestamps to UTC, and maps close labels back one minute. Timezone conversion uses the pinned package, and the package version enters dataset provenance.
 3. Normalization sorts uniquely timestamped bars and checks each expected open minute, including boundary and entirely absent windows. Invalid rows, duplicates or contract mismatches reject the import. Disorder and zero volume are reported. Gaps are retained as diagnostics and gate replay.
-4. A SHA-256 ID covers the raw source checksum, source settings, import version, price basis and normalized schedule. The store saves raw bytes, metadata and candle rows atomically. An identical request resolves to the same dataset and retains its initial import time.
+4. A SHA-256 ID covers the raw source checksum, source settings, import version, price basis and normalized schedule. Trade imports preserve the nanosecond UTC instant and unique source sequence. Schema v12 saves the prints with raw bytes and derived candles in one transaction. The store saves raw bytes, metadata and candle rows atomically. An identical request resolves to the same dataset and retains its initial import time.
 5. The repository reads a dataset in open-time order via an iterator. The CLI emits one stable ID per candle-close event. `available_at` is the historical candle close and models logical availability at close. Actual vendor delivery latency is a future input. Events keep their dated contract and historical/synthetic label. For dated schedules, the CLI resolves the exchange date at the candle open using the stored snapshot.
 6. The same incremental aggregator accepts each completed minute from replay or another chronological caller. It holds one running OHLCV bucket per selected timeframe. Intraday buckets restart at each full open window and daily bars combine all expected open windows for a trade date. A bucket publishes at its scheduled close only when every expected minute was observed. The CLI derives aggregate IDs from the dataset, aggregation version, timeframe and bucket open.
 7. Structure analysis consumes completed aggregates for one timeframe and contract. It processes breaks against previously confirmed levels before confirming new swings, then updates the classifications. Each event's UTC source opens can be joined to the input dataset's aggregate events for the run timeframe and version. The engine holds bounded pivot and ATR windows and the latest levels per scope.

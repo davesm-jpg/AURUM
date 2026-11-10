@@ -48,6 +48,7 @@ This **synthetic schema example** covers two minutes of a full session.
   --contract MGC-2025-04 --source-timezone UTC --timestamp-label open \
   --data-kind historical --price-basis unadjusted
 .venv/bin/aurum --db data/aurum.sqlite inspect DATASET_ID
+.venv/bin/aurum --db data/aurum.sqlite trade-prints TRADE_DATASET_ID --limit 20
 .venv/bin/aurum --db data/aurum.sqlite reconcile-datasets PRIMARY_ID COMPARISON_ID
 .venv/bin/aurum --db data/aurum.sqlite replay DATASET_ID
 .venv/bin/aurum --db data/aurum.sqlite aggregate DATASET_ID --timeframe 5m --timeframe 1d
@@ -78,6 +79,8 @@ This **synthetic schema example** covers two minutes of a full session.
 ```
 
 Import reports a stable dataset ID and any quality findings. Replay emits one JSON object per completed bar with UTC `opened_at` and `available_at` fields. Prices in replay are integer ticks. Dated snapshots add a `trade_date` to each replay event. Legacy snapshots with a top-level `windows` array continue to import and replay with their original IDs and event shape. A missing expected minute is preserved as a quality incident and prevents replay. Invalid prices, duplicate candles, mixed contracts, and rows outside open windows reject the import. Out-of-order rows are sorted and reported. Use `--data-kind synthetic` for generated fixtures.
+
+For a normalized authorized trade export, use `import-trades FILE.csv` with a reviewed dated calendar, provider, dated contract, source timezone, data kind and unadjusted price basis. The header is `timestamp,contract,sequence,price,size`. Timestamps identify execution instants with up to nine fractional digits. The sequence must be a unique nonnegative integer for the export. AURUM retains the source bytes and normalized prints, then derives minute OHLC from chronological prices and sums size. Missing scheduled minutes continue to block research replay. The print reader supports an inclusive `--start`, exclusive `--end` and a paired `--after-timestamp` and `--after-sequence` cursor.
 
 Dataset reconciliation compares two distinct imports for the same dated contract and data kind. It audits normalized UTC minute opens, both reviewed schedules and exact integer OHLCV values. Use `--start` and `--end` together to scope the comparison inside shared calendar coverage. Bounded discrepancy examples and source checksums are saved in the report. Inspect an incomplete import through reconciliation while its ordinary replay gate remains enforced.
 
