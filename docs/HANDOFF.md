@@ -3,21 +3,22 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — O01 is in progress. The synthetic baseline, bounded charts, nonblocking restart reconstruction batched historical recovery and verified local backups are complete.
+- Current milestone — Q03 is complete. O01 has measured optimizations and local backups. D04 readiness can proceed with reconciliation tooling while authorized verification remains blocked.
 - Current branch — `main`.
-- Last verified commit — `ef2ac86d935041bed67f62cc77c601d14ac6495b`.
+- Last verified commit — `9d74f87fd346ca35bdc66daf5a5a0d237acd6327`.
 
 ## Current Objective
 
-- Task ID — O01.
-- Objective — Measure local chart and replay bottlenecks and improve only those justified by evidence.
-- Acceptance criteria — Record repeatable workloads, validate output parity and preserve source provenance.
+- Task ID — D04 readiness.
+- Objective — Compare independent imported exports on shared reviewed schedule coverage.
+- Acceptance criteria — Persist exact normalized OHLCV, expected-minute and trade-date discrepancy counts. Keep quality-gated datasets blocked for strategy replay.
 
 ## Completed Work
 
 - D01–D05 — Immutable authorized-format CSV/Parquet/HTTPS history, reviewed dated schedules, completed candle aggregation, point-in-time contract selection and explicit continuous research mapping.
 - S01–S03 — Causal structure, liquidity, imbalances and mirrored paper strategy with contextual measurements, score and integer sizing. Versioned runs and evidence are persisted.
 - B01/Q01/Q02 — Conservative paper backtest, chronological validation, conditional Monte Carlo and separate LucidFlex paper ledger. No empirical strategy performance has been measured.
+- Q03 — Matched controls fit admission on development decisions and replay identical paper costs from flat after embargo. CLI/API report parity and the dashboard build are verified on labeled synthetic evidence.
 - L01 journal — SQLite v4 holds monitor definitions, raw/normalized pending and applied minutes, cursor, research events and in-app alerts. Contiguous application and resulting events commit together. Restart restores the applied strategy prefix without replaying delivery.
 - L01 transport — `streaming.py` accepts normalized WebSocket minute-close frames with explicit source status, reconnects with bounded backoff, can fill observed gaps using authorized HTTPS and gates stale or invalid data. The connector supports local synthetic transport. Known market closure and unavailable calendar coverage are separate states.
 - L01 verification — `monitor-replay` matches strategy replay events. Tests cover gap/restart, SQLite rollback, duplicates/conflicts, scheduled closures, staleness, backfill, local sockets and in-app alert gating.
@@ -53,8 +54,8 @@
 
 ## Test Status
 
-- Latest targeted check — Three backup and source-integrity tests and mypy across 63 files passed. Before that, 40 API, monitor and market-structure tests passed. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (159), Ruff lint/format, mypy (61 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
+- Latest checkpoint — 164 Python tests, Ruff lint/format and mypy across 64 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (164), Ruff lint/format, mypy (64 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -68,8 +69,8 @@
 
 ## Immediate Next Actions
 
-1. Add a matched research control using a saved chronological validation and a comparable broader opportunity run. Fit admission rates only on development decisions.
-2. Verify both arms use the same paper execution path and start the holdout flat. Label the comparison as conditional on the control opportunities.
+1. Implement bounded diagnostic reading of immutable normalized candles, including flagged imports. Keep the ordinary replay gate.
+2. Add a versioned reconciliation CLI and tests for UTC labels, missing minutes, calendar differences and exact price/volume mismatches.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
