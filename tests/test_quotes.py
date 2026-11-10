@@ -11,9 +11,15 @@ import pytest
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_data import DataKind
-from aurum.quotes import QuoteImportConfig, import_quote_csv, list_quote_series, quote_at
+from aurum.quotes import (
+    QuoteImportConfig,
+    import_quote_csv,
+    list_quote_series,
+    quote_at,
+    verify_quote_series,
+)
 from aurum.storage import SCHEMA_VERSION, DatasetStore
-from aurum.storage_admin import verify_store
+from aurum.storage_admin import backup_store, verify_store
 from aurum.timestamps import MINUTE, event_timestamp, minute_timestamp
 
 START = minute_timestamp("2025-03-10T13:00Z")
@@ -148,3 +154,40 @@ def test_quote_import_rejects_incompatible_or_invalid_observations(
     with pytest.raises(ValueError, match=error):
         import_quote_csv(store, source, CONFIG, CALENDAR)
     assert not store.path.exists()
+
+
+def test_quote_audit_rebuilds_restored_series_and_detects_late_page_changes(
+    tmp_path: Path,
+) -> None:
+    source = _source(
+        tmp_path / "synthetic-many.csv",
+        tuple(
+            f"2025-03-10T14:00:00.000000001+01:00,{CONTRACT.code},{seq},2900,2900.1,1,2"
+            for seq in range(1002)
+        ),
+    )
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    series = import_quote_csv(store, source, CONFIG, CALENDAR)
+    source.unlink()
+    backup = tmp_path / "synthetic-copy.sqlite"
+    backup_store(store, backup)
+    copy = DatasetStore(backup)
+    result = verify_quote_series(copy, series)
+    assert result["verified"] is True and result["quote_count"] == 1002
+    assert result["data_kind"] == "synthetic"
+    cli = [
+        str(Path(executable).with_name("aurum")),
+        "--db",
+        str(backup),
+        "verify-quote-series",
+        series,
+    ]
+    verified = subprocess.run(cli, check=True, capture_output=True, text=True)
+    assert json.loads(verified.stdout) == result
+    with sqlite3.connect(backup) as db:
+        db.execute("UPDATE book_quotes SET ask_ticks = ask_ticks + 1 WHERE sequence = 1001")
+    assert verify_store(copy, verify_sources=True)["source_checksums_verified"] == 1
+    rejected = subprocess.run(cli, check=False, capture_output=True, text=True)
+    assert rejected.returncode == 1 and rejected.stdout == ""
+    assert "stored normalized quote differs at sequence 1001" in rejected.stderr
+    assert verify_quote_series(store, series) == result

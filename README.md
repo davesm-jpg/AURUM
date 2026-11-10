@@ -194,6 +194,7 @@ data. Handle it under the same access and licensing requirements as the store.
 .venv/bin/aurum --db data/aurum.sqlite backup data/aurum-backup.sqlite
 .venv/bin/aurum --db data/aurum-backup.sqlite verify-store --full --verify-sources
 .venv/bin/aurum --db data/aurum-backup.sqlite verify-dataset DATASET_ID
+.venv/bin/aurum --db data/aurum-backup.sqlite verify-quote-series SERIES_ID
 ```
 
 For a restore rehearsal, point `--db` at the verified snapshot and inspect or
@@ -204,3 +205,5 @@ comparison. The command uses the [SQLite Online Backup API](https://sqlite.org/b
 preserved source with the original supported import and timezone versions.
 It compares metadata, quality findings and exact normalized rows offline. An
 accurately stored incomplete dataset can verify while remaining blocked for replay.
+`verify-quote-series` applies the same source-reconstruction check to normalized
+bid and ask observations.

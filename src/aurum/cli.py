@@ -84,6 +84,7 @@ from aurum.quotes import (
     import_quote_csv,
     list_quote_series,
     quote_at,
+    verify_quote_series,
 )
 from aurum.reconciliation import save_reconciliation
 from aurum.research_reports import simulate_report, validate_runs
@@ -159,6 +160,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     prints.add_argument("--limit", type=int)
     quote_series = commands.add_parser("quote-series", help="inspect saved quote provenance")
     quote_series.add_argument("series_id", nargs="?")
+    quote_audit = commands.add_parser(
+        "verify-quote-series", help="verify quote observations against preserved source bytes"
+    )
+    quote_audit.add_argument("series_id")
     quote_lookup = commands.add_parser("quote-at", help="read the prior quote at a UTC instant")
     quote_lookup.add_argument("series_id")
     quote_lookup.add_argument("--at", type=event_timestamp, required=True)
@@ -432,6 +437,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "quote-at":
             print(canonical_json(quote_at(store, args.series_id, args.at, args.maximum_age_ms)))
+        elif args.command == "verify-quote-series":
+            print(canonical_json(verify_quote_series(store, args.series_id)))
         elif args.command == "normalize-economic-ics":
             observed = args.observed_at
             if observed is not None and observed.nanosecond_tail:

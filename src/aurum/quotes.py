@@ -2,12 +2,13 @@
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from hashlib import sha256
 from importlib.metadata import version
+from itertools import zip_longest
 from pathlib import Path
 
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
@@ -18,6 +19,7 @@ from aurum.timestamps import EventTimestamp, event_timestamp, source_timezone
 
 QUOTE_IMPORT_VERSION = 1
 QUOTE_LOOKUP_VERSION = 1
+QUOTE_AUDIT_VERSION = 1
 QUOTE_COLUMNS = ("observed_at", "contract", "sequence", "bid", "ask", "bid_size", "ask_size")
 DEFAULT_QUOTE_MAX_AGE_MS = 1000
 MAX_QUOTE_AGE_MS = 86_400_000
@@ -152,15 +154,8 @@ def _quote_rows(series_id: str, quotes: Iterable[BookQuote]) -> Iterable[tuple[o
     )
 
 
-def import_quote_csv(
-    store: DatasetStore, path: Path, config: QuoteImportConfig, calendar: SessionCalendar
-) -> str:
-    if calendar.sessions is None:
-        raise ValueError("quote import requires a dated reviewed calendar")
-    raw = path.read_bytes()
-    quotes, issues = _normalize(raw, config, calendar)
-    checksum = sha256(raw).hexdigest()
-    provenance = canonical_json(
+def _quote_provenance(config: QuoteImportConfig, calendar: SessionCalendar, checksum: str) -> str:
+    return canonical_json(
         {
             "quote_import_version": QUOTE_IMPORT_VERSION,
             "source_sha256": checksum,
@@ -178,6 +173,17 @@ def import_quote_csv(
             "calendar": calendar.as_dict(),
         }
     )
+
+
+def import_quote_csv(
+    store: DatasetStore, path: Path, config: QuoteImportConfig, calendar: SessionCalendar
+) -> str:
+    if calendar.sessions is None:
+        raise ValueError("quote import requires a dated reviewed calendar")
+    raw = path.read_bytes()
+    quotes, issues = _normalize(raw, config, calendar)
+    checksum = sha256(raw).hexdigest()
+    provenance = _quote_provenance(config, calendar, checksum)
     series_id = sha256(provenance.encode()).hexdigest()
     with store.connection(write=True) as db:
         db.execute(
@@ -238,6 +244,88 @@ def describe_quote_series(store: DatasetStore, series_id: str) -> dict[str, obje
             if row is not None:
                 return _metadata(row)
     raise ValueError(f"unknown quote series: {series_id}")
+
+
+def _quote_from_row(row: sqlite3.Row) -> BookQuote:
+    return BookQuote(
+        event_timestamp(row["observed_at"]),
+        row["sequence"],
+        row["bid_ticks"],
+        row["ask_ticks"],
+        row["bid_size"],
+        row["ask_size"],
+    )
+
+
+def _stored_quotes(store: DatasetStore, series_id: str) -> Iterator[BookQuote]:
+    cursor = ("", -1)
+    while True:
+        with store.connection() as db:
+            rows = db.execute(
+                """SELECT * FROM book_quotes
+                   WHERE series_id = ? AND (observed_at, sequence) > (?, ?)
+                   ORDER BY observed_at, sequence LIMIT 1000""",
+                (series_id, *cursor),
+            ).fetchall()
+        for row in rows:
+            yield _quote_from_row(row)
+        if len(rows) < 1000:
+            return
+        cursor = rows[-1]["observed_at"], rows[-1]["sequence"]
+
+
+def verify_quote_series(store: DatasetStore, series_id: str) -> dict[str, object]:
+    metadata = describe_quote_series(store, series_id)
+    provenance = metadata["provenance"]
+    assert isinstance(provenance, dict)
+    if provenance.get("quote_import_version") != QUOTE_IMPORT_VERSION:
+        raise ValueError("quote verification requires the original quote import version")
+    if provenance.get("tzdata_version") != version("tzdata"):
+        raise ValueError("quote verification requires the original tzdata version")
+    with store.connection() as db:
+        source = db.execute(
+            """SELECT q.source_sha256, b.raw FROM quote_series q
+               JOIN source_blobs b ON b.sha256 = q.source_sha256 WHERE q.id = ?""",
+            (series_id,),
+        ).fetchone()
+    if source is None:
+        raise ValueError("quote series has no preserved source bytes")
+    raw = bytes(source["raw"])
+    checksum = sha256(raw).hexdigest()
+    if checksum != source["source_sha256"] or checksum != provenance["source_sha256"]:
+        raise ValueError("preserved quote source checksum mismatch")
+    config = QuoteImportConfig(
+        provenance["provider"],
+        MgcContract(provenance["contract"]),
+        provenance["source_timezone"],
+        DataKind(provenance["data_kind"]),
+    )
+    calendar = SessionCalendar.from_dict(provenance["calendar"])
+    rebuilt = _quote_provenance(config, calendar, checksum)
+    if rebuilt != canonical_json(provenance) or sha256(rebuilt.encode()).hexdigest() != series_id:
+        raise ValueError("rebuilt quote provenance or identity differs")
+    quotes, issues = _normalize(raw, config, calendar)
+    if (
+        metadata["quote_count"] != len(quotes)
+        or metadata["first_observed_at"] != quotes[0].observed_at.isoformat()
+        or metadata["last_observed_at"] != quotes[-1].observed_at.isoformat()
+        or metadata["issues"] != [asdict(issue) for issue in issues]
+    ):
+        raise ValueError("stored quote bounds, quality findings or metadata differ")
+    for actual, expected in zip_longest(_stored_quotes(store, series_id), quotes):
+        if actual != expected:
+            quote = expected if expected is not None else actual
+            assert quote is not None
+            raise ValueError(f"stored normalized quote differs at sequence {quote.sequence}")
+    return {
+        "quote_audit_version": QUOTE_AUDIT_VERSION,
+        "series_id": series_id,
+        "data_kind": config.data_kind,
+        "contract": config.contract.code,
+        "source_sha256": checksum,
+        "quote_count": len(quotes),
+        "verified": True,
+    }
 
 
 def quote_window(
@@ -319,14 +407,7 @@ class QuoteLookup:
         ).fetchone()
         if row is None:
             return QuoteAssessment(QuoteStatus.NOT_OBSERVED)
-        observation = BookQuote(
-            event_timestamp(row["observed_at"]),
-            row["sequence"],
-            row["bid_ticks"],
-            row["ask_ticks"],
-            row["bid_size"],
-            row["ask_size"],
-        )
+        observation = _quote_from_row(row)
         age = at.nanoseconds_since(observation.observed_at)
         status = QuoteStatus.FRESH if age <= maximum_age_ms * 1_000_000 else QuoteStatus.STALE
         return QuoteAssessment(status, observation, age)

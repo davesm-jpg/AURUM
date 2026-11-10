@@ -12,7 +12,7 @@ The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a l
 | `market_data.py` | Import configuration, 1m candles, normalized trade prints, minute derivation, provenance and gap detection |
 | `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
 | `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
-| `quotes.py`, `spread_reports.py`, `quote_costs.py` | Immutable authorized-format historical top-of-book series and precise freshness- and exchange-window-aware quote lookup, spread diagnostics from paper audit references and an opt-in fixed-fill paired quote cost projection |
+| `quotes.py`, `spread_reports.py`, `quote_costs.py` | Immutable authorized-format historical top-of-book series and offline normalized quote verification, precise freshness- and exchange-window-aware quote lookup, spread diagnostics from paper audit references and an opt-in fixed-fill paired quote cost projection |
 | `storage_admin.py` | Local validated SQLite snapshots and optional preserved-source checksum verification |
 | `dataset_audit.py` | Offline reproduction and exact verification of normalized candles, prints and immutable provenance from preserved bytes |
 | `reconciliation.py` | Bounded read-only inspection of two normalized imports, schedule and OHLCV reconciliation, and saved discrepancy report |

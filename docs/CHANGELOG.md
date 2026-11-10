@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Offline quote-series integrity
+
+- Added read-only reconstruction of normalized best bid and ask observations from preserved bytes.
+
+
 ## 2026-11-10 — Offline dataset integrity reproduction
 
 - Added a read-only command that reconstructs candle and trade datasets from stored raw bytes and compares their exact normalized rows.
