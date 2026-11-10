@@ -36,6 +36,7 @@ _COMPARABLE_FIELDS = (
     "performance_version",
     "economic_calendar",
     "execution_config",
+    "intrabar_ordering",
 )
 BACKTEST_ANALYTICS_VERSION = 2
 

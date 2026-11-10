@@ -32,6 +32,7 @@ class BacktestProfile(BaseModel):
     strategy_config: StrategyConfig = DEFAULT_STRATEGY_CONFIG
     execution_config: ExecutionConfig = DEFAULT_EXECUTION_CONFIG
     economic_calendar: dict[str, object] | None = None
+    resolve_with_trade_prints: bool = False
 
     @model_validator(mode="after")
     def check_replay_bounds(self) -> Self:

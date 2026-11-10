@@ -11,12 +11,14 @@ from typing import Any
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import (
     EXECUTION_VERSION,
+    TRADE_PRINT_ORDERING,
     ExecutionConfig,
     ExecutionEvent,
     JournalSignal,
     OrderKind,
     PaperExecution,
     PaperTrade,
+    TradePrintLookup,
 )
 from aurum.instruments import MgcContract
 from aurum.market_data import Candle, canonical_json
@@ -44,6 +46,7 @@ _COMMON_RUN_FIELDS = (
     "context_config",
     "economic_calendar",
     "execution_config",
+    "intrabar_ordering",
 )
 
 
@@ -202,9 +205,13 @@ def _paths(
     fit: dict[Stratum, _Admission],
     config: ControlConfig,
     end: datetime,
+    lookup: TradePrintLookup | None,
 ) -> list[_Path]:
     paths = [
-        _Path(PaperExecution(calendar, contract, risk, execution), index < 2)
+        _Path(
+            PaperExecution(calendar, contract, risk, execution, trade_prints=lookup),
+            index < 2,
+        )
         for index in range(config.replications + 1)
     ]
     scheduled: dict[datetime, dict[int, list[JournalSignal]]] = defaultdict(
@@ -322,6 +329,10 @@ def save_matched_control(
     raw_risk = strategy["risk"]
     risk = RiskConfig(**{**raw_risk, "target_mode": TargetMode(raw_risk["target_mode"])})
     execution = ExecutionConfig(**execution_raw)
+    ordering = reference.get("intrabar_ordering")
+    if ordering not in (None, TRADE_PRINT_ORDERING):
+        raise ValueError("unsupported intrabar ordering in saved backtest")
+    lookup = store.trade_print_lookup(dataset_id) if ordering is not None else None
     paths = _paths(
         store,
         dataset_id,
@@ -334,6 +345,7 @@ def save_matched_control(
         fit,
         config,
         end,
+        lookup,
     )
     reference_path, *control_paths = paths
     reference_summary = reference_path.summary(execution.initial_equity_cents)
@@ -358,6 +370,7 @@ def save_matched_control(
         "holdout_end": end.isoformat(),
         "risk_config": raw_risk,
         "execution_config": execution_raw,
+        **({"intrabar_ordering": ordering} if ordering is not None else {}),
     }
     return store.save_analysis(
         "matched_random_control",

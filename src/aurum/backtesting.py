@@ -15,6 +15,7 @@ from aurum.execution import (
     OrderKind,
     PaperExecution,
     PaperTrade,
+    TradePrintLookup,
 )
 from aurum.instruments import MgcContract
 from aurum.market_context import DEFAULT_CONTEXT_CONFIG, ContextConfig
@@ -68,12 +69,17 @@ class BacktestReplay:
         evidence: EvidenceConfig = DEFAULT_EVIDENCE_CONFIG,
         context: ContextConfig = DEFAULT_CONTEXT_CONFIG,
         economic: EconomicCalendar | None = None,
+        *,
+        trade_prints: TradePrintLookup | None = None,
     ) -> None:
         self._strategy = StrategyReplay(
             calendar, contract, timeframe, structure, strategy, evidence, context, economic
         )
-        self._execution = PaperExecution(calendar, contract, strategy.risk, execution)
+        self._execution = PaperExecution(
+            calendar, contract, strategy.risk, execution, trade_prints=trade_prints
+        )
         self._config = execution
+        self._resolves_trade_prints = trade_prints is not None
 
     def consume(self, candles: Iterable[Candle]) -> Iterator[BacktestEvent]:
         trades: list[PaperTrade] = []
@@ -101,10 +107,15 @@ class BacktestReplay:
                     order: OrderEvent = self._execution.submit(setup)
                     yield from record((order,))
         yield from record(self._execution.finish())
+        performance = summarize(trades, self._config.initial_equity_cents)
+        if self._resolves_trade_prints:
+            performance["trade_print_resolved_exits"] = sum(
+                trade.bracket_touch is not None for trade in trades
+            )
         yield BacktestSummary(
             first_open,
             last_close,
             signals,
             dict(sorted(cancellations.items())),
-            summarize(trades, self._config.initial_equity_cents),
+            performance,
         )

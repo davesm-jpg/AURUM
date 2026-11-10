@@ -248,6 +248,11 @@ const ADVANCED: [string, Field[]][] = [
         title: "Carry positions across scheduled closures",
         type: "boolean",
       },
+      {
+        path: "resolve_with_trade_prints",
+        title: "Resolve dual-touch minutes with stored trade prints",
+        type: "boolean",
+      },
     ],
   ],
 ];
@@ -385,9 +390,13 @@ export function BacktestForm({
     if (!selectedRun || typeof selectedRun.timeframe !== "string") return;
     setDraft({
       timeframe: selectedRun.timeframe,
-      profile: Object.fromEntries(
-        PROFILE_FIELDS.map((field) => [field, selectedRun[field]]),
-      ),
+      profile: {
+        ...Object.fromEntries(
+          PROFILE_FIELDS.map((field) => [field, selectedRun[field]]),
+        ),
+        resolve_with_trade_prints:
+          selectedRun.intrabar_ordering === "trade_print_sequence_v1",
+      },
     });
     setJsonText(null);
     setError("");

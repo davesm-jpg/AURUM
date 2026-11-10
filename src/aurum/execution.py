@@ -1,18 +1,22 @@
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from itertools import pairwise
 from typing import Any, Self
 
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_context import Regime, ResearchSession
-from aurum.market_data import Candle
+from aurum.market_data import Candle, TradePrint, candle_from_trade_prints
 from aurum.market_structure import Direction
 from aurum.paper_risk import MGC_TICK_CENTS, RiskConfig, RiskPlan, RiskRejection
 from aurum.strategy import SetupEvent, SetupState, Variant
 from aurum.timestamps import MINUTE
 
 EXECUTION_VERSION = 1
+TRADE_PRINT_ORDERING = "trade_print_sequence_v1"
+type TradePrintLookup = Callable[[Candle], Sequence[TradePrint]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +131,7 @@ class PaperTrade:
     commission_cents: int
     slippage_cents: int
     spread_cents: int
+    bracket_touch: TradePrint | None = None
 
     @property
     def gross_cents(self) -> int:
@@ -174,6 +179,14 @@ class PaperTrade:
             "net_cents": self.net_cents,
             "execution_mode": "paper_research",
             "execution_version": EXECUTION_VERSION,
+            **(
+                {
+                    "intrabar_ordering": TRADE_PRINT_ORDERING,
+                    "bracket_touch_print": self.bracket_touch.as_dict(),
+                }
+                if self.bracket_touch is not None
+                else {}
+            ),
         }
 
 
@@ -236,6 +249,7 @@ class _Exit:
     reason: ExitReason
     at_open: bool = False
     ambiguous: bool = False
+    bracket_touch: TradePrint | None = None
 
 
 class PaperExecution:
@@ -247,6 +261,8 @@ class PaperExecution:
         contract: MgcContract,
         risk: RiskConfig,
         config: ExecutionConfig = DEFAULT_EXECUTION_CONFIG,
+        *,
+        trade_prints: TradePrintLookup | None = None,
     ) -> None:
         if calendar.sessions is None:
             raise ValueError("paper execution requires a dated calendar")
@@ -254,6 +270,7 @@ class PaperExecution:
         self._contract = contract
         self._risk = risk
         self._config = config
+        self._trade_prints = trade_prints
         self._pending: _PendingOrder | None = None
         self._position: _Position | None = None
         self._last: Candle | None = None
@@ -338,6 +355,8 @@ class PaperExecution:
         position = self._position
         if position is not None:
             result = _check_bracket(position, candle)
+            if result is not None and result.ambiguous and self._trade_prints is not None:
+                result = _ordered_bracket_touch(position, candle, self._trade_prints(candle))
             if result is None or not result.at_open:
                 position.observe(candle.open_ticks)
             if result is None:
@@ -467,6 +486,7 @@ class PaperExecution:
             self._risk.commission_round_trip_cents * quantity,
             self._risk.slippage_round_trip_ticks * MGC_TICK_CENTS * quantity,
             self._config.round_trip_spread_ticks * MGC_TICK_CENTS * quantity,
+            result.bracket_touch,
         )
 
     @staticmethod
@@ -492,3 +512,32 @@ def _check_bracket(position: _Position, candle: Candle) -> _Exit | None:
     if hit_target:
         return _Exit(target, ExitReason.TARGET)
     return None
+
+
+def _ordered_bracket_touch(
+    position: _Position, candle: Candle, prints: Sequence[TradePrint]
+) -> _Exit:
+    if (
+        not prints
+        or any(
+            trade.contract != candle.contract or trade.minute_open != candle.opened_at
+            for trade in prints
+        )
+        or any(
+            (before.executed_at, before.sequence) >= (after.executed_at, after.sequence)
+            for before, after in pairwise(prints)
+        )
+        or candle_from_trade_prints(candle.opened_at, iter(prints)) != candle
+    ):
+        raise ValueError("trade prints must reconstruct the ambiguous minute in sequence")
+    stop, target = position.plan.stop_ticks, position.plan.target_ticks
+    assert target is not None
+    sign = 1 if position.signal.direction is Direction.BULLISH else -1
+    for trade in prints:
+        price = sign * trade.price_ticks
+        if price <= sign * stop:
+            return _Exit(stop, ExitReason.STOP, bracket_touch=trade)
+        if price >= sign * target:
+            return _Exit(target, ExitReason.TARGET, bracket_touch=trade)
+        position.observe(trade.price_ticks)
+    raise ValueError("ambiguous candle has no matching bracket print")

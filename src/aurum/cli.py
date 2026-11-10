@@ -158,6 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     backtest = commands.add_parser("backtest", help="run a minute-level paper simulation")
     _strategy_options(backtest)
     _execution_options(backtest)
+    backtest.add_argument("--resolve-with-trade-prints", action="store_true")
     structure_events = commands.add_parser(
         "structure-events", help="read persisted events as JSONL"
     )
@@ -738,6 +739,9 @@ def _strategy_run(
         evidence=_evidence_config(args),
         economic=_economic_calendar(args.economic_calendar),
         execution=execution,
+        resolve_with_trade_prints=args.resolve_with_trade_prints
+        if execution is not None
+        else False,
     )
 
 

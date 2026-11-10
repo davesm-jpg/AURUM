@@ -16,12 +16,12 @@ from aurum.execution import (
 )
 from aurum.instruments import MgcContract
 from aurum.market_context import ContextSnapshot, Regime, ResearchSession
-from aurum.market_data import Candle
+from aurum.market_data import Candle, TradePrint
 from aurum.market_structure import Direction, Trend
 from aurum.paper_risk import DEFAULT_RISK_CONFIG, size_paper_setup
 from aurum.performance import summarize
 from aurum.strategy import SetupEvent, SetupState, Variant
-from aurum.timestamps import MINUTE, minute_timestamp
+from aurum.timestamps import MINUTE, TradeTimestamp, minute_timestamp
 
 CONTRACT = MgcContract("MGC-2025-04")
 TRADE_DATE = date(2025, 3, 10)
@@ -106,6 +106,49 @@ def test_same_bar_collision_is_conservative_and_net_costs_are_explicit(
     assert outcome.net_cents == -5_260
     assert outcome.mfe_ticks == 0
     assert outcome.mae_ticks == 50
+
+
+@pytest.mark.parametrize("direction", list(Direction))
+@pytest.mark.parametrize("target_first", [True, False])
+def test_trade_prints_resolve_dual_touch_in_exact_source_sequence(
+    direction: Direction, target_first: bool
+) -> None:
+    first = synthetic_minute(0)
+    sign = 1 if direction is Direction.BULLISH else -1
+    target_print, stop_print = 150 + 110 * sign, 150 - 60 * sign
+    chosen, later = (target_print, stop_print) if target_first else (stop_print, target_print)
+    prices = (150, 150 + 12 * sign, chosen, later, 150)
+    candle = synthetic_minute(1, 150, max(prices), min(prices), 150)
+    prints = tuple(
+        TradePrint(CONTRACT, TradeTimestamp(candle.opened_at, 7), index, price, 2)
+        for index, price in enumerate(prices)
+    )
+    execution = PaperExecution(
+        synthetic_calendar((0, 4)), CONTRACT, DEFAULT_RISK_CONFIG, trade_prints=lambda _: prints
+    )
+    execution.advance(first)
+    execution.submit(synthetic_signal(first, direction))
+    _, trade = execution.advance(candle)
+    assert isinstance(trade, PaperTrade)
+    assert trade.ambiguous is False
+    assert trade.reason is (ExitReason.TARGET if target_first else ExitReason.STOP)
+    assert trade.net_cents == (9_740 if target_first else -5_260)
+    assert trade.mfe_ticks == (100 if target_first else 12)
+    assert trade.mae_ticks == (0 if target_first else 50)
+    assert trade.bracket_touch == prints[2]
+    assert trade.as_dict()["bracket_touch_print"] == prints[2].as_dict()
+    assert trade.recorded_at == candle.available_at
+
+    inconsistent = PaperExecution(
+        synthetic_calendar((0, 4)),
+        CONTRACT,
+        DEFAULT_RISK_CONFIG,
+        trade_prints=lambda _: tuple(reversed(prints)),
+    )
+    inconsistent.advance(first)
+    inconsistent.submit(synthetic_signal(first, direction))
+    with pytest.raises(ValueError, match="reconstruct the ambiguous minute"):
+        inconsistent.advance(candle)
 
 
 def test_latency_and_entry_recheck_do_not_use_the_late_bar_range_for_entry() -> None:

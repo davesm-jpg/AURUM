@@ -202,3 +202,12 @@
 - Decision — Store normalized point-in-time calendar content and use the shared strategy evaluator at each candle close. Omit new default provider fields and omit an absent calendar from monitor manifests.
 - Consequences — Existing profiles and monitor IDs remain usable. Updating the snapshot creates a separate monitor. A forward baseline requires matching economic assumptions. Automatic source updates and schedule revision history remain open.
 - Files — `economic_events.py`, `monitoring.py`, `runtime_profiles.py`, `forward_reports.py`.
+
+## ADR-022 — Use stored prints to order dual touches
+
+- Date — 2026-11-10.
+- Context — Minute OHLC can show both brackets touched without exposing the sequence.
+- Alternatives — Keep only stop-first, infer synthetic intrabar paths or use an ordered immutable print stream.
+- Decision — Preserve stop-first as the default. The optional rule reconstructs the ambiguous minute from its source prints and applies the first bracket crossing, retaining the reference price, costs and logical observation clock.
+- Consequences — The rule uses a separate saved run identity. A chronological candidate comparison requires the same ordering policy, and a minute-only forward baseline excludes this policy. Observed prints establish touch order. Actual fills and queue priority remain outside the model.
+- Files — `execution.py`, `backtesting.py`, `storage.py`, `control.py`, `tests/test_execution.py`.

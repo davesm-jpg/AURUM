@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Ordered print bracket resolution
+
+- Added an opt-in paper execution variant for dual-touch bars on trade-derived data, with exact source touch audit and separate comparison compatibility.
+
+
 ## 2026-11-10 — Historical trade prints
 
 - Added normalized trade CSV import, exact nanosecond and sequence ordering, derived unadjusted minute bars and paged CLI/API print inspection.

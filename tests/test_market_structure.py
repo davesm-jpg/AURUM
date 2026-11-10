@@ -23,7 +23,7 @@ from aurum.forward_reports import ForwardPeriod, save_forward_report
 from aurum.imbalances import ImbalanceConfig
 from aurum.instruments import MgcContract
 from aurum.liquidity import LiquidityConfig
-from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv
+from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv, prepare_trade_csv
 from aurum.market_structure import (
     BreakMode,
     BreakRule,
@@ -652,6 +652,84 @@ def test_backtest_cli_uses_paper_signal_and_persists_trade_and_audit(tmp_path: P
     assert validation["result"]["selected_run_id"] == run["run_id"]
     assert validation["result"]["candidates"][run["run_id"]]["validation"]["net_cents"] == -3560
     assert validation["result"]["holdout"]["summary"]["trades"] == 0
+
+
+def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_path: Path) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 70, 180, 111, 110),
+    ]
+    store, minute_dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    calendar = SessionCalendar.from_dict(store.describe(minute_dataset)["provenance"]["calendar"])
+    raw = tmp_path / "synthetic-tick-order.csv"
+    rows = ["timestamp,contract,sequence,price,size"]
+    for candle in store.replay(minute_dataset):
+        for index, price in enumerate(
+            (candle.open_ticks, candle.high_ticks, candle.low_ticks, candle.close_ticks)
+        ):
+            instant = candle.opened_at + timedelta(seconds=index + 1)
+            rows.append(f"{instant.isoformat()},{CONTRACT.code},{len(rows)},{price / 10:.1f},1")
+    raw.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    trade_config = ImportConfig(
+        "synthetic ordered prints", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC
+    )
+    trades = store.save(prepare_trade_csv(raw, trade_config, calendar))
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    args = [*aurum, "backtest", trades, "--internal-pivot", "1", "1"]
+    default = json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
+    ordered = json.loads(
+        subprocess.run(
+            [*args, "--resolve-with-trade-prints"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert default["run_id"] != ordered["run_id"]
+    assert "intrabar_ordering" not in default
+    assert ordered["intrabar_ordering"] == "trade_print_sequence_v1"
+    assert default["summary"]["performance"]["net_profit_cents"] == -3560
+    assert ordered["summary"]["performance"]["net_profit_cents"] == 6340
+    assert ordered["summary"]["performance"]["ambiguous_exits"] == 0
+    assert ordered["summary"]["performance"]["trade_print_resolved_exits"] == 1
+    (trade,) = [
+        event
+        for event in store.structure_events(ordered["run_id"])
+        if event["event"] == "paper_trade_completed"
+    ]
+    touch = trade["bracket_touch_print"]
+    assert isinstance(touch, dict)
+    assert touch["price_ticks"] == 180
+    assert touch["executed_at"] == "2025-03-10T14:05:02.000000000+00:00"
+    assert trade["exit_ticks"] == 176
+    assert trade["recorded_at"] == "2025-03-10T14:06:00+00:00"
+    with pytest.raises(ValueError, match="execution assumptions"):
+        validate_runs(
+            store,
+            (default["run_id"], ordered["run_id"]),
+            ValidationConfig(
+                START + 30 * MINUTE,
+                START + 67 * MINUTE,
+                minimum_selection_trades=1,
+            ),
+        )
+
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    profile = {"config": ordered["config"], "resolve_with_trade_prints": True}
+    with http.TestClient(api.create_app(store)) as client:
+        route = "/api/backtests"
+        saved = client.post(route, json={"dataset_id": trades, "profile": profile})
+        assert saved.status_code == 201
+        assert saved.json() == ordered
+        assert (
+            client.post(route, json={"dataset_id": minute_dataset, "profile": profile}).status_code
+            == 422
+        )
 
 
 def test_matched_control_fits_only_development_and_replays_heldout_fills(tmp_path: Path) -> None:

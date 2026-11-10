@@ -369,6 +369,7 @@ def _historical_baseline(
         "context_config": asdict(DEFAULT_CONTEXT_CONFIG),
         "execution_config": run["execution_config"],
         "economic_calendar": monitor.get("economic_calendar"),
+        "intrabar_ordering": None,
     }
     if any(
         canonical_json(history.get(key)) != canonical_json(value) for key, value in matched.items()

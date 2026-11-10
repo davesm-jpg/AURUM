@@ -312,6 +312,7 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
             context=profile.context_config,
             economic=profile.economic_events(),
             execution=profile.execution_config,
+            resolve_with_trade_prints=profile.resolve_with_trade_prints,
         )
         return store.describe_backtest(run_id)
 

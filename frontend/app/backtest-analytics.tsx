@@ -322,6 +322,13 @@ export function BacktestAnalytics({
           {String(summary.contract ?? "MGC")} · Strategy v
           {String(summary.strategy_version ?? "—")} · Run {runId.slice(0, 8)}
         </p>
+        {summary.intrabar_ordering === "trade_print_sequence_v1" && (
+          <p>
+            Trade print ordering ·{" "}
+            {String(stats.trade_print_resolved_exits ?? 0)} dual-touch exits
+            resolved
+          </p>
+        )}
       </div>
       <div className="metrics contained">
         <Metric

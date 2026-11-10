@@ -288,10 +288,10 @@ def _parse_trade_prints(
 
 def _trade_candles(trades: tuple[TradePrint, ...]) -> Iterator[Candle]:
     for opened, members in groupby(trades, key=lambda trade: trade.minute_open):
-        yield _minute_from_prints(opened, members)
+        yield candle_from_trade_prints(opened, members)
 
 
-def _minute_from_prints(opened: datetime, trades: Iterator[TradePrint]) -> Candle:
+def candle_from_trade_prints(opened: datetime, trades: Iterator[TradePrint]) -> Candle:
     first = next(trades)
     high = low = close = first.price_ticks
     volume = first.size

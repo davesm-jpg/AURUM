@@ -4,6 +4,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
+from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 from tempfile import SpooledTemporaryFile
@@ -14,7 +15,12 @@ from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
 from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
-from aurum.execution import EXECUTION_VERSION, ExecutionConfig
+from aurum.execution import (
+    EXECUTION_VERSION,
+    TRADE_PRINT_ORDERING,
+    ExecutionConfig,
+    TradePrintLookup,
+)
 from aurum.instruments import MAX_SQLITE_INTEGER, MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
 from aurum.market_data import Candle, PreparedDataset, TradePrint, canonical_json
@@ -411,6 +417,22 @@ class DatasetStore:
         """Read immutable batches without holding a reader open during consumer writes."""
         yield from self._candle_batches(dataset_id, span, batch_size, require_replayable=True)
 
+    def trade_print_lookup(self, dataset_id: str) -> TradePrintLookup:
+        if self.describe(dataset_id)["provenance"].get("source_data_type") != "trade_prints":
+            raise ValueError("ordered intrabar replay requires a trade-print dataset")
+
+        @lru_cache(maxsize=1)
+        def lookup(candle: Candle) -> tuple[TradePrint, ...]:
+            return tuple(
+                self.trade_prints(
+                    dataset_id,
+                    start=TradeTimestamp(candle.opened_at),
+                    end=TradeTimestamp(candle.available_at),
+                )
+            )
+
+        return lookup
+
     def inspection_batches(
         self, dataset_id: str, span: TradingWindow, batch_size: int = 1_000
     ) -> Iterator[tuple[Candle, ...]]:
@@ -485,6 +507,7 @@ class DatasetStore:
         context: ContextConfig = DEFAULT_CONTEXT_CONFIG,
         economic: EconomicCalendar | None = None,
         execution: ExecutionConfig | None = None,
+        resolve_with_trade_prints: bool = False,
     ) -> str:
         manifest: dict[str, object] = {
             "dataset_id": dataset_id,
@@ -508,6 +531,12 @@ class DatasetStore:
                 performance_version=PERFORMANCE_VERSION,
                 execution_config=asdict(execution),
             )
+        lookup = None
+        if resolve_with_trade_prints:
+            if execution is None:
+                raise ValueError("trade print ordering requires a paper backtest")
+            lookup = self.trade_print_lookup(dataset_id)
+            manifest["intrabar_ordering"] = TRADE_PRINT_ORDERING
 
         def run(
             calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
@@ -523,6 +552,7 @@ class DatasetStore:
                     evidence,
                     context,
                     economic,
+                    trade_prints=lookup,
                 ).consume(minutes)
             return StrategyReplay(
                 calendar, contract, timeframe, structure, strategy, evidence, context, economic
