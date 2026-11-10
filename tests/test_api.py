@@ -15,7 +15,12 @@ from aurum.instruments import MgcContract
 from aurum.liquidity import LiquidityConfig
 from aurum.market_data import Candle, DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
-from aurum.monitoring import MarketMonitor, MonitorConfig, market_chart_sequence_bounds
+from aurum.monitoring import (
+    MarketMonitor,
+    MonitorConfig,
+    describe_monitor,
+    market_chart_sequence_bounds,
+)
 from aurum.providers import FeedStatus
 from aurum.runtime_profiles import load_delivery_profile, provider_runtime
 from aurum.storage import DatasetStore
@@ -173,6 +178,30 @@ def test_api_provider_profiles_keep_environment_values_out_of_storage(
         listed = client.get("/api/configuration/runtime")
         assert listed.json()[0]["settings"]["endpoint_env"] == "AURUM_TEST_ENDPOINT"
         assert "18991" not in listed.text
+        assert "economic_calendar" not in saved.json()["settings"]
+        assert "require_clear_event_risk" not in saved.json()["settings"]
+
+        invalid = client.post(route, json={"profile": {**profile, "economic_calendar": {}}})
+        assert invalid.status_code == 422
+        snapshot = {
+            "source": "synthetic economic fixture",
+            "version": "v1",
+            "coverage": TradingWindow(start - 30 * MINUTE, start + 30 * MINUTE).as_dict(),
+            "coverage_known_at": (start - 45 * MINUTE).isoformat(),
+            "events": [],
+        }
+        event_profile = {**profile, "economic_calendar": snapshot, "require_clear_event_risk": True}
+        gated = client.post(route, json={"profile": event_profile})
+        assert gated.status_code == 201
+        gated_id = gated.json()["profile_id"]
+        assert gated_id != reference
+        assert client.post(route, json={"profile": event_profile}).json()["profile_id"] == gated_id
+        gated_monitor, _, _ = provider_runtime(store, gated_id)
+        assert gated_monitor.monitor_id != monitor.monitor_id
+        definition = describe_monitor(store, gated_monitor.monitor_id)["definition"]
+        assert isinstance(definition, dict)
+        assert definition["economic_calendar"] == snapshot
+        assert definition["strategy_config"]["require_clear_event_risk"] is True
 
 
 def test_api_saves_assumed_and_explicit_synthetic_paper_reports(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from hashlib import sha256
 from threading import Lock
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
+from aurum.economic_events import EconomicCalendar
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame, candle_from_dict
@@ -73,6 +74,8 @@ class MarketMonitor:
         structure: StructureConfig,
         strategy: StrategyConfig,
         evidence: EvidenceConfig = DEFAULT_EVIDENCE_CONFIG,
+        *,
+        economic: EconomicCalendar | None = None,
     ) -> None:
         if calendar.sessions is None:
             raise ValueError("monitoring requires reviewed dated sessions")
@@ -83,6 +86,7 @@ class MarketMonitor:
         self._structure = structure
         self._strategy_config = strategy
         self._evidence = evidence
+        self._economic = economic
         self._ingest_lock = Lock()
         self._checkpoint: str | None = None
         self._engine = self._new_engine()
@@ -101,6 +105,7 @@ class MarketMonitor:
                 "strategy_config": asdict(strategy),
                 "evidence_config": asdict(evidence),
                 "execution_mode": "paper_research",
+                **({"economic_calendar": economic.as_dict()} if economic is not None else {}),
             }
         )
         self.monitor_id = sha256(definition.encode()).hexdigest()
@@ -344,6 +349,7 @@ class MarketMonitor:
             self._structure,
             self._strategy_config,
             self._evidence,
+            economic=self._economic,
         )
 
     def _next_open(self, opened: datetime) -> str | None:

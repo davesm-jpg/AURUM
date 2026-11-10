@@ -7,6 +7,7 @@ from re import fullmatch
 from typing import Any, Literal
 
 from aurum.candles import Timeframe
+from aurum.economic_events import EconomicCalendar
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
 from aurum.market_context import ResearchSession
@@ -49,6 +50,8 @@ class ProviderProfile:
     timeframe: Timeframe = Timeframe.FIVE_MINUTES
     variant: Variant = DEFAULT_STRATEGY_CONFIG.variant
     stale_seconds: int = 90
+    economic_calendar: dict[str, object] | None = None
+    require_clear_event_risk: bool = False
 
     def __post_init__(self) -> None:
         _validate_label(self.name)
@@ -70,6 +73,14 @@ class ProviderProfile:
             raise ValueError("backfill token requires a backfill endpoint variable")
         if not 1 <= self.stale_seconds <= 3600:
             raise ValueError("provider stale threshold must be between 1 and 3600 seconds")
+
+    def economic_events(self) -> EconomicCalendar | None:
+        if self.economic_calendar is None:
+            return None
+        events = self.economic_calendar.get("events")
+        if isinstance(events, list) and len(events) > 5_000:
+            raise ValueError("provider snapshot supports at most 5000 economic announcements")
+        return EconomicCalendar.from_dict(self.economic_calendar)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,8 +111,16 @@ type RuntimeProfile = ProviderProfile | DeliveryProfile
 
 def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
     kind = "provider" if isinstance(profile, ProviderProfile) else "delivery"
+    settings = asdict(profile)
     if isinstance(profile, ProviderProfile):
         _provider_calendar(store, profile)
+        economic = profile.economic_events()
+        if economic is None:
+            del settings["economic_calendar"]
+        else:
+            settings["economic_calendar"] = economic.as_dict()
+        if not profile.require_clear_event_risk:
+            del settings["require_clear_event_risk"]
     else:
         status = describe_monitor(store, profile.monitor_id)
         definition = status["definition"]
@@ -112,7 +131,7 @@ def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
         {
             "runtime_profile_version": RUNTIME_PROFILE_VERSION,
             "kind": kind,
-            "settings": asdict(profile),
+            "settings": settings,
         }
     )
     profile_id = sha256(definition_json.encode()).hexdigest()
@@ -224,7 +243,12 @@ def provider_runtime(
             source_fingerprint=source.fingerprint,
         ),
         DEFAULT_STRUCTURE_CONFIG,
-        replace(DEFAULT_STRATEGY_CONFIG, variant=profile.variant),
+        replace(
+            DEFAULT_STRATEGY_CONFIG,
+            variant=profile.variant,
+            require_clear_event_risk=profile.require_clear_event_risk,
+        ),
+        economic=profile.economic_events(),
     )
     return monitor, source, backfill
 

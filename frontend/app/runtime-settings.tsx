@@ -141,9 +141,28 @@ export function RuntimeSettings({
     setError("");
     setSaved("");
     try {
+      const economic = String(fields.get("economic_calendar") ?? "").trim();
+      let settings: RecordData = profile;
+      if (kind === "providers") {
+        let snapshot: unknown = null;
+        if (economic) {
+          try {
+            snapshot = JSON.parse(economic);
+          } catch {
+            throw new Error(
+              "Economic calendar must be a reviewed JSON snapshot.",
+            );
+          }
+        }
+        settings = {
+          ...profile,
+          economic_calendar: snapshot,
+          require_clear_event_risk: fields.has("require_clear_event_risk"),
+        };
+      }
       const result = await api<Saved>("configuration/" + kind, {
         method: "POST",
-        body: JSON.stringify({ profile }),
+        body: JSON.stringify({ profile: settings }),
       });
       setProfiles((current) => [
         result,
@@ -266,6 +285,25 @@ export function RuntimeSettings({
                 />
               </label>
             </div>
+            <details className="settings-group">
+              <summary>Economic event risk</summary>
+              <label>
+                Reviewed economic snapshot JSON
+                <textarea
+                  name="economic_calendar"
+                  rows={5}
+                  spellCheck={false}
+                  placeholder="Optional point-in-time calendar"
+                />
+              </label>
+              <label className="checkbox-setting">
+                <input name="require_clear_event_risk" type="checkbox" />
+                Require clear event risk for confirmed paper setups
+              </label>
+              <p className="muted">
+                Missing coverage leaves event risk unknown.
+              </p>
+            </details>
             <button
               className="primary"
               disabled={pending || !sources.length || !defaults}

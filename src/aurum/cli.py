@@ -236,16 +236,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     monitor.add_argument("--backfill-token-env")
     monitor.add_argument("--stale-seconds", type=int, default=90)
     monitor.add_argument("--max-frames", type=int)
-    monitor.add_argument(
-        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
-    )
+    _strategy_context_options(monitor)
     monitor_replay = commands.add_parser(
         "monitor-replay", help="exercise the monitor with a saved dataset"
     )
     _research_options(monitor_replay)
-    monitor_replay.add_argument(
-        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
-    )
+    _strategy_context_options(monitor_replay)
     for name in ("monitor-status", "monitor-events", "monitor-alerts"):
         command = commands.add_parser(name)
         command.add_argument("monitor_id")
@@ -637,9 +633,7 @@ def _evidence_config(args: Namespace) -> EvidenceConfig:
 
 def _strategy_options(parser: ArgumentParser) -> None:
     _research_options(parser)
-    parser.add_argument(
-        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
-    )
+    _strategy_context_options(parser)
     parser.add_argument("--session", type=ResearchSession, choices=ResearchSession, action="append")
     parser.add_argument("--regime", type=Regime, choices=Regime, action="append")
     parser.add_argument("--min-volatility-bps", type=int)
@@ -655,8 +649,6 @@ def _strategy_options(parser: ArgumentParser) -> None:
         choices=TargetMode,
         default=DEFAULT_RISK_CONFIG.target_mode,
     )
-    parser.add_argument("--economic-calendar", type=Path)
-    parser.add_argument("--require-clear-event-risk", action="store_true")
     parser.add_argument(
         "--commission-cents", type=int, default=DEFAULT_RISK_CONFIG.commission_round_trip_cents
     )
@@ -664,6 +656,18 @@ def _strategy_options(parser: ArgumentParser) -> None:
         "--slippage-ticks", type=int, default=DEFAULT_RISK_CONFIG.slippage_round_trip_ticks
     )
     parser.add_argument("--max-contracts", type=int)
+
+
+def _strategy_context_options(parser: ArgumentParser) -> None:
+    parser.add_argument(
+        "--variant", type=Variant, choices=Variant, default=DEFAULT_STRATEGY_CONFIG.variant
+    )
+    parser.add_argument("--economic-calendar", type=Path)
+    parser.add_argument("--require-clear-event-risk", action="store_true")
+
+
+def _economic_calendar(path: Path | None) -> EconomicCalendar | None:
+    return EconomicCalendar.from_json(path.read_text(encoding="utf-8")) if path else None
 
 
 def _strategy_run(
@@ -689,18 +693,13 @@ def _strategy_run(
         maximum_volatility_bps=args.max_volatility_bps,
         require_clear_event_risk=args.require_clear_event_risk,
     )
-    economic = (
-        EconomicCalendar.from_json(args.economic_calendar.read_text(encoding="utf-8"))
-        if args.economic_calendar
-        else None
-    )
     return store.build_strategy_run(
         args.dataset_id,
         args.timeframe,
         _structure_config(args),
         config,
         evidence=_evidence_config(args),
-        economic=economic,
+        economic=_economic_calendar(args.economic_calendar),
         execution=execution,
     )
 
@@ -865,8 +864,13 @@ def _monitor_live(store: DatasetStore, args: Namespace) -> dict[str, object]:
         args.contract,
         config,
         _structure_config(args),
-        replace(DEFAULT_STRATEGY_CONFIG, variant=args.variant),
+        replace(
+            DEFAULT_STRATEGY_CONFIG,
+            variant=args.variant,
+            require_clear_event_risk=args.require_clear_event_risk,
+        ),
         _evidence_config(args),
+        economic=_economic_calendar(args.economic_calendar),
     )
     backfill = (
         HttpsGapBackfill(args.backfill_url, args.backfill_token_env) if args.backfill_url else None
@@ -907,8 +911,13 @@ def _monitor_replay(store: DatasetStore, args: Namespace) -> dict[str, object]:
         contract,
         config,
         _structure_config(args),
-        replace(DEFAULT_STRATEGY_CONFIG, variant=args.variant),
+        replace(
+            DEFAULT_STRATEGY_CONFIG,
+            variant=args.variant,
+            require_clear_event_risk=args.require_clear_event_risk,
+        ),
         _evidence_config(args),
+        economic=_economic_calendar(args.economic_calendar),
     )
     existing = describe_monitor(store, instance.monitor_id)
     expected = existing["next_expected_open"]

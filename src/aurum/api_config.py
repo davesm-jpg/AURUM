@@ -9,7 +9,6 @@ from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
 from aurum.instruments import MGC
 from aurum.market_context import DEFAULT_CONTEXT_CONFIG, ContextConfig, Regime, ResearchSession
-from aurum.market_data import canonical_json
 from aurum.market_structure import (
     DEFAULT_STRUCTURE_CONFIG,
     BreakMode,
@@ -67,7 +66,7 @@ class BacktestProfile(BaseModel):
     def economic_events(self) -> EconomicCalendar | None:
         if self.economic_calendar is None:
             return None
-        return EconomicCalendar.from_json(canonical_json(self.economic_calendar))
+        return EconomicCalendar.from_dict(self.economic_calendar)
 
 
 class BacktestRequest(BaseModel):

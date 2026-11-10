@@ -193,3 +193,12 @@
 - Decision — Sample qualified decisions from an analyst-selected structural opportunity variant. Estimate admission separately by session and direction, with optional regime, using pre-validation decisions only. Run the reference and seeded control replications from flat after the holdout embargo.
 - Consequences — The same cost model and position constraints apply across arms. Trade counts can differ, zero-rate strata are reported and only paths with trades contribute to expectancy quantiles. All paths share one holdout, so quantiles describe conditional variation. The analyst must predeclare the opportunity rule and settings outside the software.
 - Files — `src/aurum/control.py`, `src/aurum/execution.py`, `src/aurum/api_reports.py`, `tests/test_market_structure.py`.
+
+## ADR-021 — Bind economic context to monitor identity
+
+- Date — 2026-11-10.
+- Context — Streaming and historical analysis must assess event risk with the same release-time evidence.
+- Alternatives — Mutate a calendar in place or freeze it in each monitor definition.
+- Decision — Store normalized point-in-time calendar content and use the shared strategy evaluator at each candle close. Omit new default provider fields and omit an absent calendar from monitor manifests.
+- Consequences — Existing profiles and monitor IDs remain usable. Updating the snapshot creates a separate monitor. A forward baseline requires matching economic assumptions. Automatic source updates and schedule revision history remain open.
+- Files — `economic_events.py`, `monitoring.py`, `runtime_profiles.py`, `forward_reports.py`.

@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Economic context in monitoring
+
+- Added reviewed point-in-time economic snapshots and a clear-risk filter to monitoring, replay and provider settings. Existing definitions retain their IDs.
+
+
 ## 2026-11-10 — Historical data reconciliation
 
 - Added normalized minute and schedule comparison with bounded discrepancy examples, preserved replay gates and CLI, API and dashboard entry points.

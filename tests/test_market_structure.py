@@ -13,6 +13,7 @@ import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
 from aurum.control import ControlConfig, save_matched_control
+from aurum.economic_events import Announcement, EconomicCalendar
 from aurum.evidence import EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG
@@ -39,7 +40,7 @@ from aurum.market_structure import (
     Trend,
     TrendChange,
 )
-from aurum.monitoring import MarketMonitor, MonitorConfig
+from aurum.monitoring import MarketMonitor, MonitorConfig, market_events_page, monitor_events
 from aurum.providers import FeedStatus
 from aurum.research_reports import backtest_analytics, validate_runs
 from aurum.statistics import ValidationConfig
@@ -868,6 +869,99 @@ def test_persistent_monitor_replay_matches_strategy_and_gates_synthetic_alerts(
     last = minutes[-1]
     instance.ingest(FeedFrame.from_replay(last, FeedStatus.REAL_TIME, last.available_at))
     assert len(list(monitor_alerts(store, instance.monitor_id))) == 1
+
+
+@pytest.mark.parametrize("published_early", [False, True])
+def test_monitor_restarts_with_point_in_time_event_filter_and_matches_strategy(
+    tmp_path: Path, published_early: bool
+) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 103, 120, 111),
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    decision = bars[12].available_at
+    snapshot = EconomicCalendar(
+        "synthetic scheduled release fixture",
+        "fixture-v1",
+        TradingWindow(START - 30 * MINUTE, decision + 30 * MINUTE),
+        START - 60 * MINUTE,
+        (
+            Announcement(
+                "fictional-announcement",
+                "Synthetic release",
+                decision + 2 * MINUTE,
+                decision + (-2 if published_early else 1) * MINUTE,
+            ),
+        ),
+    )
+    path = tmp_path / "synthetic-economic.json"
+    path.write_text(json.dumps(snapshot.as_dict()), encoding="utf-8")
+    calendar = SessionCalendar.from_dict(store.describe(dataset)["provenance"]["calendar"])
+    config = MonitorConfig(f"replay:{dataset}", FeedStatus.SIMULATED)
+    structure = StructureConfig(PivotRule(1, 1))
+    strategy = replace(DEFAULT_STRATEGY_CONFIG, require_clear_event_risk=True)
+    instance = MarketMonitor(
+        store, calendar, CONTRACT, config, structure, strategy, economic=snapshot
+    )
+    without_snapshot = MarketMonitor(store, calendar, CONTRACT, config, structure, strategy)
+    assert without_snapshot.monitor_id != instance.monitor_id
+    instance.set_connection(True, START)
+    for minute in list(store.replay(dataset))[:62]:
+        instance.ingest(FeedFrame.from_replay(minute, FeedStatus.SIMULATED, minute.available_at))
+
+    aurum = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]
+    options = [
+        dataset,
+        "--internal-pivot",
+        "1",
+        "1",
+        "--economic-calendar",
+        str(path),
+        "--require-clear-event-risk",
+    ]
+    run = json.loads(
+        subprocess.run(
+            [*aurum, "monitor-replay", *options],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert run["monitor_id"] == instance.monitor_id
+    assert run["definition"]["economic_calendar"] == snapshot.as_dict()
+    transitions = [
+        event
+        for event in monitor_events(store, instance.monitor_id)
+        if event["event"] == "paper_setup_transition"
+    ]
+    historical = json.loads(
+        subprocess.run(
+            [*aurum, "strategy", *options],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    for observed, expected in zip(
+        transitions, store.structure_events(historical["run_id"]), strict=True
+    ):
+        shared = (observed.keys() & expected.keys()) - {"event_id"}
+        assert {key: observed[key] for key in shared} == {key: expected[key] for key in shared}
+    assert any(event["state"] == "paper_signal" for event in transitions) is not published_early
+    contexts = market_events_page(store, instance.monitor_id, kind="market_context_observed")
+    risks = {}
+    for event in contexts:
+        context = event["context"]
+        assert isinstance(context, dict)
+        risks[event["confirmed_at"]] = context["economic"]["risk"]
+    assert risks[(decision - 5 * MINUTE).isoformat()] == "clear"
+    assert risks[decision.isoformat()] == ("elevated" if published_early else "clear")
+    assert risks[(decision + 5 * MINUTE).isoformat()] == "elevated"
 
 
 @pytest.mark.parametrize("recover", [False, True])
