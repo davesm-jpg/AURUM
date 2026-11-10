@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Streaming store contention recovery
+
+- Added bounded retry for SQLite locks and preserved transport receipt separately from processing time. Retried frames are audited and ineligible for alert and forward fill processing.
+
+
 ## 2026-11-10 — Paired quote cost sensitivity
 
 - Added an opt-in fixed-fill projection using fresh quoted widths at eligible entry and exit references, with explicit subset and exclusions.

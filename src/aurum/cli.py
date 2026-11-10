@@ -89,7 +89,7 @@ from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile,
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
 from aurum.spread_reports import save_spread_report
 from aurum.statistics import ValidationConfig
-from aurum.storage import DatasetStore
+from aurum.storage import DatasetStore, is_transient_lock
 from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
@@ -921,8 +921,7 @@ def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
                         for reference in published:
                             print(f"aurum: saved forward report {reference}", file=sys.stderr)
             except sqlite3.OperationalError as exc:
-                code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
-                if not args.watch or code not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                if not args.watch or not is_transient_lock(exc):
                     raise
                 if retry == args.poll_seconds:
                     print(

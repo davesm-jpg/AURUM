@@ -1,4 +1,6 @@
 import os
+import sqlite3
+import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -14,6 +16,7 @@ from aurum.feed_frames import FeedFrame
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_history
 from aurum.monitoring import MAX_REPLAY_BATCH, MarketMonitor, MonitorState, describe_monitor
 from aurum.providers import FeedStatus, HttpsHistorySource, SourceFormat
+from aurum.storage import is_transient_lock
 
 
 class FrameConnection(Protocol):
@@ -22,6 +25,19 @@ class FrameConnection(Protocol):
 
 class FeedDisconnected(Exception):
     """The authorized transport ended without an integrity fault."""
+
+
+def _retry_store[T](action: Callable[[bool], T], sleeper: Callable[[float], None]) -> T:
+    retried = False
+    for delay in (0.25, 0.5):
+        try:
+            return action(retried)
+        except sqlite3.OperationalError as exc:
+            if not is_transient_lock(exc):
+                raise
+            sleeper(delay)
+            retried = True
+    return action(retried)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +177,7 @@ def run_stream(
 
     def try_backfill() -> None:
         nonlocal last_backfill
-        if backfill is None or (gap := monitor.gap()) is None:
+        if backfill is None or (gap := _retry_store(lambda _: monitor.gap(), sleeper)) is None:
             return
         timer = monotonic()
         if last_backfill is not None and timer - last_backfill < 15:
@@ -170,42 +186,75 @@ def run_stream(
         try:
             backfill.recover(monitor, gap, clock)
         except (OSError, ValueError):
-            monitor.note(
-                clock(), "feed_backfill_failed", "authorized backfill unavailable or incomplete"
+            _retry_store(
+                lambda _: monitor.note(
+                    clock(), "feed_backfill_failed", "authorized backfill unavailable or incomplete"
+                ),
+                sleeper,
+            )
+        except sqlite3.OperationalError as exc:
+            if not is_transient_lock(exc):
+                raise
+            _retry_store(
+                lambda _: monitor.note(
+                    clock(), "feed_backfill_deferred", "transient store contention"
+                ),
+                sleeper,
             )
 
     try:
         while max_frames is None or handled < max_frames:
             try:
                 with source.connect() as connection:
-                    monitor.set_connection(True, clock())
+                    _retry_store(lambda _: monitor.set_connection(True, clock()), sleeper)
                     while max_frames is None or handled < max_frames:
                         try:
                             raw = connection.recv(timeout=1)
                         except TimeoutError:
-                            monitor.refresh(clock())
+                            _retry_store(lambda _: monitor.refresh(clock()), sleeper)
                             try_backfill()
                             continue
                         now = clock()
                         try:
                             frame = FeedFrame.from_message(raw, source.mode, now)
-                            status = monitor.ingest(frame)
+
+                            def apply_frame(
+                                retried: bool, frame: FeedFrame = frame
+                            ) -> dict[str, object]:
+                                return monitor.ingest(
+                                    frame, application_clock=clock, storage_retry=retried
+                                )
+
+                            status = _retry_store(apply_frame, sleeper)
                         except (ValueError, KeyError, TypeError, OverflowError):
-                            monitor.fault(now, "invalid_normalized_frame")
-                            return monitor.set_connection(False, now)
+                            _retry_store(
+                                lambda _: monitor.fault(clock(), "invalid_normalized_frame"),
+                                sleeper,
+                            )
+                            break
                         handled += 1
                         retry_delay = 1
                         if status["state"] == MonitorState.INVALID:
-                            return monitor.set_connection(False, now)
+                            break
                         try_backfill()
+                break
             except FeedDisconnected as exc:
-                now = clock()
-                monitor.set_connection(False, now)
-                monitor.note(now, "transport_retry_scheduled", str(exc))
+                _retry_store(lambda _: monitor.set_connection(False, clock()), sleeper)
+
+                def record_retry(_: bool, reason: str = str(exc)) -> None:
+                    monitor.note(clock(), "transport_retry_scheduled", reason)
+
+                _retry_store(record_retry, sleeper)
                 sleeper(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
     except KeyboardInterrupt:
         pass
     finally:
-        monitor.set_connection(False, clock())
+        failure = sys.exception()
+        try:
+            _retry_store(lambda _: monitor.set_connection(False, clock()), sleeper)
+        except sqlite3.OperationalError as cleanup:
+            if failure is None:
+                raise
+            failure.add_note(f"monitor disconnect persistence failed: {type(cleanup).__name__}")
     return describe_monitor(monitor.store, monitor.monitor_id)

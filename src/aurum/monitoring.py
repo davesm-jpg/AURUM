@@ -2,7 +2,7 @@ import json
 import sqlite3
 from base64 import b64encode
 from bisect import bisect_right
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -192,8 +192,16 @@ class MarketMonitor:
                 datetime.fromisoformat(row["next_open"]), datetime.fromisoformat(future)
             )
 
-    def ingest(self, frame: FeedFrame) -> dict[str, object]:
-        return self._ingest_batch((frame,))
+    def ingest(
+        self,
+        frame: FeedFrame,
+        *,
+        application_clock: Callable[[], datetime] | None = None,
+        storage_retry: bool = False,
+    ) -> dict[str, object]:
+        return self._ingest_batch(
+            (frame,), application_clock=application_clock, storage_retry=storage_retry
+        )
 
     def ingest_replay_batch(self, frames: Sequence[FeedFrame]) -> dict[str, object]:
         """Apply a bounded synthetic or historical batch as one durable unit."""
@@ -216,7 +224,13 @@ class MarketMonitor:
         ):
             raise ValueError("feed candle status is incompatible with monitor configuration")
 
-    def _ingest_batch(self, frames: Sequence[FeedFrame]) -> dict[str, object]:
+    def _ingest_batch(
+        self,
+        frames: Sequence[FeedFrame],
+        *,
+        application_clock: Callable[[], datetime] | None = None,
+        storage_retry: bool = False,
+    ) -> dict[str, object]:
         for frame in frames:
             self._validate_frame(frame)
         with self._ingest_lock:
@@ -228,7 +242,13 @@ class MarketMonitor:
                         if checkpoint == self._checkpoint:
                             pending = 0
                             for frame in frames:
-                                pending = self._ingest(db, row, frame)
+                                now = (
+                                    application_clock() if application_clock else frame.received_at
+                                )
+                                _utc(now)
+                                if now < frame.received_at:
+                                    raise ValueError("monitor application clock precedes receipt")
+                                pending = self._ingest(db, row, frame, now, storage_retry)
                                 row = _run(db, self.monitor_id)
                             return _status(row, pending)
                     self._restore(checkpoint)
@@ -237,14 +257,21 @@ class MarketMonitor:
                 self._engine = self._new_engine()
                 raise
 
-    def _ingest(self, db: sqlite3.Connection, row: sqlite3.Row, frame: FeedFrame) -> int:
-        now = frame.received_at
+    def _ingest(
+        self,
+        db: sqlite3.Connection,
+        row: sqlite3.Row,
+        frame: FeedFrame,
+        now: datetime,
+        storage_retry: bool,
+    ) -> int:
+        received = frame.received_at.isoformat()
         opened = frame.candle.opened_at.isoformat()
         normalized = canonical_json(frame.candle.as_dict())
         db.execute(
             """UPDATE monitor_runs SET last_received = max(coalesce(last_received, ''), ?)
                WHERE id = ?""",
-            (now.isoformat(), self.monitor_id),
+            (received, self.monitor_id),
         )
         previous = db.execute(
             "SELECT candle FROM monitor_minutes WHERE run_id = ? AND opened_at = ?",
@@ -272,13 +299,24 @@ class MarketMonitor:
             """INSERT INTO monitor_minutes
                (run_id, opened_at, candle, raw, received_at, source_status, applied)
                VALUES (?, ?, ?, ?, ?, ?, 0)""",
-            (self.monitor_id, opened, normalized, frame.raw, now.isoformat(), frame.source_status),
+            (self.monitor_id, opened, normalized, frame.raw, received, frame.source_status),
         )
+        if storage_retry:
+            self._record(
+                db,
+                {
+                    "event": "feed_storage_retry_recovered",
+                    "at": now.isoformat(),
+                    "opened_at": opened,
+                    "source_received_at": received,
+                },
+            )
         expected = row["next_open"]
         last_applied = row["last_applied"]
         observed = max(now.isoformat(), row["last_received"] or "")
         direct = (
-            pending == 0
+            not storage_retry
+            and pending == 0
             and expected == opened
             and row["connected"]
             and (row["checked_at"] is None or now >= datetime.fromisoformat(row["checked_at"]))

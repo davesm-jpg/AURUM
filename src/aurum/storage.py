@@ -32,6 +32,12 @@ from aurum.timestamps import TradeTimestamp, trade_timestamp
 APPLICATION_ID = 0x4155524D
 SCHEMA_VERSION = 13
 
+
+def is_transient_lock(error: sqlite3.OperationalError) -> bool:
+    code = getattr(error, "sqlite_errorcode", None)
+    return isinstance(code, int) and (code & 0xFF) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+
+
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
         sha256 TEXT PRIMARY KEY NOT NULL,

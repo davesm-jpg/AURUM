@@ -1,6 +1,8 @@
 import json
 import sqlite3
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -157,6 +159,143 @@ def test_operational_read_fails_closed_after_heartbeat_deadline(tmp_path: Path) 
             assert payload["heartbeat_status"] == "overdue"
             assert payload["alerts_suspended"] is True
     assert describe_monitor(store, monitor.monitor_id) == ready
+
+
+@pytest.mark.parametrize(
+    ("error_code", "succeeds", "expected_delays"),
+    [
+        (sqlite3.SQLITE_BUSY | (3 << 8), True, [0.25]),
+        (sqlite3.SQLITE_LOCKED, False, [0.25, 0.5]),
+        (sqlite3.SQLITE_IOERR, False, []),
+    ],
+)
+def test_stream_store_retry_preserves_receipt_and_atomic_frame_application(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: int,
+    succeeds: bool,
+    expected_delays: list[float],
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 8)))
+    source = WebSocketSource("wss://synthetic.invalid", FeedStatus.REAL_TIME)
+    current = START
+    queue = iter((frame(0), frame(1)))
+    delays = []
+
+    class FixtureConnection:
+        def recv(self, timeout: float | None = None) -> str:
+            nonlocal current
+            value = next(queue)
+            current = value.received_at
+            payload = value.candle.as_dict()
+            del payload["available_at"]
+            return json.dumps({"event": "candle_closed", **payload})
+
+    @contextmanager
+    def connect(_: WebSocketSource) -> Iterator[FixtureConnection]:
+        yield FixtureConnection()
+
+    def sleep(seconds: float) -> None:
+        nonlocal current
+        delays.append(seconds)
+        current += timedelta(seconds=seconds)
+
+    original = MarketMonitor._ingest
+    invocations = 0
+    error = sqlite3.OperationalError("synthetic SQLite failure after applying frame")
+    error.sqlite_errorcode = error_code
+
+    def ingest(
+        instance: MarketMonitor,
+        db: sqlite3.Connection,
+        row: sqlite3.Row,
+        value: FeedFrame,
+        now: datetime,
+        storage_retry: bool,
+    ) -> int:
+        nonlocal invocations
+        invocations += 1
+        result = original(instance, db, row, value, now, storage_retry)
+        if invocations == 1 or not succeeds:
+            raise error
+        return result
+
+    monkeypatch.setattr(WebSocketSource, "connect", connect)
+    monkeypatch.setattr(MarketMonitor, "_ingest", ingest)
+    if succeeds:
+        state = run_stream(monitor, source, max_frames=2, clock=lambda: current, sleeper=sleep)
+        assert state["last_applied_open"] == (START + MINUTE).isoformat()
+    else:
+        with pytest.raises(sqlite3.OperationalError) as failure:
+            run_stream(monitor, source, max_frames=2, clock=lambda: current, sleeper=sleep)
+        assert failure.value is error
+        assert invocations == len(expected_delays) + 1
+    assert delays == expected_delays
+    assert describe_monitor(store, monitor.monitor_id)["connected"] is False
+    with store.connection() as db:
+        applied = [
+            tuple(row)
+            for row in db.execute(
+                """SELECT received_at, applied_at, execution_eligible
+                   FROM monitor_minutes ORDER BY opened_at"""
+            )
+        ]
+    if succeeds:
+        first, second = START + MINUTE, START + 2 * MINUTE
+        assert applied == [
+            (first.isoformat(), (first + timedelta(seconds=0.25)).isoformat(), 0),
+            (second.isoformat(), second.isoformat(), 1),
+        ]
+        (recovery,) = [
+            event
+            for event in monitor_events(store, monitor.monitor_id)
+            if event["event"] == "feed_storage_retry_recovered"
+        ]
+        assert recovery["source_received_at"] == first.isoformat()
+        assert recovery["at"] == (first + timedelta(seconds=0.25)).isoformat()
+    else:
+        assert applied == []
+
+
+def test_application_clock_after_receipt_controls_live_eligibility(tmp_path: Path) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 8)))
+    monitor.set_connection(True, START)
+    value = frame(0)
+    applied = value.received_at + timedelta(seconds=91)
+    health = monitor.ingest(value, application_clock=lambda: applied)
+    assert health["last_received"] == value.received_at.isoformat()
+    assert health["checked_at"] == applied.isoformat()
+    with store.connection() as db:
+        row = db.execute("SELECT received_at, applied_at, execution_eligible FROM monitor_minutes")
+        assert tuple(row.fetchone()) == (value.received_at.isoformat(), applied.isoformat(), 0)
+
+
+def test_invalid_stream_frame_latches_fault_and_disconnects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 8)), FeedStatus.SIMULATED)
+    source = WebSocketSource("ws://127.0.0.1:18991/synthetic", FeedStatus.SIMULATED)
+
+    class FixtureConnection:
+        def recv(self, timeout: float | None = None) -> str:
+            return '{"event":"candle_closed"}'
+
+    @contextmanager
+    def connect(_: WebSocketSource) -> Iterator[FixtureConnection]:
+        yield FixtureConnection()
+
+    monkeypatch.setattr(WebSocketSource, "connect", connect)
+    state = run_stream(monitor, source, max_frames=1, clock=lambda: START)
+    assert state["state"] == MonitorState.INVALID
+    assert state["fault"] == "invalid_normalized_frame"
+    assert state["connected"] is False
+    assert state["last_applied_open"] is None
+    assert [event["event"] for event in monitor_events(store, monitor.monitor_id)].count(
+        "feed_disconnected"
+    ) == 1
 
 
 def test_monitor_restart_rebuilds_without_blocking_ingestion_and_catches_up_once(
