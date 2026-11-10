@@ -2,7 +2,7 @@ import json
 import sqlite3
 from base64 import b64encode
 from bisect import bisect_right
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -498,6 +498,8 @@ def market_events_page(
     through_open: str | None = None,
     observed_through: datetime | None = None,
     kind: str | None = None,
+    kinds: Collection[str] = (),
+    through_sequence: int | None = None,
 ) -> list[dict[str, object]]:
     with store.connection() as db:
         if db.execute("PRAGMA user_version").fetchone()[0] < 6:
@@ -517,6 +519,12 @@ def market_events_page(
         if kind is not None:
             query += " AND e.kind = ?"
             parameters += (kind,)
+        if kinds:
+            query += " AND e.kind IN (" + ", ".join("?" for _ in kinds) + ")"
+            parameters += tuple(kinds)
+        if through_sequence is not None:
+            query += " AND e.sequence <= ?"
+            parameters += (through_sequence,)
         query += " ORDER BY e.sequence DESC LIMIT ?" if latest else " ORDER BY e.sequence LIMIT ?"
         rows = db.execute(query, (*parameters, limit)).fetchall()
     if latest:
@@ -532,6 +540,58 @@ def market_events_page(
         }
         for row in rows
     ]
+
+
+def market_chart_sequence_bounds(
+    store: DatasetStore,
+    monitor_id: str,
+    checkpoint: str,
+    left: datetime,
+    right: datetime,
+    lookback: int,
+) -> tuple[int, int | None]:
+    """Bound the projector by actual primary closes and the pinned applied prefix."""
+    through_open = min(checkpoint, (right - MINUTE).isoformat())
+    with store.connection() as db:
+        if db.execute("PRAGMA user_version").fetchone()[0] < 10:
+            return 0, None
+        last = db.execute(
+            """SELECT sequence FROM monitor_market_events
+               WHERE run_id = ? AND minute_open <= ?
+               ORDER BY minute_open DESC, sequence DESC LIMIT 1""",
+            (monitor_id, through_open),
+        ).fetchone()
+        if last is None:
+            return 0, 0
+        first_observation = db.execute(
+            """SELECT opened_at FROM monitor_minutes
+               WHERE run_id = ? AND applied_at >= ? AND opened_at <= ?
+               ORDER BY applied_at, opened_at LIMIT 1""",
+            (monitor_id, left.isoformat(), through_open),
+        ).fetchone()
+        # Every analyzed primary close produces one context row. Count back through
+        # actual analysis steps so delayed batches, shortened windows and breaks
+        # cannot move the starting boundary forward.
+        boundary = (
+            first_observation["opened_at"]
+            if first_observation is not None
+            else (datetime.fromisoformat(through_open) + MINUTE).isoformat()
+        )
+        first_context = db.execute(
+            """SELECT minute_open FROM monitor_market_events
+               WHERE run_id = ? AND kind = 'market_context_observed' AND minute_open < ?
+               ORDER BY minute_open DESC LIMIT 1 OFFSET ?""",
+            (monitor_id, boundary, lookback - 1),
+        ).fetchone()
+        if first_context is None:
+            return 0, int(last["sequence"])
+        first = db.execute(
+            """SELECT sequence FROM monitor_market_events
+               WHERE run_id = ? AND minute_open >= ?
+               ORDER BY minute_open, sequence LIMIT 1""",
+            (monitor_id, first_context["minute_open"]),
+        ).fetchone()
+        return int(first["sequence"]) - 1, int(last["sequence"])
 
 
 def market_evidence_started_at(

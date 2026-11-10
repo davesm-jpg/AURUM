@@ -1,3 +1,4 @@
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
@@ -6,12 +7,15 @@ from threading import Event
 import pytest
 
 from aurum.candles import AggregateCandle, CandleAggregator
+from aurum.evidence import EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.feed_frames import FeedFrame
+from aurum.imbalances import ImbalanceConfig
 from aurum.instruments import MgcContract
+from aurum.liquidity import LiquidityConfig
 from aurum.market_data import Candle, DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
-from aurum.monitoring import MarketMonitor, MonitorConfig
+from aurum.monitoring import MarketMonitor, MonitorConfig, market_chart_sequence_bounds
 from aurum.providers import FeedStatus
 from aurum.runtime_profiles import load_delivery_profile, provider_runtime
 from aurum.storage import DatasetStore
@@ -398,3 +402,60 @@ def test_recovered_synthetic_monitor_evidence_uses_observed_time_on_chart(tmp_pa
         assert report.status_code == 201
         assert report.json()["result"]["period"]["outcomes"]["trades"] == 0
         assert report.json()["result"]["period"]["coverage"]["applied_forward_minutes"] == 0
+
+
+def test_indexed_synthetic_monitor_projection_matches_full_journal_after_recovery(
+    tmp_path: Path,
+) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    start = minute_timestamp("2025-03-10T13:00Z")
+    span = TradingWindow(start, start + 160 * MINUTE)
+    calendar = SessionCalendar(
+        "synthetic projection fixture",
+        "synthetic-index-v1",
+        span,
+        sessions=(TradingSession(date(2025, 3, 10), (span,)),),
+    )
+    store = DatasetStore(tmp_path / "synthetic.sqlite")
+    contract = MgcContract("MGC-2025-04")
+    monitor = MarketMonitor(
+        store,
+        calendar,
+        contract,
+        MonitorConfig("synthetic bounded evidence", FeedStatus.SIMULATED),
+        DEFAULT_STRUCTURE_CONFIG,
+        DEFAULT_STRATEGY_CONFIG,
+        EvidenceConfig(
+            liquidity=LiquidityConfig(max_level_age_bars=3),
+            imbalances=ImbalanceConfig(max_age_bars=3),
+        ),
+    )
+
+    def send(index: int, observed: int) -> None:
+        ticks = 29000 + (index // 5 % 8) * 10
+        candle = Candle(contract, start + index * MINUTE, ticks, ticks, ticks, ticks, 1)
+        monitor.ingest(
+            FeedFrame.from_replay(candle, FeedStatus.SIMULATED, start + observed * MINUTE)
+        )
+
+    for index in range(160):
+        if index != 145:
+            send(index, index + 1)
+        if index == 150:
+            send(145, 151)
+    through = start + 154 * MINUTE
+    left = through - 12 * MINUTE
+    checkpoint = (span.end - MINUTE).isoformat()
+    after, ceiling = market_chart_sequence_bounds(
+        store, monitor.monitor_id, checkpoint, left, through, 5
+    )
+    assert ceiling is not None and 0 < after < ceiling
+    params = {"limit": 12, "timeframe": "1m", "through": through.isoformat()}
+    with http.TestClient(api.create_app(store)) as client:
+        route = f"/api/monitors/{monitor.monitor_id}/chart"
+        indexed = client.get(route, params=params).json()
+        assert indexed["market_evidence"]["spans"]
+        with sqlite3.connect(store.path) as db:
+            db.execute("PRAGMA user_version = 9")
+        assert client.get(route, params=params).json() == indexed

@@ -27,7 +27,7 @@ from aurum.api_reports import (
     report_configuration,
 )
 from aurum.candles import CandleAggregator, Timeframe
-from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence
+from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
     ForwardPaper,
@@ -41,6 +41,7 @@ from aurum.market_data import canonical_json
 from aurum.monitoring import (
     applied_minute_batches,
     describe_monitor,
+    market_chart_sequence_bounds,
     market_events_page,
     market_evidence_started_at,
 )
@@ -663,14 +664,23 @@ def _monitor_chart(
             right = datetime.fromisoformat(bars[-1].available_at)
             if capture_started is not None:
                 market_evidence = chart_evidence(
-                    _monitor_chart_events(store, monitor_id, last_open, market=True),
+                    _market_chart_events(
+                        store,
+                        monitor_id,
+                        last_open,
+                        left,
+                        right,
+                        span_lookback(
+                            definition.get("evidence_config"), definition.get("evidence_version")
+                        ),
+                    ),
                     left,
                     right,
                     tracks_execution=False,
                     use_observed_time=True,
                 )
             paper_evidence = chart_evidence(
-                _monitor_chart_events(store, monitor_id, last_open, market=False),
+                _monitor_setup_chart_events(store, monitor_id, last_open, left, right),
                 left,
                 right,
                 tracks_execution=False,
@@ -702,25 +712,79 @@ def _monitor_chart(
     )
 
 
-def _monitor_chart_events(
-    store: DatasetStore, monitor_id: str, last_open: str, *, market: bool
+def _market_chart_events(
+    store: DatasetStore,
+    monitor_id: str,
+    last_open: str,
+    left: datetime,
+    right: datetime,
+    lookback: int | None,
 ) -> Iterator[tuple[int, dict[str, object]]]:
-    after = 0
-    applied_close = datetime.fromisoformat(last_open) + MINUTE
-    while True:
-        batch = (
-            market_events_page(store, monitor_id, after=after, limit=500, through_open=last_open)
-            if market
-            else _events(store, monitor_id, after, 500, monitor=True)
+    after, ceiling = (
+        (0, None)
+        if lookback is None
+        else market_chart_sequence_bounds(store, monitor_id, last_open, left, right, lookback)
+    )
+    while ceiling is None or after < ceiling:
+        batch = market_events_page(
+            store,
+            monitor_id,
+            after=after,
+            limit=500,
+            through_open=last_open,
+            observed_through=right,
+            kinds=_CHART_KINDS,
+            through_sequence=ceiling,
         )
+        yield from ((int(str(event["sequence"])), event) for event in batch)
+        if len(batch) < 500:
+            return
+        after = int(str(batch[-1]["sequence"]))
+
+
+def _monitor_setup_chart_events(
+    store: DatasetStore,
+    monitor_id: str,
+    last_open: str,
+    left: datetime,
+    right: datetime,
+) -> Iterator[tuple[int, dict[str, object]]]:
+    applied_close = datetime.fromisoformat(last_open) + MINUTE
+    with store.connection() as db:
+        indexed = _schema(db) >= 10
+    if indexed:
+        lower = left.isoformat()
+        after = 0
+        while True:
+            with store.connection() as db:
+                rows = db.execute(
+                    """SELECT sequence, payload, json_extract(payload, '$.observed_at') AS observed
+                       FROM monitor_events
+                       WHERE run_id = ?
+                         AND json_extract(payload, '$.event') = 'paper_setup_transition'
+                         AND json_extract(payload, '$.state') = 'paper_signal'
+                         AND json_extract(payload, '$.observed_at') >= ?
+                         AND (json_extract(payload, '$.observed_at'), sequence) > (?, ?)
+                         AND json_extract(payload, '$.observed_at') <= ?
+                       ORDER BY json_extract(payload, '$.observed_at'), sequence LIMIT 500""",
+                    (monitor_id, lower, lower, after, right.isoformat()),
+                ).fetchall()
+            for row in rows:
+                event = json.loads(row["payload"])
+                if datetime.fromisoformat(event["confirmed_at"]) <= applied_close:
+                    yield row["sequence"], event
+            if len(rows) < 500:
+                return
+            after = rows[-1]["sequence"]
+            lower = rows[-1]["observed"]
+    after = 0
+    while True:
+        batch = _events(store, monitor_id, after, 500, monitor=True)
         for event in batch:
-            sequence = int(str(event["sequence"]))
-            if market and event["event"] in _CHART_KINDS:
-                yield sequence, event
-            if not market and event["event"] == "paper_setup_transition":
+            if event["event"] == "paper_setup_transition":
                 if datetime.fromisoformat(str(event["confirmed_at"])) > applied_close:
                     return
-                yield sequence, event
+                yield int(str(event["sequence"])), event
         if len(batch) < 500:
             return
         after = int(str(batch[-1]["sequence"]))

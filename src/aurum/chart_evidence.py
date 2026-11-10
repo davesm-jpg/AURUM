@@ -56,6 +56,23 @@ CHART_EVENT_KINDS = (
 )
 
 
+def span_lookback(evidence_config: object, evidence_version: object) -> int | None:
+    """A span retires by the first eligible bar plus its configured lifetime."""
+    if evidence_version != 1 or not isinstance(evidence_config, dict):
+        return None
+    liquidity, imbalance = evidence_config.get("liquidity"), evidence_config.get("imbalances")
+    if not isinstance(liquidity, dict) or not isinstance(imbalance, dict):
+        return None
+    level_age, gap_age = liquidity.get("max_level_age_bars"), imbalance.get("max_age_bars")
+    if (
+        not isinstance(level_age, int)
+        or not isinstance(gap_age, int)
+        or min(level_age, gap_age) < 1
+    ):
+        return None
+    return max(level_age, gap_age) + 2
+
+
 @dataclass(frozen=True, slots=True)
 class ChartMarker:
     category: str

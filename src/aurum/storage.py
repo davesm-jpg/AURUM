@@ -23,7 +23,7 @@ from aurum.performance import PERFORMANCE_VERSION
 from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA_V1 = (
     """CREATE TABLE source_blobs (
@@ -215,6 +215,20 @@ SCHEMA_V9 = """CREATE TABLE runtime_profiles (
     definition TEXT NOT NULL,
     created_at TEXT NOT NULL
 ) STRICT"""
+
+SCHEMA_V10 = (
+    """CREATE INDEX monitor_market_minute
+       ON monitor_market_events(run_id, minute_open, sequence)""",
+    """CREATE INDEX monitor_market_context_minute
+       ON monitor_market_events(run_id, minute_open)
+       WHERE kind = 'market_context_observed'""",
+    """CREATE INDEX monitor_minute_observation
+       ON monitor_minutes(run_id, applied_at, opened_at) WHERE applied_at IS NOT NULL""",
+    """CREATE INDEX monitor_setup_observation
+       ON monitor_events(run_id, json_extract(payload, '$.observed_at'), sequence)
+       WHERE json_extract(payload, '$.event') = 'paper_setup_transition'
+         AND json_extract(payload, '$.state') = 'paper_signal'""",
+)
 
 
 class DatasetDescription(TypedDict):
@@ -678,4 +692,7 @@ class DatasetStore:
                 db.execute(statement)
         if write and version < 9:
             db.execute(SCHEMA_V9)
-            db.execute("PRAGMA user_version = 9")
+        if write and version < 10:
+            for statement in SCHEMA_V10:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 10")
