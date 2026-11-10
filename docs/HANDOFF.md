@@ -3,19 +3,20 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03–Q05, D06–D07, B03–B04 and L04–L05 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q05, D06–D08, B03–B04 and L04–L05 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `09186960d7041947b201c7425b50ecf0f3174d27`.
+- Last verified commit — `0ea704edbb4d908307e19db74105061a69719c1c`.
 
 ## Current Objective
 
-- Task ID — D08.
-- Objective — Import and inspect independently labeled historical best bid and ask observations.
-- Acceptance criteria — Preserve exact observation times, sequences, raw bytes and contract provenance. A point-in-time lookup must reject stale, future and prior-window quotes.
+- Task ID — B05.
+- Objective — Audit quote availability and spreads at historical decision and execution reference timestamps.
+- Acceptance criteria — Match contract, data class and reviewed windows. Quantify freshness and spread only from preceding eligible observations, with no change to paper fills.
 
 ## Completed Work
 
 - D01–D05 — Immutable authorized-format CSV/Parquet/HTTPS history, reviewed dated schedules, completed candle aggregation, point-in-time contract selection and explicit continuous research mapping.
+- D08 — Schema v13 stores immutable historical top-of-book series with exact timestamps and strict preceding, same-window quote lookup.
 - D07 — Schema v12 preserves normalized trade prints and raw bytes with derived minute OHLCV. Exact nanosecond/sequence ordering and normal replay gates are verified.
 - D06 — Data reconciliation compares two immutable imports with bounded samples of missing minutes, calendar differences and exact OHLCV mismatches. It preserves replay eligibility and distinguishes synthetic inputs.
 - S01–S03 — Causal structure, liquidity, imbalances and mirrored paper strategy with contextual measurements, score and integer sizing. Versioned runs and evidence are persisted.
@@ -40,7 +41,7 @@
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v12. The benchmark entry point is `benchmarks/synthetic_pipeline.py`. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v13. The benchmark entry point is `benchmarks/synthetic_pipeline.py`. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
 - Remaining portions — Monitor streams support native reconnect cursors and checkpoint-triggered chart refresh. Production feed and delivery remain unverified. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
@@ -63,8 +64,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 188 Python tests, Ruff lint/format and mypy across 69 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (188), Ruff lint/format, mypy (69 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 194 Python tests, Ruff lint/format and mypy across 71 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The latest 21,600-minute benchmark took 4.44 s for batched ingestion, with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (194), Ruff lint/format, mypy (71 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -78,8 +79,8 @@
 
 ## Immediate Next Actions
 
-1. Add a normalized quote observation schema and historical import alongside immutable trade datasets.
-2. Implement exact as-of lookups with freshness and exchange-window bounds. Keep spread analysis separate from modeled execution until the observation path is verified.
+1. Reuse an immutable quote lookup for batched research anchors from a saved backtest.
+2. Add a saved spread observation report with freshness, alignment and coverage counts. Exercise future, stale and exact timestamp boundaries.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
