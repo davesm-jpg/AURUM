@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — Q03, D06 and L04 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
+- Current milestone — Q03–Q04, D06 and L04–L05 are complete. O01 has measured optimizations and local backups. D04 still needs authorized inputs.
 - Current branch — `main`.
-- Last verified commit — `1b12133c00ceb75238c7e66beae31f485a9b0b6b`.
+- Last verified commit — `a9dabb684bf728311ce89cfbfe7af65d8d6d91fb`.
 
 ## Current Objective
 
-- Task ID — L05.
-- Objective — Allow a provider profile to use a reviewed exchange schedule before any historical data import.
-- Acceptance criteria — Persist either one existing dataset reference or an explicit reviewed dated schedule and contract. Retain existing profile IDs and reject synthetic schedules for real and delayed feeds.
+- Task ID — D07.
+- Objective — Import normalized historical trade prints and derive exact unadjusted minute bars.
+- Acceptance criteria — Preserve exact trade timestamps and sequence, raw bytes and contract identity. Reject duplicates and off-session prints. Gate derived replay when expected minutes have no prints.
 
 ## Completed Work
 
@@ -19,11 +19,13 @@
 - D06 — Data reconciliation compares two immutable imports with bounded samples of missing minutes, calendar differences and exact OHLCV mismatches. It preserves replay eligibility and distinguishes synthetic inputs.
 - S01–S03 — Causal structure, liquidity, imbalances and mirrored paper strategy with contextual measurements, score and integer sizing. Versioned runs and evidence are persisted.
 - B01/Q01/Q02 — Conservative paper backtest, chronological validation, conditional Monte Carlo and separate LucidFlex paper ledger. No empirical strategy performance has been measured.
+- Q04 — Backtest analytics groups duration, modeled excursions, costs, ambiguous exits and return dispersion by exchange date and decision context. Saved run IDs are unchanged.
 - Q03 — Matched controls fit admission on development decisions and replay identical paper costs from flat after embargo. CLI/API report parity and the dashboard build are verified on labeled synthetic evidence.
 - L01 journal — SQLite v4 holds monitor definitions, raw/normalized pending and applied minutes, cursor, research events and in-app alerts. Contiguous application and resulting events commit together. Restart restores the applied strategy prefix without replaying delivery.
 - L01 transport — `streaming.py` accepts normalized WebSocket minute-close frames with explicit source status, reconnects with bounded backoff, can fill observed gaps using authorized HTTPS and gates stale or invalid data. The connector supports local synthetic transport. Known market closure and unavailable calendar coverage are separate states.
 - L01 verification — `monitor-replay` matches strategy replay events. Tests cover gap/restart, SQLite rollback, duplicates/conflicts, scheduled closures, staleness, backfill, local sockets and in-app alert gating.
 
+- L05 — Provider profiles can pin a standalone dated schedule and contract before historical import. Synthetic calendars stay restricted to simulated workers.
 - L04 — Monitor and replay share versioned economic snapshots. Linked revisions take effect at publication, cancellations retire earlier versions and partial coverage cannot yield clear risk. API/CLI health uses the same heartbeat cutoff as notification delivery.
 
 - L03 — `notifications.py` uses SQLite v5 durable claims, filtering, quiet hours, retries, rate limits and uncertain outcomes. `notification_transport.py` supports opt-in Telegram and Discord. Tests use fake responses.
@@ -57,8 +59,8 @@
 
 ## Test Status
 
-- Latest checkpoint — 171 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
-- Passed — `.venv/bin/python -m pytest -q` (171), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
+- Latest checkpoint — 172 Python tests, Ruff lint/format and mypy across 66 files passed. Five frontend tests, typecheck and production build passed. Three backup/source-integrity tests are included. The 21,600-minute batched workload took 4.36 s with all projection hashes unchanged.
+- Passed — `.venv/bin/python -m pytest -q` (172), Ruff lint/format, mypy (66 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px in an earlier checkpoint. The current built workspace saved a synthetic matched control, reconciled 350 fixture minutes and saved a provider profile with a partial economic snapshot.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
 - Limitations — Local feed, backfill, signals and trading observations in tests are synthetic. A fake real-time classification exercises the outbox gate only.
@@ -72,8 +74,8 @@
 
 ## Immediate Next Actions
 
-1. Add a reviewed dated schedule and contract option to provider runtime profiles.
-2. Test fresh-store setup, legacy profile identity, synthetic classification and the Settings form.
+1. Finish precise trade timestamp handling and a normalized CSV trade import path with deterministic aggregation.
+2. Persist trade prints with indexed chronology and expose bounded readback. Test sequence ties, timezone and missing-minute behavior with labeled synthetic input.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat
