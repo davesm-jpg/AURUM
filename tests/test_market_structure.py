@@ -13,7 +13,7 @@ import pytest
 
 from aurum.candles import AggregateCandle, Timeframe
 from aurum.control import ControlConfig, save_matched_control
-from aurum.economic_events import Announcement, EconomicCalendar
+from aurum.economic_events import Announcement, EconomicCalendar, EconomicSourceKind
 from aurum.evidence import EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingSession, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG
@@ -1341,6 +1341,81 @@ def test_monitor_restarts_with_point_in_time_event_filter_and_matches_strategy(
     assert risks[(decision - 5 * MINUTE).isoformat()] == "clear"
     assert risks[decision.isoformat()] == ("elevated" if published_early else "clear")
     assert risks[(decision + 5 * MINUTE).isoformat()] == "elevated"
+
+
+@pytest.mark.parametrize("known_at_observation", [False, True])
+def test_monitor_rechecks_economic_risk_without_rewriting_source_decision(
+    tmp_path: Path, known_at_observation: bool
+) -> None:
+    bars = [
+        *(synthetic_bar(index, *bound) for index, bound in enumerate(BEARISH)),
+        synthetic_bar(9, 81, 94, 85),
+        synthetic_bar(10, 78, 90, 89),
+        synthetic_bar(11, 88, 118, 116),
+        synthetic_bar(12, 91, 118, 110),
+        synthetic_bar(13, 103, 120, 111),
+        synthetic_bar(14, 100, 122, 110),
+    ]
+    store, dataset = prepare_synthetic_replay(tmp_path, bars=bars)
+    calendar = SessionCalendar.from_dict(store.describe(dataset)["provenance"]["calendar"])
+    decision = bars[12].available_at
+    observed = decision + timedelta(seconds=5)
+    snapshot = EconomicCalendar(
+        "synthetic observation-time risk",
+        "fixture-v1",
+        TradingWindow(START - 30 * MINUTE, decision + 30 * MINUTE),
+        START - 60 * MINUTE,
+        (
+            Announcement(
+                "synthetic-between-clocks",
+                "Synthetic economic release",
+                decision + MINUTE,
+                decision + timedelta(seconds=2 if known_at_observation else 10),
+            ),
+        ),
+        data_kind=EconomicSourceKind.SYNTHETIC,
+    )
+    monitor = MarketMonitor(
+        store,
+        calendar,
+        CONTRACT,
+        MonitorConfig("synthetic observation fixture", FeedStatus.SIMULATED),
+        StructureConfig(PivotRule(1, 1)),
+        replace(DEFAULT_STRATEGY_CONFIG, require_clear_event_risk=True),
+        economic=snapshot,
+    )
+    forward = register_forward(store, monitor.monitor_id, START, synthetic=True)
+    monitor.set_connection(True, START)
+    for candle in list(store.replay(dataset)):
+        frame = FeedFrame.from_replay(candle, FeedStatus.SIMULATED, candle.available_at)
+        if candle.available_at == decision:
+            monitor.ingest(frame, application_clock=lambda: observed)
+        else:
+            monitor.ingest(frame)
+    (signal,) = [
+        event
+        for event in monitor_events(store, monitor.monitor_id)
+        if event.get("state") == "paper_signal"
+    ]
+    assert signal["confirmed_at"] == decision.isoformat()
+    assert signal["observed_at"] == observed.isoformat()
+    context, later_risk = signal["context"], signal["observed_economic"]
+    assert isinstance(context, dict) and isinstance(later_risk, dict)
+    assert context["economic"]["risk"] == "clear"
+    assert later_risk["risk"] == ("elevated" if known_at_observation else "clear")
+    assert signal["observation_event_filter_passed"] is not known_at_observation
+    with store.connection() as db:
+        (eligible,) = db.execute(
+            "SELECT execution_eligible FROM monitor_minutes WHERE run_id = ? AND opened_at = ?",
+            (monitor.monitor_id, (decision - MINUTE).isoformat()),
+        ).fetchone()
+        assert eligible == 1
+    assert ForwardPaper(store, forward).sync()["caught_up"] is True
+    paper_events = list(forward_events(store, forward))
+    signals = [event for event in paper_events if event["event"] == "paper_forward_signal"]
+    assert bool(signals) is not known_at_observation
+    if signals:
+        assert signals[0]["observed_economic"] == later_risk
 
 
 @pytest.mark.parametrize("recover", [False, True])

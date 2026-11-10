@@ -115,6 +115,10 @@ def render_alert(alert: dict[str, object]) -> str:
         if isinstance(cautions, list)
         else ""
     )
+    observed_risk = _mapping(alert.get("observed_economic")).get("risk")
+    if isinstance(observed_risk, str):
+        observation = f"Event risk at observation {observed_risk}"
+        caution_text = f"{caution_text}, {observation}" if caution_text else observation
     return "\n".join(
         (
             f"AURUM PAPER RESEARCH • {contract} • {setup.get('direction')}",

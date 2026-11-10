@@ -10,12 +10,12 @@ from hashlib import sha256
 from threading import Lock
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
-from aurum.economic_events import EconomicCalendar, EconomicSourceKind
+from aurum.economic_events import EconomicCalendar, EconomicSourceKind, EventAssessment, EventRisk
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame, candle_from_dict
 from aurum.instruments import MgcContract
-from aurum.market_context import CONTEXT_VERSION
+from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG
 from aurum.market_data import Candle, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig
 from aurum.providers import FeedStatus
@@ -353,9 +353,19 @@ class MarketMonitor:
             if step is not None:
                 self._record_market(db, minute, step)
             for event in step.setups if step is not None else ():
-                alert_eligible = (
-                    fresh_frame and expected == opened and event.state is SetupState.PAPER_SIGNAL
+                qualified = event.state is SetupState.PAPER_SIGNAL
+                observed_economic = (
+                    self._economic.assess(
+                        datetime.fromisoformat(observed),
+                        DEFAULT_CONTEXT_CONFIG.event_buffer_minutes,
+                    )
+                    if qualified and self._economic is not None
+                    else None
                 )
+                event_gate = not self._strategy_config.require_clear_event_risk or (
+                    observed_economic is not None and observed_economic.risk is EventRisk.CLEAR
+                )
+                alert_eligible = fresh_frame and expected == opened and qualified and event_gate
                 self._record(
                     db,
                     {
@@ -364,10 +374,18 @@ class MarketMonitor:
                         "source_received_at": available["received_at"],
                         "observed_at": observed,
                         "alert_eligible": alert_eligible,
+                        **(
+                            {
+                                "observed_economic": observed_economic.as_dict(),
+                                "observation_event_filter_passed": event_gate,
+                            }
+                            if observed_economic is not None
+                            else {}
+                        ),
                     },
                 )
                 if alert_eligible:
-                    self._alert(db, event, now)
+                    self._alert(db, event, now, observed_economic)
             last_applied = expected
             expected = self._next_open(minute.opened_at)
         db.execute(
@@ -535,7 +553,13 @@ class MarketMonitor:
             ),
         )
 
-    def _alert(self, db: sqlite3.Connection, event: SetupEvent, now: datetime) -> None:
+    def _alert(
+        self,
+        db: sqlite3.Connection,
+        event: SetupEvent,
+        now: datetime,
+        observed_economic: EventAssessment | None,
+    ) -> None:
         alert_id = f"{self.monitor_id}/{event.setup_id}"
         payload = {
             "alert_id": alert_id,
@@ -553,6 +577,11 @@ class MarketMonitor:
                 source_timezone("Europe/Prague")
             ).isoformat(),
             "setup": event.as_dict(),
+            **(
+                {"observed_economic": observed_economic.as_dict()}
+                if observed_economic is not None
+                else {}
+            ),
         }
         self._queue_alert(db, alert_id, payload, now)
 

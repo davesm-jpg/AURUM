@@ -658,6 +658,12 @@ export default function Dashboard() {
                 {latestSetup ? (
                   <>
                     <span className="chip">{label(latestSetup.state)}</span>
+                    {latestSetup.observation_event_filter_passed === false && (
+                      <p className="notice">
+                        Setup suppressed at observation · event risk{" "}
+                        {label(record(latestSetup.observed_economic).risk)}
+                      </p>
+                    )}
                     <p className="setup-direction">
                       {label(latestSetup.direction)}
                     </p>

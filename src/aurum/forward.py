@@ -221,6 +221,8 @@ class ForwardPaper:
         for event in self._engine.advance(candle, observed_at=observed):
             yield event.as_dict()
         for item in signals:
+            if item.get("observation_event_filter_passed") is False:
+                continue
             if not self._synthetic and not item["alert_eligible"]:
                 continue
             if datetime.fromisoformat(item["observed_at"]) != observed:
@@ -238,6 +240,11 @@ class ForwardPaper:
                 "variant": signal.variant,
                 "score": item["score"],
                 "plan": signal.plan.as_dict(),
+                **(
+                    {"observed_economic": item["observed_economic"]}
+                    if "observed_economic" in item
+                    else {}
+                ),
             }
             yield self._engine.submit(signal, observed_at=observed).as_dict()
 
