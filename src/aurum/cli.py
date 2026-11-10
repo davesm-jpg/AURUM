@@ -75,6 +75,7 @@ from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore
+from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
 from aurum.timestamps import minute_timestamp
@@ -287,11 +288,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--token-env")
 
+    backup = commands.add_parser("backup", help="save a verified local SQLite snapshot")
+    backup.add_argument("output", type=Path)
+    backup.add_argument("--timeout-seconds", type=float, default=120)
+    verify = commands.add_parser(
+        "verify-store", help="verify database and preserved source integrity"
+    )
+    verify.add_argument("--full", action="store_true")
+    verify.add_argument("--verify-sources", action="store_true")
+
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
     try:
         if args.command == "serve":
             _serve(store, args)
+        elif args.command == "backup":
+            print(
+                canonical_json(
+                    backup_store(store, args.output, timeout_seconds=args.timeout_seconds)
+                )
+            )
+        elif args.command == "verify-store":
+            print(
+                canonical_json(
+                    verify_store(store, full=args.full, verify_sources=args.verify_sources)
+                )
+            )
         elif args.command in ("import-csv", "import-parquet", "import-https"):
             print(canonical_json(store.describe(_import_history(store, args))))
         elif args.command == "contracts":
