@@ -31,3 +31,9 @@ The larger run stored 15,904 historical evidence events and 20,224 monitor marke
 - Monitor recent window `594c7214cab60b4adf18c84ca43357a80a40093e6495f5ba86d090bcdf078e88`
 
 Chart time grew with journal length for fixed-width views, even when the requested historical window was at the beginning. Monitor restart replayed its whole applied prefix while holding a write transaction. Those are the first optimization targets. Live provider latency and strategy performance require authorized data.
+
+## Bounded monitor projection
+
+At 21,600 synthetic minutes the recent monitor chart median decreased from 335.1 ms to 11.7 ms. The output retained the baseline digest. The monitor chart counts actual analyzed primary closes before the earliest observation in view, then starts no later than the maximum configured span lifetime plus two bars. Recovery can make a much earlier source bar available within the view. The lower bound follows that observation and the upper bound follows the pinned applied cursor. The v9 fallback still scans the relevant full journal.
+
+The 60-session simulated ingestion measurement moved from 32.87 s to 33.47 s after adding the indexes. These are single measurements and include SQLite commits per minute.

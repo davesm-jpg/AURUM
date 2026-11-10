@@ -3,9 +3,9 @@
 ## Project Status
 
 - Current phase — L01 normalized monitoring and L03 optional notification delivery are complete. The U01 local API and dashboard slice is verified. L02 production verification, D04 historical reconciliation and B02 empirical backtesting are blocked on authorized access.
-- Current milestone — F01 forward research and U01 local workspace are verified on synthetic input. Runtime profiles and browser origin controls are in place.
+- Current milestone — O01 is in progress. The synthetic baseline and bounded monitor chart are verified.
 - Current branch — `main`.
-- Last verified commit — `efaf64a5ed86984309de746408baf02efc7493c1`.
+- Last verified commit — `a115039faa3919b33e1136de114e47526c11adcc`.
 
 ## Current Objective
 
@@ -30,7 +30,7 @@
 
 ## Work In Progress
 
-- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v9. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
+- Current files — `src/aurum/api.py`, `src/aurum/chart_evidence.py`, `frontend/app/price-chart.tsx` and their tests. The store is at schema v10. The benchmark entry point is `benchmarks/synthetic_pipeline.py`. F01 code is in `src/aurum/forward.py` and `src/aurum/execution.py`.
 - Implemented foundations — `monitor_alerts` exposes eligible paper alerts with stable IDs, context, source age, New York and Prague timestamps and full setup evidence. Recovery and simulated data retain events without creating delivery alerts.
 - Remaining portions — Monitor streams support native reconnect cursors and checkpoint-triggered chart refresh. Production feed and delivery remain unverified. The Forward worker can already publish completed periods with `--auto-reports`. Provider and channel runtime configuration is available through the CLI. Forward paper reporting and production checks remain separate.
 
@@ -53,6 +53,7 @@
 
 ## Test Status
 
+- Latest targeted check — 37 API, monitoring and market-structure tests passed. The 21,600-minute synthetic monitor chart fell from 335 ms to 12 ms with identical output digests.
 - Passed — `.venv/bin/python -m pytest -q` (151), Ruff lint/format, mypy (60 files), dependency and Git whitespace checks. Five frontend timeline, histogram and loopback proxy tests, typecheck and production build passed. Desktop overlay toggles, source switching, analytics controls, forward journal/report and three other saved report views passed. The protected runtime profile form saved through the browser and fit at 390px. The source switch and no horizontal overflow were verified at 390px.
 - Failed — None outstanding.
 - Not run — Authorized real-data reconciliation, production feed verification, actual external delivery and the full mobile UI.
@@ -67,8 +68,8 @@
 
 ## Immediate Next Actions
 
-1. Profile replay, chart projection and monitor restart using labeled synthetic workloads and record baseline timings.
-2. Repeat with representative authorized data once D04 is unblocked.
+1. Finish historical chart timestamp indexing and prove its window against the replay aggregator. Verify all projection hashes from [performance](PERFORMANCE.md).
+2. Move monitor restart reconstruction outside the SQLite write transaction and verify identical post-restart evidence.
 3. Continue authorized source and delivery reconciliation when configuration is available.
 
 ## Do Not Repeat

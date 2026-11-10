@@ -10,6 +10,8 @@
 - `.venv/bin/mypy .` passed across 60 source/test files.
 - `.venv/bin/python -m pip check` reported no broken requirements.
 
+The November 10 performance checkpoint used 7,200 and 21,600 synthetic minutes. The monitor projection matched the full-journal fallback in recovery tests and retained the benchmark digest. See [performance measurements](PERFORMANCE.md).
+
 The local synthetic monitor stream resumed at sequence 2 with Last-Event-ID 1 through the frontend proxy. Checkpoint mode emitted a named SSE event. The final suite passed 151 Python and five TypeScript tests, static checks and the production build.
 
 Runtime profile tests verified stable IDs, worker resolution by environment name and redaction of rejected values. The browser saved a synthetic provider profile through the bearer proxy at local width and fit at 390px. Local HTTP tests returned 403 for cross-origin mutations and an untrusted Host. Five TypeScript tests passed.

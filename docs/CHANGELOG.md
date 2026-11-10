@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-10 — Bounded monitor chart projection
+
+- Added a reproducible synthetic benchmark and indexed monitor evidence reads bounded by recorded primary closes.
+
 ## 2026-11-09 — Monitor stream recovery
 
 - Added native event-stream resume and checkpoint-triggered chart refresh with polling fallback.
