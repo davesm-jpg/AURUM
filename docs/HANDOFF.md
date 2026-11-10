@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — L12 official release capture archive is verified. Next is L13 reviewing and auditing the archive.
+- Current milestone — L13 archive review and integrity checks are verified through API and build. Next is L14 browser verification and reviewed refresh design.
 - Current branch — `main`.
-- Last verified code commit — `69708278db6b0f421391e7124d7ad69bcc4bffd0`.
+- Last verified code commit — `102b2f50fcc61387d806140479aea993bd4e1c0b`.
 
 ## Current Objective
 
-- Task ID — L13.
-- Objective — Verify archived economic capture metadata and bytes in normalized store audits and expose a local review workflow.
-- Acceptance criteria — Corrupt archive receipts or bytes block verified backup publication. Read and preview endpoints use saved captures only. Provider settings can review a prepared partial snapshot.
+- Task ID — L14.
+- Objective — Exercise the archived snapshot picker in the browser and design causal adoption of reviewed updates in monitoring.
+- Acceptance criteria — Verify the picker prepares partial evidence and copies it without saving the profile. Document separate source-close and observation-time refresh boundaries before changing worker behavior.
 
 ## Completed Work
 
@@ -20,14 +20,14 @@
 - S01–S03 — Deterministic causal structure, liquidity proxies and sweeps, FVG/IFVG evidence, mirrored setup state, higher-timeframe context, score and integer paper risk.
 - B01 and B03–B06 — Shared conservative paper replay and explicit costs. The ordered-print variant resolves dual touches from stored prints and has a separate run identity. Intrabar sensitivity pairs saved runs. Quote reports assess observed spread and optionally reprice the paired subset at fixed fills.
 - Q01–Q06 — Chronological validation, Monte Carlo, LucidFlex paper rules, development-fitted matched control, grouped execution diagnostics and pre-holdout one-factor sensitivity. Staged selection excludes all final outcomes and final evaluation starts paper execution flat after embargo. The browser exercised both reports. No historical strategy performance has been measured.
-- L01 and L03–L12 — Durable normalized WebSocket monitoring, gap backfill, restart, health and optional Telegram/Discord delivery. Transient SQLite retries preserve transport receipt and record later processing while suppressing affected alert and forward eligibility. Economic snapshots can be imported from reviewed local iCalendar captures, can represent causal revisions and can be supplied through direct monitoring or provider profiles. Source-close and observation-time event risk remain separate. Standalone reviewed schedules can configure a worker before any dataset import. Ordered local iCalendar comparisons preserve capture digests, first observations and explicit cancellations. Composed partial snapshots retain isolated source IDs and per-source provenance. Indexed event assessment matched its prior output digest. Official BEA capture archived 43,459 bytes and normalized two selected releases using the saved clock. BLS returned HTTP 403.
+- L01 and L03–L13 — Durable normalized WebSocket monitoring, gap backfill, restart, health and optional Telegram/Discord delivery. Transient SQLite retries preserve transport receipt and record later processing while suppressing affected alert and forward eligibility. Economic snapshots can be imported from reviewed local iCalendar captures, can represent causal revisions and can be supplied through direct monitoring or provider profiles. Source-close and observation-time event risk remain separate. Standalone reviewed schedules can configure a worker before any dataset import. Ordered local iCalendar comparisons preserve capture digests, first observations and explicit cancellations. Composed partial snapshots retain isolated source IDs and per-source provenance. Indexed event assessment matched its prior output digest. Official BEA capture archived 43,459 bytes and normalized two selected releases using the saved clock. BLS returned HTTP 403. Normalized store and backup checks validate archived receipts and bytes. The offline API preview does not change the store.
 - U01–U02 and F01 — Loopback API and dashboard, chart evidence with original availability, local report creation, provider settings, rollover and continuous preview. A forward consumer registers at an applied cursor, audits observed paper execution and can save completed daily, weekly and monthly periods. Browser checks exercised synthetic matched controls, reconciliation, provider settings, rollover and adjusted versus dated prices.
 - O01 — The repeatable 21,600-minute synthetic workload measured 4.44 s batched monitor ingestion, approximately 0.81 s restart and 6, 10 and 12 ms for the three chart projections. All projection SHA-256 digests matched the recorded baseline. See `docs/PERFORMANCE.md`.
 
 ## Work In Progress
 
 - Schema v14. Recent changes are committed. The temporary browser preview services were stopped.
-- L13 has no implementation yet. Reuse archive receipt and raw checks. Keep dashboard preview local and leave provider profile saving explicit.
+- The L13 Settings picker passed typecheck and production build. Its interactive browser check remains open. No runtime refresh implementation exists.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
 ## Important Decisions
@@ -48,8 +48,8 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (227), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (85 files), `.venv/bin/python -m pip check` and Git whitespace checks.
-- Frontend — Five tests, TypeScript typecheck and production build passed. Browser checks used temporary synthetic stores.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (228), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (85 files), `.venv/bin/python -m pip check` and Git whitespace checks.
+- Frontend — Five tests, TypeScript typecheck and production build passed. Earlier staged holdout and contract browser checks used temporary synthetic stores. Archive picker browser interaction remains unverified.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
 - Limitations — The performance workload, socket and delivery exercises, quotes and strategy outcomes are synthetic. Delivery tests use fake transports.
@@ -62,8 +62,8 @@
 
 ## Immediate Next Actions
 
-1. Add archived receipt and content verification to `verify-store --verify-normalized` and staged backup validation.
-2. Expose bounded receipt and offline preview endpoints. Wire the provider Settings snapshot picker and verify synthetic API parity and a local browser workflow.
+1. Open Settings against a temporary local archive and verify receipt selection, preview, copied JSON and explicit save separation.
+2. Inspect monitor restart and forward execution before designing reviewed snapshot refresh. Preserve both source-close and observation clocks.
 3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
 
 ## Do Not Repeat
