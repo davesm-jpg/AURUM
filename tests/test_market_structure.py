@@ -785,12 +785,13 @@ def test_backtest_can_resolve_dual_touch_from_an_immutable_trade_dataset(tmp_pat
 
 def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_path: Path) -> None:
     store, _, trade_dataset = prepare_synthetic_print_replay(tmp_path)
+    execution = replace(DEFAULT_EXECUTION_CONFIG, round_trip_spread_ticks=1)
     run = store.build_strategy_run(
         trade_dataset,
         TIMEFRAME,
         StructureConfig(PivotRule(1, 1)),
         DEFAULT_STRATEGY_CONFIG,
-        execution=DEFAULT_EXECUTION_CONFIG,
+        execution=execution,
         resolve_with_trade_prints=True,
     )
     before = store.describe_backtest(run)
@@ -798,7 +799,7 @@ def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_p
     source = tmp_path / "synthetic-spread.csv"
     source.write_text(
         "observed_at,contract,sequence,bid,ask,bid_size,ask_size\n"
-        "2025-03-10T14:04:59.950Z,MGC-2025-04,1,10.9,11.1,1,1\n"
+        "2025-03-10T14:04:59.950Z,MGC-2025-04,1,10.8,11.1,1,1\n"
         "2025-03-10T14:05:01.990Z,MGC-2025-04,2,17.7,17.9,1,1\n"
         "2025-03-10T14:05:02Z,MGC-2025-04,3,17.0,18.0,1,1\n",
         encoding="utf-8",
@@ -818,6 +819,7 @@ def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_p
     report = json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
     result = report["result"]
     assert result["data_kind"] == "synthetic"
+    assert "quote_cost_proxy" not in result
     decision = result["anchors"]["setup_decision"]
     entry = result["anchors"]["modeled_entry_open"]
     touch = result["anchors"]["ordered_bracket_touch"]
@@ -829,6 +831,52 @@ def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_p
     assert touch["examples"][0]["age_nanoseconds"] == 10_000_000
     assert touch["examples"][0]["quote"]["sequence"] == 2
     assert store.describe_backtest(run) == before
+    proxy_output = subprocess.run(
+        [*command[:-1], "100", "--quote-cost-proxy"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    proxy_report = json.loads(proxy_output.stdout)
+    costs = proxy_report["result"]["quote_cost_proxy"]
+    assert proxy_report["report_id"] != report["report_id"]
+    assert costs["paired_trades"] == costs["completed_trades"] == 1
+    assert costs["paired_recorded_spread_cents"] == 100
+    assert costs["paired_quoted_spread_proxy_cents"] == 250
+    assert costs["paired_recorded_net_cents"] == 6240
+    assert costs["paired_repriced_net_cents"] == 6090
+    assert costs["paired_net_difference_cents"] == -150
+    assert costs["examples"][0]["exit"]["basis"] == "ordered_bracket_touch"
+
+    stale_id = save_spread_report(
+        store,
+        run,
+        series,
+        maximum_age_ms=20,
+        include_quote_cost_proxy=True,
+    )
+    stale = store.describe_analysis(stale_id)["result"]
+    assert isinstance(stale, dict)
+    assert stale["quote_cost_proxy"]["excluded_first_reason"] == {"entry_stale": 1}
+    assert stale["quote_cost_proxy"]["paired_repriced_net_cents"] is None
+
+    no_ordering = store.build_strategy_run(
+        trade_dataset,
+        TIMEFRAME,
+        StructureConfig(PivotRule(1, 1)),
+        DEFAULT_STRATEGY_CONFIG,
+        execution=execution,
+    )
+    unknown_id = save_spread_report(
+        store,
+        no_ordering,
+        series,
+        maximum_age_ms=100,
+        include_quote_cost_proxy=True,
+    )
+    unknown = store.describe_analysis(unknown_id)["result"]
+    assert isinstance(unknown, dict)
+    assert unknown["quote_cost_proxy"]["excluded_first_reason"] == {"exit_time_unknown": 1}
 
     misdated = SessionCalendar(
         "synthetic conflicting trade date",
@@ -857,6 +905,17 @@ def test_spread_report_uses_preceding_fresh_quotes_at_immutable_references(tmp_p
         )
         assert response.status_code == 201
         assert response.json() == report
+        saved_proxy = client.post(
+            "/api/reports/spread-observations",
+            json={
+                "run_id": run,
+                "quote_series_id": series,
+                "maximum_age_ms": 100,
+                "include_quote_cost_proxy": True,
+            },
+        )
+        assert saved_proxy.status_code == 201
+        assert saved_proxy.json() == proxy_report
 
 
 def prepare_synthetic_research_sample(

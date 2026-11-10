@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-10 — Paired quote cost sensitivity
+
+- Added an opt-in fixed-fill projection using fresh quoted widths at eligible entry and exit references, with explicit subset and exclusions.
+
+
 ## 2026-11-10 — Historical spread observations
 
 - Added saved spread and quote coverage diagnostics for paper decision, entry and ordered bracket references.

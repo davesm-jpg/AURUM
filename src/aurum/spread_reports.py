@@ -7,6 +7,7 @@ from statistics import median
 
 from aurum.exchange_calendar import SessionCalendar
 from aurum.execution import OrderKind
+from aurum.quote_costs import QUOTE_COST_PROXY_VERSION, QuoteCostProjection
 from aurum.quotes import (
     DEFAULT_QUOTE_MAX_AGE_MS,
     MAX_QUOTE_AGE_MS,
@@ -14,7 +15,6 @@ from aurum.quotes import (
     QuoteAssessment,
     QuoteLookup,
     QuoteStatus,
-    quote_window,
 )
 from aurum.statistics import quantile
 from aurum.storage import DatasetStore
@@ -23,7 +23,6 @@ from aurum.timestamps import EventTimestamp, event_timestamp
 
 SPREAD_REPORT_VERSION = 1
 _ANCHORS = ("setup_decision", "modeled_entry_open", "ordered_bracket_touch")
-_CALENDAR_MISMATCH = "calendar_mismatch"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,12 +56,9 @@ class _ObservationSummary:
     ages: list[int] = field(default_factory=list)
     examples: list[dict[str, object]] = field(default_factory=list)
 
-    def add(
-        self, reference: _Reference, assessment: QuoteAssessment | None, example_limit: int
-    ) -> None:
-        status = _CALENDAR_MISMATCH if assessment is None else assessment.status
-        self.counts[status] += 1
-        if assessment is not None and assessment.status is QuoteStatus.FRESH:
+    def add(self, reference: _Reference, assessment: QuoteAssessment, example_limit: int) -> None:
+        self.counts[assessment.status] += 1
+        if assessment.status is QuoteStatus.FRESH:
             assert assessment.quote is not None and assessment.age_nanoseconds is not None
             self.spreads.append(assessment.quote.ask_ticks - assessment.quote.bid_ticks)
             self.ages.append(assessment.age_nanoseconds)
@@ -71,11 +67,7 @@ class _ObservationSummary:
                 {
                     "setup_id": reference.setup_id,
                     "at": reference.at.isoformat(),
-                    **(
-                        assessment.as_dict()
-                        if assessment is not None
-                        else {"status": status, "age_nanoseconds": None, "quote": None}
-                    ),
+                    **assessment.as_dict(),
                 }
             )
 
@@ -86,7 +78,7 @@ class _ObservationSummary:
             "references": total,
             "fresh": fresh,
             "fresh_fraction": fresh / total if total else None,
-            "statuses": {name: self.counts[name] for name in (*QuoteStatus, _CALENDAR_MISMATCH)},
+            "statuses": {name: self.counts[name] for name in QuoteStatus},
             "spread_ticks": (
                 {
                     "mean": sum(ordered) / fresh,
@@ -109,6 +101,7 @@ def save_spread_report(
     *,
     maximum_age_ms: int = DEFAULT_QUOTE_MAX_AGE_MS,
     example_limit: int = 10,
+    include_quote_cost_proxy: bool = False,
 ) -> str:
     if not 0 <= example_limit <= 100:
         raise ValueError("spread example limit must be between zero and 100")
@@ -123,22 +116,26 @@ def save_spread_report(
         raise ValueError("backtest and quote series must share the dated contract and data kind")
     calendar = SessionCalendar.from_dict(provenance["calendar"])
     summaries = {kind: _ObservationSummary() for kind in _ANCHORS}
+    costs = (
+        QuoteCostProjection(lookup, calendar, maximum_age_ms, example_limit)
+        if include_quote_cost_proxy
+        else None
+    )
     for batch in store.structure_payload_batches(run_id):
+        if costs is not None:
+            costs.add_batch(item for _, item in batch if item["event"] == "paper_trade_completed")
         references = list(_references(batch))
         if not references:
             continue
-        assessments = lookup.assess_many((ref.at for ref in references), maximum_age_ms)
+        assessments = lookup.assess_many(
+            (ref.at for ref in references), maximum_age_ms, price_calendar=calendar
+        )
         for ref, assessment in zip(references, assessments, strict=True):
-            both_covered = all(
-                schedule.coverage.start <= ref.at.time < schedule.coverage.end
-                for schedule in (calendar, lookup.calendar)
-            )
-            conflict = both_covered and (
-                quote_window(calendar, ref.at) != quote_window(lookup.calendar, ref.at)
-            )
-            summaries[ref.kind].add(ref, None if conflict else assessment, example_limit)
+            summaries[ref.kind].add(ref, assessment, example_limit)
     summary = run["summary"]
     assert isinstance(summary, dict)
+    if costs is not None and costs.completed != summary["performance"]["trades"]:
+        raise ValueError("spread cost sample count differs from the saved backtest")
     return store.save_analysis(
         "quote_spread_observations",
         {
@@ -149,6 +146,7 @@ def save_spread_report(
             "quote_series_id": quote_series_id,
             "maximum_age_ms": maximum_age_ms,
             "example_limit_per_anchor": example_limit,
+            **({"quote_cost_proxy_version": QUOTE_COST_PROXY_VERSION} if costs is not None else {}),
         },
         {
             "sample_kind": "unpartitioned_replay_quote_observations",
@@ -164,5 +162,6 @@ def save_spread_report(
             "strategy_version": run["strategy_version"],
             "execution_config": run["execution_config"],
             "anchors": {kind: group.as_dict() for kind, group in summaries.items()},
+            **({"quote_cost_proxy": costs.as_dict()} if costs is not None else {}),
         },
     )

@@ -29,6 +29,7 @@ class QuoteStatus(StrEnum):
     NOT_OBSERVED = "not_observed"
     CLOSED = "market_closed"
     UNCOVERED = "calendar_unavailable"
+    CALENDAR_MISMATCH = "calendar_mismatch"
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,17 +276,32 @@ class QuoteLookup:
         self.calendar = SessionCalendar.from_dict(provenance["calendar"])
 
     def assess_many(
-        self, times: Iterable[EventTimestamp], maximum_age_ms: int
+        self,
+        times: Iterable[EventTimestamp],
+        maximum_age_ms: int,
+        *,
+        price_calendar: SessionCalendar | None = None,
     ) -> tuple[QuoteAssessment, ...]:
         if not 0 <= maximum_age_ms <= MAX_QUOTE_AGE_MS:
             raise ValueError("quote maximum age must be between zero and 86400000 ms")
         with self.store.connection() as db:
-            return tuple(self._assess(db, at, maximum_age_ms) for at in times)
+            return tuple(self._assess(db, at, maximum_age_ms, price_calendar) for at in times)
 
     def _assess(
-        self, db: sqlite3.Connection, at: EventTimestamp, maximum_age_ms: int
+        self,
+        db: sqlite3.Connection,
+        at: EventTimestamp,
+        maximum_age_ms: int,
+        price_calendar: SessionCalendar | None,
     ) -> QuoteAssessment:
         active = quote_window(self.calendar, at)
+        if (
+            price_calendar is not None
+            and price_calendar.coverage.start <= at.time < price_calendar.coverage.end
+            and self.calendar.coverage.start <= at.time < self.calendar.coverage.end
+            and quote_window(price_calendar, at) != active
+        ):
+            return QuoteAssessment(QuoteStatus.CALENDAR_MISMATCH)
         if active is None:
             status = (
                 QuoteStatus.CLOSED

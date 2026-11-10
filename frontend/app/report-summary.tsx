@@ -248,6 +248,7 @@ function ValidationReport({ result }: { result: RecordData }) {
 function SpreadObservationsReport({ report }: { report: RecordData }) {
   const result = record(report.result);
   const definition = record(report.definition);
+  const cost = record(result.quote_cost_proxy);
   const anchors: [string, RecordData][] = Object.entries(
     record(result.anchors),
   ).map(([kind, row]) => [label(kind), record(row)]);
@@ -291,6 +292,44 @@ function SpreadObservationsReport({ report }: { report: RecordData }) {
           },
         ]}
       />
+      {cost.completed_trades !== undefined && (
+        <>
+          <h3>Paired spread cost sensitivity</h3>
+          <p className="muted">
+            {String(cost.paired_trades ?? 0)} of{" "}
+            {String(cost.completed_trades ?? 0)} completed trades had fresh
+            quotes on both sides. The projection replaces the recorded spread
+            cost with half the quoted width at each reference. Entry, exit,
+            quantity, commission and slippage use the saved paper values.
+          </p>
+          <div className="metrics">
+            <Metric
+              title="Recorded subset net P&L"
+              value={money(cost.paired_recorded_net_cents)}
+              detail={`${money(cost.paired_recorded_spread_cents)} modeled spread cost`}
+            />
+            <Metric
+              title="Repriced subset net P&L"
+              value={money(cost.paired_repriced_net_cents)}
+              detail={`${money(cost.paired_quoted_spread_proxy_cents)} quoted spread proxy`}
+            />
+            <Metric
+              title="Net difference"
+              value={money(cost.paired_net_difference_cents)}
+              detail="Paired completed trades only"
+            />
+          </div>
+          {Object.keys(record(cost.excluded_first_reason)).length > 0 && (
+            <DataTable
+              labelHeading="First exclusion reason"
+              items={Object.entries(record(cost.excluded_first_reason)).map(
+                ([reason, value]) => [label(reason), { value }],
+              )}
+              columns={[{ title: "Trades", value: (row) => String(row.value) }]}
+            />
+          )}
+        </>
+      )}
     </>
   );
 }

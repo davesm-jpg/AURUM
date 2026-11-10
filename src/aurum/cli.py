@@ -210,6 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     spread.add_argument("quote_series_id")
     spread.add_argument("--maximum-age-ms", type=int, default=DEFAULT_QUOTE_MAX_AGE_MS)
     spread.add_argument("--example-limit", type=int, default=10)
+    spread.add_argument("--quote-cost-proxy", action="store_true")
     validation = commands.add_parser("validate", help="compare chronological backtest samples")
     validation.add_argument("run_ids", nargs="+")
     validation.add_argument("--validation-start", type=minute_timestamp, required=True)
@@ -584,6 +585,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.quote_series_id,
                 maximum_age_ms=args.maximum_age_ms,
                 example_limit=args.example_limit,
+                include_quote_cost_proxy=args.quote_cost_proxy,
             )
             print(canonical_json(store.describe_analysis(report_id)))
         elif args.command == "validate":

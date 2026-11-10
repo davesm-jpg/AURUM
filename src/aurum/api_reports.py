@@ -54,6 +54,7 @@ class SpreadObservationsRequest(BaseModel):
     quote_series_id: _RunId
     maximum_age_ms: int = Field(default=DEFAULT_QUOTE_MAX_AGE_MS, ge=0, le=MAX_QUOTE_AGE_MS)
     example_limit: int = Field(default=10, ge=0, le=100)
+    include_quote_cost_proxy: bool = False
 
     def run(self, store: DatasetStore) -> str:
         return save_spread_report(
@@ -62,6 +63,7 @@ class SpreadObservationsRequest(BaseModel):
             self.quote_series_id,
             maximum_age_ms=self.maximum_age_ms,
             example_limit=self.example_limit,
+            include_quote_cost_proxy=self.include_quote_cost_proxy,
         )
 
 

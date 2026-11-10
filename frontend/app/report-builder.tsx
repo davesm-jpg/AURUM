@@ -216,6 +216,7 @@ export function ReportBuilder({
           quote_series_id: fields.get("quote_series_id"),
           maximum_age_ms: int("maximum_age_ms"),
           example_limit: int("example_limit"),
+          include_quote_cost_proxy: fields.has("include_quote_cost_proxy"),
         };
       } else if (kind === "parameter-sensitivity") {
         const selected = fields.getAll("sensitivity_candidates");
@@ -512,6 +513,10 @@ export function ReportBuilder({
                       min={0}
                     />
                   </div>
+                  <label className="checkbox-setting">
+                    <input name="include_quote_cost_proxy" type="checkbox" />
+                    Reprice the paired subset using quoted half-spreads
+                  </label>
                 </>
               )}
               {kind === "parameter-sensitivity" && (
