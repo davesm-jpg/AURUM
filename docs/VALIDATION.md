@@ -5,6 +5,7 @@
 - Two synthetic regressions showed the old audit accepting decreasing known application observations, both adjacent and separated by an unknown legacy row.
 - Monitor audit v2 now rejects both cases. Verified backups reject and do not publish the inconsistent store. Unknown legacy times stay unknown.
 - Full suite passed 317 tests. Ruff check/format, strict mypy (100 files) and Git whitespace checks passed.
+- Commit c84eacd passed Python, frontend and container jobs in hosted run 43091664364. No code verification remains pending. The observed setup-node runtime annotation is tracked as CI-001.
 
 ## Verified checkpoint — 2026-11-11, processing-clock rollback
 
@@ -27,6 +28,7 @@
 - CLI and API persist Monte Carlo version 2 and the stopped-account policy with stable repeated IDs. Existing v1 reports are not rewritten.
 - Browser verified separate unrestricted and stopped-account tables. An explicitly assumed 0% win scenario with four paths and 100 trades had zero market observations. A temporary legacy-shaped fixture showed unavailable account metrics and the re-run explanation. No market performance inference follows.
 - Hosted run 43088753935 passed all three jobs for paused-reader fix f6a1d63. Monte Carlo changes await publication.
+- Subsequent differential verification compared v2 with the exact pre-change module from f6a1d63. All 28 synthetic cases matched every pre-existing result field after removing the new account/basis fields and normalizing the version. Cases used seed 73 and 32 paths: six reference assumed win rates with fixed/variable costs and fixed/trailing floors (120 trades), plus shuffle/block bootstrap on 50 invented outcomes (40 trades). Variable costs ranged from 0 to 600 cents; fixed cost was 260 cents; trailing sessions grouped five trades. This confirms seeded unrestricted-path compatibility, not market performance.
 
 ## Verified checkpoint — 2026-11-11, paused replay readers
 

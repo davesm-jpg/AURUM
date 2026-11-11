@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Offline research, monitoring, forward paper and dashboard implementation. Production data validation is blocked.
-- Current milestone — Reliability fixes passed local and hosted checks; final known-observation audit extension passed local checks and awaits publication.
+- Current milestone — Reliability and audit fixes passed local and hosted checks. Final continuation checkpoint saved; production validation remains blocked.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — 8d3714f passed all three hosted jobs in run 43091243129. The subsequent audit extension passed 317 local tests.
+- Last verified commit — c84eacd passed all three hosted jobs in run 43091664364 and 317 local tests. This handoff checkpoint changes documentation only.
 - Total completion — 50/54 roadmap tasks DONE (92.6 percent), three BLOCKED and O01 IN_PROGRESS. This is task completion, not empirical strategy validation or production readiness.
 
 ## Current Objective
 
 - Task ID — O01 reliability maintenance, CLOCK-002.
-- Objective — Publish monitor audit v2 and record hosted verification, then save the final checkpoint.
+- Objective — Resume from the verified audit checkpoint; next independent work is CI-001's observed action-runtime annotation.
 - Acceptance criteria — Reject decreasing known observation times, including across unknown legacy rows; fail closed on verified backups; preserve recorded evidence and legacy unknown clocks.
 
 ## Completed Work
@@ -30,6 +30,7 @@
 ## Work In Progress
 
 - Monitor audit v2 rejects known application observations that decrease in source order, carrying the prior known bound across unknown legacy rows. Verified backups reject the same defect without publishing a partial file. Two regressions failed before the change and now pass.
+- Final audit commit c84eacd is published; hosted run 43091664364 passed Python, frontend and containers. A separate 28-case synthetic differential check matched all pre-existing Monte Carlo fields against f6a1d63, confirming unchanged seeded unrestricted paths.
 - No schema, dataset identity or monitor identity changed. Existing recorded observation times are not rewritten.
 - O01 remains open: additional optimization needs workload evidence; optional ML requires authorized historical and out-of-sample evidence.
 
@@ -49,13 +50,14 @@
 - ACCOUNT-001 — Provider unrealized-breach/DLL ambiguities remain disclosed paper assumptions.
 - SQLite bulk writes serialize. Alert export retains O(alert count) ID metadata, with at most 256 payloads per page.
 - Local macOS container daemon is unavailable after a prior Colima VM download timeout. Hosted Linux container verification passed.
+- CI-001 — Hosted setup-node emits a Node.js 20/forced Node.js 24 annotation. Frontend still passed. Inspect the official action release before a pinned upgrade.
 
 ## Test Status
 
 - Last full command — .venv/bin/pytest -q: 317 passed.
 - Static — Ruff check/format, strict mypy (100 files) and Git whitespace checks passed.
 - Frontend — Latest UI change (Monte Carlo) passed typecheck, five tests, production build and browser current/legacy report verification. Later changes are backend-only.
-- Hosted — All three jobs passed for 8d3714f in run 43091243129. Current audit extension awaits publication.
+- Hosted — Python, frontend and containers passed for c84eacd in run 43091664364. No code verification remains pending.
 - Failed — No outstanding automated failure. Regression failures before fixes are recorded in VALIDATION.md.
 - Not run — Authorized historical reconciliation/backtesting, production feed/channel trials and empirical out-of-sample evaluation.
 
@@ -69,8 +71,8 @@
 
 ## Immediate Next Actions
 
-1. Commit/push the locally verified audit v2 slice, inspect its hosted run and record exact commit/run results.
-2. Re-read this handoff and Git status before resuming. Continue only evidence-backed reliability work; avoid reimplementing completed modules.
+1. Read AGENTS.md, this handoff, Git status and relevant roadmap before resuming. c84eacd is the verified code checkpoint; do not repeat its completed fixes.
+2. Investigate CI-001 using the official setup-node release, then verify a pinned upgrade through the hosted frontend job. Avoid reimplementing completed modules.
 3. For D04/B02/L02, obtain authorized data/configuration. Databento was recommended; access or purchase is not confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat
