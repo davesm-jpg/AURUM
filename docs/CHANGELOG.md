@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Native Databento adapter
+
+- Added explicit dated MGC minute subscriptions using a pinned SDK, raw mapping/record evidence and the existing stream monitor.
+- Bounded buffering, strict record validation, historical recovery classification and durable next-minute resume preserve alert eligibility boundaries.
+- Fifteen native synthetic cases and the full 275-test suite passed locally. No vendor connection or paid history request was opened.
+
 ## 2026-11-11 — Forward report notifications and hosted verification
 
 - Added opt-in durable daily, weekly and monthly report notifications with source labels, coverage, actual counts and saved report references.

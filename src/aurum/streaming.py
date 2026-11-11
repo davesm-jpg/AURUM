@@ -2,7 +2,7 @@ import os
 import sqlite3
 import sys
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -20,7 +20,13 @@ from aurum.storage import is_transient_lock
 
 
 class FrameConnection(Protocol):
-    def recv(self, timeout: float | None = None) -> str | bytes: ...
+    def recv(self, timeout: float | None = None) -> str | bytes | FeedFrame: ...
+
+
+class FrameSource(Protocol):
+    @property
+    def mode(self) -> FeedStatus: ...
+    def connect(self) -> AbstractContextManager[FrameConnection]: ...
 
 
 class FeedDisconnected(Exception):
@@ -158,7 +164,7 @@ class HttpsGapBackfill:
 
 def run_stream(
     monitor: MarketMonitor,
-    source: WebSocketSource,
+    source: FrameSource,
     *,
     backfill: HttpsGapBackfill | None = None,
     max_frames: int | None = None,
@@ -214,9 +220,18 @@ def run_stream(
                             _retry_store(lambda _: monitor.refresh(clock()), sleeper)
                             try_backfill()
                             continue
+                        except (ValueError, KeyError, TypeError, OverflowError):
+                            _retry_store(
+                                lambda _: monitor.fault(clock(), "invalid_provider_frame"), sleeper
+                            )
+                            break
                         now = clock()
                         try:
-                            frame = FeedFrame.from_message(raw, source.mode, now)
+                            frame = (
+                                raw
+                                if isinstance(raw, FeedFrame)
+                                else FeedFrame.from_message(raw, source.mode, now)
+                            )
 
                             def apply_frame(
                                 retried: bool, frame: FeedFrame = frame

@@ -65,6 +65,7 @@ services:
       - aurum-data:/data
       - ./data:/imports:ro
     environment:
+      DATABENTO_API_KEY: ${DATABENTO_API_KEY:-}
       AURUM_MARKET_ENDPOINT: ${AURUM_MARKET_ENDPOINT:-}
       AURUM_STREAM_TOKEN: ${AURUM_STREAM_TOKEN:-}
       AURUM_BACKFILL_ENDPOINT: ${AURUM_BACKFILL_ENDPOINT:-}

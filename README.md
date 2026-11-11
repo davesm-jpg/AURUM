@@ -245,6 +245,26 @@ the linked report ID locally for its complete rules and execution assumptions.
 
 ## Runtime profiles
 
+The native Databento minute worker can be launched explicitly after obtaining
+authorized GLBX.MDP3 access. Install `.[databento]` or use the packaged worker.
+Keep `DATABENTO_API_KEY` in the local environment. Confirm the dated contract,
+vendor raw symbol and reviewed schedule before starting.
+
+```sh
+aurum --db data/aurum.sqlite monitor-databento \
+  --calendar data/reviewed-schedule.json --contract MGC-YYYY-MM \
+  --raw-symbol YOUR_VERIFIED_RAW_SYMBOL
+```
+
+The command consumes native `ohlcv-1m` records through the same monitor and
+quality gates as normalized streaming. It recovers the next missing reviewed
+minute through native intraday replay when it falls within the preceding 23
+hours. Recovery bars are historical and cannot create fresh paper alerts or
+new forward entries. A longer gap requires separately authorized historical
+data. Missing no-trade minutes remain explicit gaps. The worker preserves DBN
+record and symbol-mapping bytes. SDK behavior is tested offline with synthetic
+records; production subscription timing and entitlements remain unverified.
+
 Email delivery uses the same durable preferences and attempt audit as other
 channels. Set the recipient in `AURUM_EMAIL_TO`, an ASCII app password in
 `AURUM_SMTP_PASSWORD`, and JSON in `AURUM_SMTP_SETTINGS` with `host`, `port`,

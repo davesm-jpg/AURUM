@@ -310,3 +310,13 @@
 - Decision — Queue a source-labeled immutable report summary atomically with the period publication marker. Use the saved report ID for deduplication. Manual queuing supports older saved reports. Existing delivery workers retain all channel, expiry, quiet-hour and attempt rules.
 - Consequences — Report creation remains usable offline. No channel is contacted by the publishing command. Enabling notifications later does not automatically resend earlier publications. Past-period summaries remain eligible when a feed is stale, while confirmed setup delivery still requires freshness.
 - Files — `report_notifications.py`, `forward_reports.py`, notification transports, CLI and forward report tests.
+
+## ADR-034 — Keep native data recovery in the shared monitor
+
+- Date — 2026-11-11.
+- Context — The recommended vendor's native stream should feed existing causal detection without a separate strategy implementation.
+- Alternatives — Require an external normalized WebSocket bridge or implement an SDK frame source.
+- Decision — Add a pinned Databento source with bounded callback buffering, exact fixed-point conversion, prior dated symbol mapping and preserved DBN bytes. Native replay remains historical until explicit completion. Resolve restart from the next reviewed minute, within a 23-hour recovery horizon, and use existing monitor retries and integrity faults.
+- Consequences — No credentials enter persisted configuration. No paid history query or live connection is required for synthetic SDK tests. Longer gaps and missing no-trade intervals remain blocked. Native subscription behavior still needs authorized verification under L02.
+- Sources — [Client](https://databento.com/docs/api-live/client?lang=python), [symbology](https://databento.com/docs/conventions/symbology), [OHLCV](https://databento.com/docs/schemas/ohlcv).
+- Files — `databento_live.py`, shared streaming, CLI, dependency pins and native tests.

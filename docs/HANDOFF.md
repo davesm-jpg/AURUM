@@ -5,7 +5,7 @@
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
 - Current milestone — Email and period-report notifications are verified with synthetic transports. Hosted Python, frontend and complete container smoke passed. Authorized market-data validation remains blocked.
 - Current branch — `codex/verified-research-platform`, tracking the same branch at `https://github.com/davesm-jpg/AURUM.git`.
-- Last verified code commit — `03c3da4` for hosted CI and containers. The subsequent report-notification slice passed local full verification before this checkpoint.
+- Last verified code commit — `1b55d11`, including report notifications, passed all three hosted jobs in run 43002289883. The subsequent native adapter slice passed full local verification before this checkpoint.
 
 ## Current Objective
 
@@ -32,7 +32,8 @@
 - D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
 - N04 adds authenticated STARTTLS/implicit TLS email with durable retry and uncertain acknowledgement handling. Profiles persist environment names only. Eleven fake SMTP cases passed. External email was not sent.
 - N05 queues saved daily/weekly/monthly report summaries atomically with publication. Manual `notify-report` deduplicates saved report IDs. Existing channel preferences and audit apply. Source classification, actual sample, net costs, coverage and uncertainty remain visible. No external message was sent.
-- Completion is 92 percent, 46 of 50 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
+- L16 implements native SDK minute monitoring with exact DBN evidence, mapping checks, bounded callback buffering, shared integrity gates and historical intraday recovery. Fifteen synthetic native cases and 275 total tests passed locally. No authorized vendor connection opened. Hosted validation remains pending for this slice.
+- Completion is 90.2 percent, 46 of 51 roadmap tasks DONE while L16 awaits hosted verification. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
 - User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
@@ -54,7 +55,7 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (260), focused report/email tests (16), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (93 files), actionlint and Git whitespace checks. Both hosted CI runs passed all three jobs. Deployment checkpoint pip check passed.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (275), native tests (15), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (95 files), pip check, actionlint and Git whitespace checks. Three hosted CI runs passed all three jobs through `1b55d11`.
 - Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
@@ -68,8 +69,8 @@
 
 ## Immediate Next Actions
 
-1. Finish publishing the locally verified N05 report slice and inspect its hosted checks. Do not dispatch a duplicate workflow while a push run is starting.
-2. Inspect native Databento SDK integration requirements and implement the next offline-testable provider slice if justified. Do not query a paid endpoint or assume an account is authorized.
+1. Publish the locally verified L16 native adapter slice and inspect its hosted checks. Do not dispatch a duplicate workflow while a push run is starting.
+2. Once hosted checks pass, mark L16 complete and checkpoint the exact commit. Preserve production L02 as blocked until authorized verification. Do not query paid endpoints or assume an account is authorized.
 3. When approved inputs arrive, run historical reconciliation and integrity checks before any empirical backtest or production monitor trial. Recommended provider is Databento CME Standard; keys must stay in local environment variables.
 
 ## Do Not Repeat

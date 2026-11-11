@@ -18,6 +18,7 @@ from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contract_reports import save_contract_assessment
 from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
+from aurum.databento_live import DatabentoSource
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_archive import (
     EconomicPublisher,
@@ -109,7 +110,7 @@ from aurum.statistics import ValidationConfig
 from aurum.storage import DatasetStore, is_transient_lock
 from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
-from aurum.streaming import HttpsGapBackfill, WebSocketSource, run_stream
+from aurum.streaming import FrameSource, HttpsGapBackfill, WebSocketSource, run_stream
 from aurum.timestamps import event_timestamp, minute_timestamp, trade_timestamp
 
 
@@ -374,6 +375,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     monitor.add_argument("--stale-seconds", type=int, default=90)
     monitor.add_argument("--max-frames", type=int)
     _strategy_context_options(monitor)
+    native_monitor = commands.add_parser(
+        "monitor-databento", help="explicitly subscribe to an authorized native MGC minute feed"
+    )
+    _research_options(native_monitor, dataset_argument=False)
+    native_monitor.add_argument("--calendar", type=Path, required=True)
+    native_monitor.add_argument("--contract", type=MgcContract, required=True)
+    native_monitor.add_argument("--raw-symbol", required=True)
+    native_monitor.add_argument("--key-env", default="DATABENTO_API_KEY")
+    native_monitor.add_argument("--start", type=minute_timestamp)
+    native_monitor.add_argument("--stale-seconds", type=int, default=90)
+    native_monitor.add_argument("--max-frames", type=int)
+    _strategy_context_options(native_monitor)
     monitor_replay = commands.add_parser(
         "monitor-replay", help="exercise the monitor with a saved dataset"
     )
@@ -684,6 +697,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 remaining -= len(events)
         elif args.command == "monitor":
             print(canonical_json(_monitor_live(store, args)))
+        elif args.command == "monitor-databento":
+            print(canonical_json(_monitor_databento(store, args)))
         elif args.command == "monitor-replay":
             print(canonical_json(_monitor_replay(store, args)))
         elif args.command == "monitor-status":
@@ -1204,7 +1219,7 @@ def _monitor_live(store: DatasetStore, args: Namespace) -> dict[str, object]:
 
 def _watch_monitor(
     instance: MarketMonitor,
-    source: WebSocketSource,
+    source: FrameSource,
     backfill: HttpsGapBackfill | None,
     max_frames: int | None,
 ) -> dict[str, object]:
@@ -1214,6 +1229,43 @@ def _watch_monitor(
         return run_stream(instance, source, backfill=backfill, max_frames=max_frames)
     finally:
         signal.signal(signal.SIGTERM, previous)
+
+
+def _monitor_databento(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    source = DatabentoSource(args.contract, args.raw_symbol, args.key_env, args.start)
+    calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
+    instance = MarketMonitor(
+        store,
+        calendar,
+        args.contract,
+        MonitorConfig(
+            "Databento GLBX.MDP3 native ohlcv-1m",
+            source.mode,
+            stale_seconds=args.stale_seconds,
+            timeframe=args.timeframe,
+            source_origin=source.origin,
+            source_fingerprint=source.fingerprint,
+        ),
+        _structure_config(args),
+        replace(
+            DEFAULT_STRATEGY_CONFIG,
+            variant=args.variant,
+            require_clear_event_risk=args.require_clear_event_risk,
+        ),
+        _evidence_config(args),
+        economic=_economic_calendar(args.economic_calendar),
+    )
+
+    def resume() -> datetime:
+        expected = describe_monitor(store, instance.monitor_id)["next_expected_open"]
+        if not isinstance(expected, str):
+            raise ValueError("Databento monitoring requires additional reviewed schedule coverage")
+        next_open = datetime.fromisoformat(expected)
+        if source.start is not None and source.start > next_open:
+            raise ValueError("Databento replay start cannot skip an expected monitor minute")
+        return next_open
+
+    return _watch_monitor(instance, replace(source, resume_from=resume), None, args.max_frames)
 
 
 def _stop_monitor(signum: int, frame: object) -> None:

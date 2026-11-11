@@ -262,3 +262,14 @@ publication/outbox rollback, restart delivery suppression, severity filtering,
 source disclosure and informational email subjects. Ruff and strict mypy passed.
 No external notification was sent. Summaries retain actual outcome counts and
 saved model versions; they do not assert historical or live profitability.
+
+## Native Databento adapter
+
+The full local suite passed 275 tests. Fifteen native cases use constructed
+SDK 0.90.0 records and fake clients, never a market-data connection. They cover
+mapping identity and interval, fixed-point tick conversion, byte preservation,
+premature bars, replay completion, publisher changes, queue overflow, stale
+connection handling, reconnect retry, resume cursor and missing credentials.
+Ruff, strict mypy (95 files), pip check, actionlint and whitespace checks passed.
+The adapter uses the existing monitor and paper eligibility gates. Native timing,
+entitlements, calendar reconciliation and sparse data remain production tasks.

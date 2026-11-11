@@ -60,6 +60,13 @@ and run the integrity checks before restarting workers.
 
 ## Verification limits
 
+The packaged worker includes the pinned native Databento SDK. Set
+`DATABENTO_API_KEY` in the local environment to use `monitor-databento` after
+authorization. Launch it explicitly with the reviewed schedule under `/imports`
+and a verified raw dated MGC symbol. It performs no REST history purchase.
+Restart uses the durable next expected minute for intraday recovery, limited
+to 23 hours. Extend and review calendar coverage before its final session ends.
+
 On 2026-11-11, Compose configuration validation passed and the native standalone
 dashboard served assets and proxied the token-protected API. The direct API
 returned 401 without the token. The image digests were obtained from the
