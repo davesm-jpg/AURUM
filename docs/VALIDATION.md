@@ -1,5 +1,12 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, paused replay readers
+
+- Full Python suite passed 309 tests, Ruff check/format passed and strict mypy passed across 100 files.
+- Two synthetic regressions reproduced `database is locked` before the change. They now commit a separate write while full and span-bounded public iterators pause, both before and after the first 1,000-candle page, then verify every remaining candle exactly.
+- Existing missing-data rejection, stable CLI replay IDs, audit and backtest tests passed. No schema, dataset ID or detection rule changed. Replay relies on the existing immutable-dataset contract; this is not a long-lived database snapshot across unauthorized direct edits.
+- Reconnect safeguards b05d4da passed all three hosted jobs in run 43088269838.
+
 ## Verified checkpoint — 2026-11-11, reconnect safeguards
 
 - `.venv/bin/pytest -q` passed 307 tests. Ruff and strict mypy passed (100 files).

@@ -3,14 +3,14 @@
 ## Project Status
 
 - Current phase — Offline research, forward paper simulation, monitoring and dashboard. Production data validation remains blocked.
-- Current milestone — L17 public polling, D13 monitor input verification and N06 optional setup lifecycle alerts passed hosted CI. Reconnect safeguards passed local verification.
+- Current milestone — L17 public polling, D13 monitor input verification, N06 optional setup lifecycle alerts and reconnect safeguards passed hosted CI. Public replay reader fix passed local checks.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — e9e78b2 passed all three hosted jobs in run 43085850744. Subsequent reconnect safeguards passed 307 local tests and static checks before this snapshot.
+- Last verified commit — b05d4da passed all three hosted jobs in run 43088269838. Subsequent replay maintenance passed 309 local tests before this snapshot.
 
 ## Current Objective
 
 - Task ID — O01 reliability maintenance of L01/L16, then STORE-001.
-- Objective — Publish reconnect safeguards and remove the reproduced public replay reader lock.
+- Objective — Publish verified public replay reader fix and inspect hosted gates.
 - Acceptance criteria — Retry typed wrapped transport errors, redact private provider text, suspend prior-process readiness at startup, then release public replay readers before yielding to writers without changing candle order or quality gates.
 
 ## Completed Work
@@ -33,6 +33,7 @@
 - No foreground preview or polling process remains running.
 - Roadmap lists 50/54 DONE (92.6 percent), three BLOCKED tasks and O01 IN_PROGRESS.
 - Reconnect maintenance recognizes OSError causes/context wrapped by the pinned SDK's BentoError, including suppressed timeout context. Unqualified authorization errors remain permanent. Callback registration is inside the same sanitized boundary. Shared run_stream suspends the saved connection before opening a replacement transport. Five added synthetic cases passed; no actual provider or delivery call was made.
+- STORE-001 is resolved: DatasetStore.replay reuses immutable 1,000-row pages and closes the reader before yielding. Two regressions failed with database-is-locked before the fix and now commit another writer before/after the page boundary, preserving all full/bounded candles. No schema or rule version changed.
 - O01 optimization remains open. The 21,600-minute synthetic benchmark retained all chart digests after restart source validation. Ingestion measured 4.519 s and restart 1.168 s versus the prior approximately 0.8 s. See PERFORMANCE.md. Optional ML awaits historical evidence.
 
 ## Important Decisions
@@ -48,16 +49,16 @@
 - D04/B02/L02 — Authorized bounded MGC history, its matching reviewed schedule, production feed and approved channel configuration are absent.
 - DATA-002/003 — Sparse omitted minutes block replay; large imports are buffered. Do not fabricate bars.
 - EVENT-001 — BLS public iCalendar returns 403 here. FOMC ingestion remains open. Public receipts are partial and require review; successful polling does not establish clear risk.
-- MONITOR-001/STORE-001 — Legacy rows can lack observation clocks; SQLite bulk writers serialize.
+- MONITOR-001 — Legacy rows can lack observation clocks. SQLite bulk writers serialize; paused public replay no longer holds a read lock.
 - ACCOUNT-001 — Provider unrealized-breach/DLL ambiguities remain explicit simulation assumptions.
 - Local containers lack a running macOS daemon. Hosted Linux verification passed.
 
 ## Test Status
 
-- Last full command — .venv/bin/pytest -q — 307 passed, including native wrapped failure recovery and a startup delivery hold.
+- Last full command — .venv/bin/pytest -q — 309 passed, including native wrapped failure recovery, startup delivery hold and paused public replay writers.
 - Static — Ruff check/format, strict mypy (100 files), Git whitespace, pip check and actionlint passed. Frontend typecheck/build and five tests passed for lifecycle Settings. Browser verified unchecked default, enabled profile saving and zero monitor creation.
 - Integration — Real public BEA/BLS one-shot attempts and browser capture health verified. Source/normalized audit passed on the ignored public-data store.
-- Hosted — All jobs passed for e9e78b2 in run 43085850744. Reconnect maintenance awaits publication and its own run.
+- Hosted — All three jobs passed for reconnect maintenance b05d4da in run 43088269838. Replay maintenance awaits publication.
 - Failed — No outstanding automated failure.
 - Not run — Authorized MGC reconciliation, actual feed/channel trials and empirical out-of-sample evaluation. Do not interpret fixture outcomes as evidence.
 
@@ -70,8 +71,8 @@
 
 ## Immediate Next Actions
 
-1. Commit/push verified reconnect maintenance and inspect its hosted run.
-2. Resolve STORE-001's public DatasetStore.replay generator holding a read connection across yields. Reuse bounded immutable batches and test a paused iterator while another connection commits. Preserve ordering, span semantics and replayability checks.
+1. Commit/push the verified paused-reader fix and inspect its hosted run.
+2. Inspect the next evidence-backed reliability gap without reimplementing completed features. Optional ML remains dependent on authorized historical evidence.
 3. For D04/B02/L02, wait for authorized data/configuration. Recommended provider was Databento; no purchase or access has been confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat

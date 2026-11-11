@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Nonblocking public replay
+
+- Closed public replay readers before yielding candles, fixing a reproduced same-store writer timeout without buffering the entire dataset.
+- Full and bounded replay regressions preserve exact output across page boundaries. Full suite passed 309 tests and static checks.
+
 ## 2026-11-11 — Reconnect safeguards
 
 - Fixed transient native subscription failures wrapped by the pinned SDK while keeping authorization failures permanent and provider text private.

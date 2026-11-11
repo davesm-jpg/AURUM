@@ -431,8 +431,15 @@ class DatasetStore:
             return bytes(source["raw"])
 
     def replay(self, dataset_id: str, *, span: TradingWindow | None = None) -> Iterator[Candle]:
-        with self.connection() as db:
-            yield from self._replay(db, self._dataset(db, dataset_id), span=span)
+        """Yield immutable candles without retaining a reader during consumer work."""
+        if span is None:
+            dataset = self.describe(dataset_id)
+            span = TradingWindow(
+                datetime.fromisoformat(dataset["first_open"]),
+                datetime.fromisoformat(dataset["last_close"]),
+            )
+        for batch in self.replay_batches(dataset_id, span):
+            yield from batch
 
     def trade_prints(
         self,

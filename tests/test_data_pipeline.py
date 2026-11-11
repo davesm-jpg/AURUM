@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import subprocess
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -10,11 +11,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aurum.exchange_calendar import SessionCalendar
+from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MGC, MgcContract
 from aurum.market_data import DataKind, ImportConfig, TimestampLabel, prepare_csv
 from aurum.storage import DatasetStore
-from aurum.timestamps import minute_timestamp
+from aurum.timestamps import MINUTE, minute_timestamp
 
 HEADER = "timestamp,contract,open,high,low,close,volume\n"
 CONTRACT = MgcContract("MGC-2025-04")
@@ -130,6 +131,45 @@ def test_gaps_include_edges_and_empty_windows_but_exclude_closures(tmp_path: Pat
     assert store.describe(dataset_id)["replayable"] is False
     with pytest.raises(ValueError, match="replay blocked"):
         next(store.replay(dataset_id))
+
+
+@pytest.mark.parametrize("bounded", (False, True))
+def test_paused_public_replay_releases_reader_and_preserves_remaining_candles(
+    tmp_path: Path, bounded: bool
+) -> None:
+    start = minute_timestamp("2025-03-10T00:00Z")
+    end = start + 1006 * MINUTE
+    calendar = SessionCalendar.from_json(
+        schedule(
+            {"start": start.isoformat(), "end": end.isoformat()},
+            coverage={"start": start.isoformat(), "end": end.isoformat()},
+        )
+    )
+    prepared = prepare_csv(
+        csv_file(tmp_path, *(row((start + index * MINUTE).isoformat()) for index in range(1006))),
+        CONFIG,
+        calendar,
+    )
+    store = DatasetStore(tmp_path / "synthetic-paused-replay.sqlite")
+    dataset = store.save(prepared)
+    span = TradingWindow(start + 2 * MINUTE, end - 2 * MINUTE) if bounded else None
+    expected = list(prepared.candles[2:-2] if bounded else prepared.candles)
+    iterator = store.replay(dataset, span=span)
+    assert isinstance(iterator, Generator)
+    try:
+        for offset in (0, 1000):
+            assert next(iterator) == expected[offset]
+            # A genuine write transaction must commit while the caller holds a
+            # partly consumed replay page. The short timeout makes the former
+            # connection-across-yield regression fail promptly.
+            with store.connection(write=True) as db:
+                db.execute("PRAGMA busy_timeout = 100")
+                db.execute("UPDATE datasets SET imported_at = imported_at WHERE id = ?", (dataset,))
+            if offset == 0:
+                assert [next(iterator) for _ in range(999)] == expected[1:1000]
+        assert list(iterator) == expected[1001:]
+    finally:
+        iterator.close()
 
 
 @pytest.mark.parametrize(
