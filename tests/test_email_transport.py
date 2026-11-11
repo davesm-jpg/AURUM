@@ -191,3 +191,21 @@ def test_email_connection_failure_is_retryable_and_redacted(
     assert failure.value.reason == "smtp_connection_failed"
     assert failure.value.retry_seconds == 15 and not failure.value.uncertain
     assert SECRET not in str(failure.value)
+
+
+@pytest.mark.parametrize(
+    ("event", "subject"),
+    [
+        ("forward_paper_report", "AURUM forward paper research report"),
+        ("data_quality_warning", "AURUM data quality warning"),
+    ],
+)
+def test_email_subject_identifies_informational_messages(
+    monkeypatch: pytest.MonkeyPatch, event: str, subject: str
+) -> None:
+    client = SyntheticSmtp()
+    configure(monkeypatch, client)
+    SmtpAlertChannel(SETTINGS, "recipient@example.invalid", SECRET).send(
+        {"alert_id": "synthetic-info", "event": event}
+    )
+    assert client.messages[0]["Subject"] == subject

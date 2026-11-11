@@ -8,7 +8,8 @@ Local Compose packaging uses separate unprivileged API and standalone dashboard
 containers in one network namespace. Published ports bind to localhost, and the
 server-side proxy continues to use a loopback API address. An explicit all-interface
 API bind requires an access token. Workers share the persistent data volume and
-start explicitly. Container launch verification remains open. See `OPERATIONS.md`.
+start explicitly. Hosted CI built and launched both images and verified the
+token boundary on 2026-11-11. See `OPERATIONS.md` for remaining host limits.
 
 | Module | Current responsibility |
 | --- | --- |
@@ -38,6 +39,7 @@ start explicitly. Container launch verification remains open. See `OPERATIONS.md
 | `forward.py` | Registration-bound paper execution over observed monitor minutes, durable cursor and independent ledger |
 | `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
 | `email_transport.py` | Authenticated STARTTLS or implicit TLS email with acknowledgement-aware retry classification |
+| `report_notifications.py` | Opt-in immutable forward report summaries in the existing durable alert and delivery path |
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 
@@ -72,6 +74,7 @@ comparison rejects an unmatched adopted economic history.
 13. Contract analysis filters reviewed listings by effective availability and compares activity over a common measurement period. Continuous series plans reference immutable datasets and explicit switches. Forward adjustment uses a shared close known by the switch and applies only to the successor segment. Streaming a series uses bounded immutable read pages and keeps dated source candles separate. The Reports workspace creates the same immutable contract and continuous reports as the CLI, with point-in-time availability and separately labeled preview prices.
 14. The monitor journals normalized and raw frames. The live worker retains the receive clock, samples the processing clock within the write transaction and retries only SQLite busy or locked errors. A retried committed frame records its recovery and stays execution-ineligible. It applies only the contiguous prefix of reviewed open minutes, passing those minutes to the existing strategy engine. Recovered setup events retain their actual observed time and source status. A fresh, connected, real-time close can enqueue a paper alert. Missing data, clock staleness and latched integrity conflicts suspend delivery eligibility.
 15. An explicitly started worker filters the alert queue, claims one destination-specific delivery, sends outside the transaction and records the outcome. Health warnings remain eligible during a feed fault. Confirmed paper setups require a fresh monitor check. Ambiguous transport results or expired sending leases become uncertain.
+16. Completed reviewed daily, weekly and monthly reports may queue an informational summary in the same transaction as their publication marker. Manual queuing supports saved reports. The report ID determines the alert identity, preserving the first queue clock and destination-level delivery history across restarts. Reports disclose source classification, actual sample, modeled net costs, coverage and uncertainty. The common preferences and delivery audit apply without requiring a current market heartbeat for a past-period report.
 
 ## Current database
 

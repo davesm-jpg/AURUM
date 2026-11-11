@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Forward report notifications and hosted verification
+
+- Added opt-in durable daily, weekly and monthly report notifications with source labels, coverage, actual counts and saved report references.
+- Publication and alert queuing commit together. Existing channel delivery controls and destination deduplication remain shared.
+- Published the verified checkpoint to the user-provided GitHub repository. All three hosted Python, frontend and container smoke jobs passed on `10573ba`.
+
 ## 2026-11-11 — Repository quality workflow
 
 - Added isolated Python, frontend and container verification jobs with pinned action revisions and read-only repository access.

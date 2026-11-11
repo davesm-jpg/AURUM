@@ -10,6 +10,7 @@ from aurum.exchange_calendar import SessionCalendar
 from aurum.forward import describe_forward, forward_events
 from aurum.market_context import DEFAULT_CONTEXT_CONFIG
 from aurum.market_data import canonical_json
+from aurum.report_notifications import enqueue_forward_report
 from aurum.statistics import Observation, bootstrap_expectancy, outcome_summary
 from aurum.storage import DatasetStore
 from aurum.timestamps import MINUTE
@@ -210,6 +211,7 @@ def publish_completed_periods(
     periods: tuple[ForwardPeriod, ...] = tuple(ForwardPeriod),
     *,
     baseline_validation_id: str | None = None,
+    notify: bool = False,
 ) -> list[str]:
     """Save each completed reviewed period once, including after a worker restart."""
     run, monitor, calendar = _source(store, forward_id)
@@ -255,6 +257,8 @@ def publish_completed_periods(
                     (forward_id, period, start.isoformat(), baseline, report_id),
                 )
                 if created.rowcount:
+                    if notify:
+                        enqueue_forward_report(db, report_id)
                     reports.append(report_id)
                     saved.add((period, start.isoformat()))
     return reports

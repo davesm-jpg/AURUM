@@ -100,6 +100,7 @@ from aurum.quotes import (
     verify_quote_series,
 )
 from aurum.reconciliation import save_reconciliation
+from aurum.report_notifications import queue_forward_report
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
@@ -403,6 +404,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     forward_sync.add_argument("--watch", action="store_true")
     forward_sync.add_argument("--poll-seconds", type=float, default=2.0)
     forward_sync.add_argument("--auto-reports", action="store_true")
+    forward_sync.add_argument("--notify-reports", action="store_true")
     forward_sync.add_argument("--report-baseline")
     commands.add_parser("forward-runs", help="list forward paper runs")
     for name in ("forward-status", "forward-events"):
@@ -418,6 +420,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     forward_report.add_argument("--bootstrap-draws", type=int, default=1000)
     forward_report.add_argument("--block-length", type=int, default=5)
     forward_report.add_argument("--seed", type=int, default=42)
+    notify_report = commands.add_parser("notify-report", help="queue a saved forward report once")
+    notify_report.add_argument("report_id")
 
     delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
     delivery.add_argument("monitor_id")
@@ -647,6 +651,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical_json(describe_forward(store, reference)))
         elif args.command == "forward-sync":
             print(canonical_json(_sync_forward(store, args)))
+        elif args.command == "notify-report":
+            print(canonical_json({"alert_id": queue_forward_report(store, args.report_id)}))
         elif args.command == "forward-runs":
             print(canonical_json(list_forward_runs(store)))
         elif args.command == "forward-report":
@@ -1078,6 +1084,8 @@ def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
         raise ValueError("forward poll interval must be between 0.25 and 60 seconds")
     if args.report_baseline is not None and not args.auto_reports:
         raise ValueError("automatic report baseline requires --auto-reports")
+    if args.notify_reports and not args.auto_reports:
+        raise ValueError("report notifications require --auto-reports")
     runner = ForwardPaper(store, args.forward_id)
     reports_pending = args.auto_reports
     last_publications: list[str] = []
@@ -1090,7 +1098,10 @@ def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:
                 reports_pending |= args.auto_reports and bool(status["processed_minutes"])
                 if status["caught_up"] and reports_pending:
                     published = publish_completed_periods(
-                        store, args.forward_id, baseline_validation_id=args.report_baseline
+                        store,
+                        args.forward_id,
+                        baseline_validation_id=args.report_baseline,
+                        notify=args.notify_reports,
                     )
                     reports_pending = False
                     if published:

@@ -301,3 +301,12 @@
 - Decision — Add a versioned Databento minute CSV format, requiring explicit pretty export options, one dated MGC symbol and one publisher/instrument pair. Reuse exact tick, calendar, duplicate, gap and provenance logic.
 - Consequences — Normalized rows can be reproduced from their original bytes. Epoch timestamps and fixed-point price encodings require an explicitly supported format. A missing vendor bar cannot establish a no-trade interval by itself, so affected research stays gated.
 - Files — `databento_csv.py`, `market_data.py`, `providers.py`, CLI, dataset audit and adapter tests.
+
+## ADR-033 — Publish report notifications through the existing outbox
+
+- Date — 2026-11-11.
+- Context — Saved daily, weekly and monthly forward reports need optional delivery without repeated summaries after worker restart.
+- Alternatives — Direct sends from the report worker or a shared durable alert queue.
+- Decision — Queue a source-labeled immutable report summary atomically with the period publication marker. Use the saved report ID for deduplication. Manual queuing supports older saved reports. Existing delivery workers retain all channel, expiry, quiet-hour and attempt rules.
+- Consequences — Report creation remains usable offline. No channel is contacted by the publishing command. Enabling notifications later does not automatically resend earlier publications. Past-period summaries remain eligible when a feed is stale, while confirmed setup delivery still requires freshness.
+- Files — `report_notifications.py`, `forward_reports.py`, notification transports, CLI and forward report tests.

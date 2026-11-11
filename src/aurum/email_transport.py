@@ -81,7 +81,10 @@ class SmtpAlertChannel:
         message = EmailMessage()
         message["From"] = self.settings.sender
         message["To"] = self.recipient
-        message["Subject"] = "AURUM paper research signal"
+        message["Subject"] = {
+            "forward_paper_report": "AURUM forward paper research report",
+            "data_quality_warning": "AURUM data quality warning",
+        }.get(str(alert.get("event")), "AURUM paper research signal")
         identity = canonical_json((alert.get("alert_id"), self.destination_key)).encode()
         message["Message-ID"] = f"<{sha256(identity).hexdigest()}@aurum.local>"
         message.set_content(render_alert(alert))

@@ -242,5 +242,23 @@ The GitHub Actions workflow defines independent Python and frontend checks plus
 an isolated container smoke job. It uses verified immutable action revisions,
 read-only repository permission, explicit interpreter versions and the runtime
 dependency lock. `actionlint .github/workflows/verify.yml` passed locally.
-Python, frontend and native smoke commands passed in this workspace. Hosted
-workflow execution is pending. No remote push or workflow dispatch occurred.
+Python, frontend and native smoke commands passed in this workspace. On
+2026-11-11 the authorized empty GitHub repository received the checkpoint on
+`codex/verified-research-platform`. Hosted run
+[43001173432](https://github.com/davesm-jpg/AURUM/actions/runs/43001173432)
+passed all three jobs on `10573ba`. Container images built and started healthy.
+The dashboard proxy returned schema v15 health, the direct unauthenticated API
+returned 401 and the worker audited the empty store. Run
+[43001928370](https://github.com/davesm-jpg/AURUM/actions/runs/43001928370)
+passed all three jobs on `03c3da4`, including two persisted synthetic minute
+imports, API/dashboard container replacement, normalized audit and standalone
+JavaScript delivery. Local macOS container execution remains unverified.
+
+## Forward period notification publication
+
+The full local Python suite passed 260 tests. Synthetic fixtures covered daily,
+weekly and monthly summaries, opt-in behavior, concurrent manual deduplication,
+publication/outbox rollback, restart delivery suppression, severity filtering,
+source disclosure and informational email subjects. Ruff and strict mypy passed.
+No external notification was sent. Summaries retain actual outcome counts and
+saved model versions; they do not assert historical or live profitability.

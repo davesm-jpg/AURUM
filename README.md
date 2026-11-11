@@ -234,6 +234,14 @@ before registration.
 Use `forward-sync FORWARD_ID --watch --auto-reports` to save completed reviewed
 daily, weekly and monthly periods from the foreground worker. Weekly and
 monthly publication requires reviewed schedule coverage into the next period.
+Add `--notify-reports` to atomically queue each new publication for the existing
+delivery worker. This is opt-in and uses that worker's destinations, quiet hours,
+severity filters, rate limits and expiry. `notify-report REPORT_ID` queues an
+already saved forward report once. Repeating either operation does not resend
+the report to a destination already recorded in the delivery ledger.
+The summary identifies source, synthetic versus observed paper data, trade dates,
+actual completed outcomes, modeled net costs, coverage and uncertainty. Inspect
+the linked report ID locally for its complete rules and execution assumptions.
 
 ## Runtime profiles
 

@@ -86,6 +86,8 @@ def _key(channel: Channel, address: str) -> str:
 
 def render_alert(alert: dict[str, object]) -> str:
     contract = str(alert.get("contract", "MGC"))
+    if alert.get("event") == "forward_paper_report":
+        return _render_report(alert)
     if alert.get("event") == "data_quality_warning":
         return (
             f"AURUM paper research • {contract}\n"
@@ -135,6 +137,37 @@ def render_alert(alert: dict[str, object]) -> str:
             f"Experimental score {score.get('total')}/100 | Comparable samples "
             f"{score.get('validated_comparable_samples')}",
             f"Feed age {alert.get('feed_age_seconds')} s | {caution_text}",
+        )
+    )
+
+
+def _render_report(alert: dict[str, object]) -> str:
+    summary = _mapping(alert.get("summary"))
+    outcomes = _mapping(summary.get("outcomes"))
+    coverage = _mapping(summary.get("coverage"))
+    uncertainty = _mapping(summary.get("uncertainty"))
+    interval = (
+        "Bootstrap 95% expectancy interval "
+        f"{uncertainty.get('expectancy_95_percentile_cents')} cents"
+        if uncertainty
+        else "Uncertainty interval unavailable with this sample"
+    )
+    return "\n".join(
+        (
+            f"AURUM PAPER REPORT • {alert.get('contract')} • {alert.get('period')}",
+            f"Data {alert.get('data_kind')} | Source {alert.get('source')}",
+            f"Trade dates {alert.get('first_trade_date')} to "
+            f"{alert.get('end_trade_date_exclusive')} exclusive",
+            f"Completed trades {outcomes.get('trades')} | Net {outcomes.get('net_cents')} cents",
+            f"Net expectancy {outcomes.get('expectancy_cents')} cents per trade",
+            f"Unresolved outcomes {summary.get('unresolved_outcomes')} | "
+            f"Coverage {coverage.get('applied_forward_minutes')}/"
+            f"{coverage.get('reviewed_minutes')} reviewed minutes",
+            interval,
+            f"Strategy version {alert.get('strategy_version')} | "
+            "Includes saved modeled commissions and slippage",
+            f"Report {alert.get('report_id')}",
+            "Descriptive paper research. No established advantage or guaranteed returns.",
         )
     )
 

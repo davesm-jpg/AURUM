@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — Email delivery is verified on synthetic SMTP transports. Local deployment packaging passed native smoke and configuration. The CI workflow passed local actionlint. Container and hosted execution remain open.
-- Current branch — `main`.
-- Last verified code commit — `3b99888`.
+- Current milestone — Email and period-report notifications are verified with synthetic transports. Hosted Python, frontend and complete container smoke passed. Authorized market-data validation remains blocked.
+- Current branch — `codex/verified-research-platform`, tracking the same branch at `https://github.com/davesm-jpg/AURUM.git`.
+- Last verified code commit — `03c3da4` for hosted CI and containers. The subsequent report-notification slice passed local full verification before this checkpoint.
 
 ## Current Objective
 
-- Task ID — O03 and O02.
-- Objective — Validate the workflow and attempt the isolated container smoke test when a runtime is available.
-- Acceptance criteria — CI passes local linting and runs the documented gates. Confirm API authorization, standalone assets, persistent data and worker integrity inside the packaged services. Disclose unavailable execution environments.
+- Task ID — Production adapter readiness and D04 preparation.
+- Objective — Continue the next independent implementation slice while awaiting authorized history and provider configuration.
+- Acceptance criteria — Keep paid requests and real channel sends disabled without approved inputs. Reuse the shared quality and monitoring paths, verify offline and retain exact continuation evidence.
 
 ## Completed Work
 
@@ -26,13 +26,13 @@
 
 ## Work In Progress
 
-- Schema v15. Recent changes are committed. Temporary preview services are stopped.
+- Schema v15. Temporary preview services and the failed Colima runtime are stopped.
 - L13 picker browser verification prepared and copied the expected synthetic capture without creating a provider profile. L15 adds reviewed CLI/API activations, observation/source-time gating and restart reconstruction through immutable activation history.
-- Docker CLI is installed, but its daemon and Compose/buildx plugins are unavailable. Inspect installed runtime options before treating containers as verified.
-- Standalone `docker-compose` exists and validated the service configuration. Pinned image manifests and runtime lock are committed. Native standalone dashboard served assets and proxied the authenticated API. Starting Colima failed on a GitHub VM image download, and it was stopped. Container execution remains O02.
+- Docker CLI and standalone `docker-compose` are installed locally, but no daemon is running. The user-provided GitHub destination was empty. The checkpoint was published without overwriting remote work. Hosted run 43001928370 on `03c3da4` passed Python, frontend and containers. Container verification included two synthetic minute imports, persisted data after replacement, normalized worker audit, standalone assets and direct API 401. Local macOS container verification remains unavailable.
 - D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
 - N04 adds authenticated STARTTLS/implicit TLS email with durable retry and uncertain acknowledgement handling. Profiles persist environment names only. Eleven fake SMTP cases passed. External email was not sent.
-- Completion is 87.8 percent, 43 of 49 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O02/O03 execution evidence is still incomplete, and optional ML awaits historical evidence.
+- N05 queues saved daily/weekly/monthly report summaries atomically with publication. Manual `notify-report` deduplicates saved report IDs. Existing channel preferences and audit apply. Source classification, actual sample, net costs, coverage and uncertainty remain visible. No external message was sent.
+- Completion is 92 percent, 46 of 50 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
 - User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
@@ -54,7 +54,7 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (257), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (91 files), actionlint and Git whitespace checks. Deployment checkpoint pip check passed.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (260), focused report/email tests (16), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (93 files), actionlint and Git whitespace checks. Both hosted CI runs passed all three jobs. Deployment checkpoint pip check passed.
 - Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
@@ -68,9 +68,9 @@
 
 ## Immediate Next Actions
 
-1. Inspect the current Colima start attempt. Stop it when container validation is finished or its image download fails. All unrelated existing Colima profiles were stopped before this session.
-2. Commit the locally validated CI workflow and record whether container execution succeeded. Hosted workflow execution requires the repository's normal remote workflow.
-3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
+1. Finish publishing the locally verified N05 report slice and inspect its hosted checks. Do not dispatch a duplicate workflow while a push run is starting.
+2. Inspect native Databento SDK integration requirements and implement the next offline-testable provider slice if justified. Do not query a paid endpoint or assume an account is authorized.
+3. When approved inputs arrive, run historical reconciliation and integrity checks before any empirical backtest or production monitor trial. Recommended provider is Databento CME Standard; keys must stay in local environment variables.
 
 ## Do Not Repeat
 

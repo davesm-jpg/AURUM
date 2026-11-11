@@ -63,9 +63,15 @@ and run the integrity checks before restarting workers.
 On 2026-11-11, Compose configuration validation passed and the native standalone
 dashboard served assets and proxied the token-protected API. The direct API
 returned 401 without the token. The image digests were obtained from the
-official Docker registry. Container builds and execution remain unverified in
-this environment. Starting the available Colima runtime failed while fetching
-its VM image from GitHub, and the runtime was stopped.
+official Docker registry. Hosted Linux CI on commit `03c3da4` built and started
+both containers, imported two explicitly synthetic minutes through the worker,
+replaced API/dashboard containers and verified the same data through the proxy.
+It audited the persisted source and served standalone JavaScript assets without
+exposing the API token. The direct unauthenticated API remained 401.
+[Hosted evidence](https://github.com/davesm-jpg/AURUM/actions/runs/43001928370).
+Local macOS container execution remains unavailable. Starting Colima failed
+while fetching its VM image, and the runtime was stopped. CI does not establish
+authorized market-data coverage or actual delivery-channel behavior.
 
 Service definitions follow the documented health and dependency behavior.
 [Compose services](https://docs.docker.com/reference/compose-file/services/) ·
