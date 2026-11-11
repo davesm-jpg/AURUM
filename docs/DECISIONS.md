@@ -375,3 +375,4 @@
 - Decision — Preserve each raw frame and actual receipt, record feed_clock_regressed with policy version 1 and leave it unapplied while processing time precedes the known check. A later frame at or beyond that bound drains the prefix using its actual processing observation and ordinary recovery eligibility rules.
 - Consequences — Alerts remain suspended while input is pending. Restart preserves the hold. Clock recovery alone does not advance the detector without another frame. Existing observations and monitor IDs stay unchanged. No synthetic future clock is substituted for an actual application.
 - Files — `monitoring.py` and real-time/delayed clock rollback tests.
+- Audit extension — Monitor audit v2 rejects known observation regressions, including across legacy unknown rows. Verified backups reject the same defect without rewriting old data. Unknown clocks cannot establish complete chronology.

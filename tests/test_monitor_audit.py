@@ -79,6 +79,34 @@ def test_monitor_audit_includes_pending_frames_and_preserves_unknown_legacy_cloc
     assert report["legacy_unknown_observation_rows"] == 1
 
 
+@pytest.mark.parametrize("unknown_middle", (False, True))
+def test_monitor_audit_rejects_regressing_known_observations_and_backup(
+    tmp_path: Path, unknown_middle: bool
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic-regressed-observations.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 6)), FeedStatus.SIMULATED)
+    later = START + 5 * MINUTE
+    for index in range(3):
+        monitor.ingest(frame(index, mode=FeedStatus.SIMULATED), application_clock=lambda: later)
+    assert verify_monitor(store, monitor.monitor_id)["verified"] is True
+    with store.connection(write=True) as db:
+        db.execute(
+            "UPDATE monitor_minutes SET applied_at = ? WHERE opened_at = ?",
+            ((START + 4 * MINUTE).isoformat(), (START + 2 * MINUTE).isoformat()),
+        )
+        if unknown_middle:
+            db.execute(
+                "UPDATE monitor_minutes SET applied_at = NULL WHERE opened_at = ?",
+                ((START + MINUTE).isoformat(),),
+            )
+    with pytest.raises(ValueError, match="known monitor observations regress"):
+        verify_monitor(store, monitor.monitor_id)
+    destination = tmp_path / "synthetic-rejected-clock-backup.sqlite"
+    with pytest.raises(ValueError, match="known monitor observations regress"):
+        backup_store(store, destination, verify_normalized=True)
+    assert not destination.exists()
+
+
 @pytest.mark.parametrize(
     "mutation",
     (

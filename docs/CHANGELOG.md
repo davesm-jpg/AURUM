@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Audit known observation chronology
+
+- Monitor audit v2 and verified backups reject decreasing known application times, including across unknown legacy rows.
+- Preserve original observations and disclose that unknown clocks cannot establish complete chronology.
+
 ## 2026-11-11 — Processing-clock rollback guard
 
 - Preserve newly received candles as pending when processing time moves behind the last known check, recording the actual clock without backdating discovery.

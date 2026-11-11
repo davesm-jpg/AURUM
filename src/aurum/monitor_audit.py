@@ -15,7 +15,7 @@ from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.timestamps import MINUTE
 
-MONITOR_AUDIT_VERSION = 1
+MONITOR_AUDIT_VERSION = 2
 MAX_FRAME_BYTES = 64 * 1024
 
 
@@ -103,6 +103,7 @@ def verify_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
     expected = calendar.windows[0].start if calendar.windows else None
     applied = unknown_clocks = eligible = count = 0
     last_applied = None
+    last_observed: datetime | None = None
     after = ""
     while through is not None:
         fields = (
@@ -139,6 +140,9 @@ def verify_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
                     observed = datetime.fromisoformat(item["applied_at"])
                     if observed.tzinfo is not UTC or item["applied_at"] < item["received_at"]:
                         raise ValueError("monitor application precedes receipt or is not UTC")
+                    if last_observed is not None and observed < last_observed:
+                        raise ValueError("known monitor observations regress in source order")
+                    last_observed = observed
                 if item["execution_eligible"]:
                     if (
                         observed is None
@@ -190,5 +194,6 @@ def verify_monitor(store: DatasetStore, monitor_id: str) -> dict[str, object]:
         "limitations": [
             "Source classification and entitlements are adapter/operator assertions.",
             "This audit does not reproduce the detector-event or alert journals.",
+            "Unknown legacy observation clocks are not reconstructed.",
         ],
     }

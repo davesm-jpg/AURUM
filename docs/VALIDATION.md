@@ -1,5 +1,11 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, known observation chronology
+
+- Two synthetic regressions showed the old audit accepting decreasing known application observations, both adjacent and separated by an unknown legacy row.
+- Monitor audit v2 now rejects both cases. Verified backups reject and do not publish the inconsistent store. Unknown legacy times stay unknown.
+- Full suite passed 317 tests. Ruff check/format, strict mypy (100 files) and Git whitespace checks passed.
+
 ## Verified checkpoint — 2026-11-11, processing-clock rollback
 
 - Real-time and delayed synthetic regressions failed before the fix because the monitor applied input and returned READY after its processing clock moved backward.
