@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — L13 archive review and integrity checks are verified through API and build. Next is L14 browser verification and reviewed refresh design.
+- Current milestone — L14 browser review and L15 immutable reviewed economic activation are verified. Next is O02 local deployment packaging.
 - Current branch — `main`.
-- Last verified code commit — `102b2f50fcc61387d806140479aea993bd4e1c0b`.
+- Last verified code commit — `802e098`.
 
 ## Current Objective
 
-- Task ID — L14.
-- Objective — Exercise the archived snapshot picker in the browser and design causal adoption of reviewed updates in monitoring.
-- Acceptance criteria — Verify the picker prepares partial evidence and copies it without saving the profile. Document separate source-close and observation-time refresh boundaries before changing worker behavior.
+- Task ID — O02.
+- Objective — Package local API, dashboard and explicitly launched workers reproducibly.
+- Acceptance criteria — Preserve data, localhost access and token protection. Validate builds and configuration where available, and document container-runtime limitations.
 
 ## Completed Work
 
@@ -26,8 +26,9 @@
 
 ## Work In Progress
 
-- Schema v14. Recent changes are committed. The temporary browser preview services were stopped.
-- The L13 Settings picker passed typecheck and production build. Its interactive browser check remains open. No runtime refresh implementation exists.
+- Schema v15. Recent changes are committed. Temporary preview services are stopped.
+- L13 picker browser verification prepared and copied the expected synthetic capture without creating a provider profile. L15 adds reviewed CLI/API activations, observation/source-time gating and restart reconstruction through immutable activation history.
+- Docker CLI is installed, but its daemon and Compose/buildx plugins are unavailable. Inspect installed runtime options before treating containers as verified.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
 ## Important Decisions
@@ -42,14 +43,14 @@
 
 - DATA-001 and CAL-002 — Authorized historical MGC and a matching reviewed production schedule are absent. Real outcomes and operating coverage remain unverified.
 - DATA-002 and DATA-003 — Sparse expected minutes block replay, and normalization buffers source data. Use bounded exports for large sources.
-- EVENT-001 — Scheduled economic capture and running-worker refresh remain open. Local composition supports separately reviewed snapshots. The official BLS iCalendar request returned HTTP 403 from this runtime. Local reviewed captures are supported.
+- EVENT-001 — Scheduled economic polling remains open. Reviewed updates can be adopted through CLI/API. The official BLS iCalendar request returned HTTP 403 from this runtime. Local reviewed captures are supported.
 - MONITOR-001 and STORE-001 — Legacy journals can lack observed timestamps. Long SQLite transactions still serialize. Conflicting duplicates require a corrected monitor run after investigation.
 - ACCOUNT-001 — Public LucidFlex documentation leaves unrealized breach treatment and optional DLL amount open. Keep those simulation assumptions explicit.
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (228), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (85 files), `.venv/bin/python -m pip check` and Git whitespace checks.
-- Frontend — Five tests, TypeScript typecheck and production build passed. Earlier staged holdout and contract browser checks used temporary synthetic stores. Archive picker browser interaction remains unverified.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (233), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (87 files) and Git whitespace checks. Prior checkpoint pip check passed.
+- Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
 - Limitations — The performance workload, socket and delivery exercises, quotes and strategy outcomes are synthetic. Delivery tests use fake transports.
@@ -62,8 +63,8 @@
 
 ## Immediate Next Actions
 
-1. Open Settings against a temporary local archive and verify receipt selection, preview, copied JSON and explicit save separation.
-2. Inspect monitor restart and forward execution before designing reviewed snapshot refresh. Preserve both source-close and observation clocks.
+1. Inspect existing API loopback protections and package a local deployment that preserves them.
+2. Validate image references, Compose configuration and native production launch. Container execution needs an available daemon.
 3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
 
 ## Do Not Repeat
