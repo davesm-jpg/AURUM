@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Durable public calendar polling
+
+- Added explicit foreground public capture with persisted cadence, exclusive leases, bounded retry and interruption recovery.
+- Added read-only health, attempt audit and Settings status. Monitor adoption remains reviewed.
+- Extended normalized backup verification to reconstruct polling journals. Full suite passed 285 tests; actual BEA capture and BLS failure were recorded and browser-verified.
+
 ## 2026-11-11 — Native Databento adapter
 
 - Added explicit dated MGC minute subscriptions using a pinned SDK, raw mapping/record evidence and the existing stream monitor.

@@ -2,84 +2,81 @@
 
 ## Project Status
 
-- Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — Native Databento core, email, report notifications and packaged services passed hosted CI. Native provider Settings and profile extensions passed local and browser verification. Authorized market-data validation remains blocked.
-- Current branch — `codex/verified-research-platform`, tracking the same branch at `https://github.com/davesm-jpg/AURUM.git`.
-- Last verified code commit — `1d6d92c` passed 276 local tests, static/frontend checks and browser verification, and is published. Its hosted run 43004980567 was queued at shutdown. Native core `6a0bcf0` passed all hosted jobs in run 43004011688.
+- Current phase — Offline research, forward paper simulation, monitoring and dashboard. Production data validation remains blocked.
+- Current milestone — L17 durable public economic-calendar polling is implemented and locally verified. Its hosted checkpoint is next.
+- Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
+- Last verified commit — 1d6d92c passed hosted run 43004980567. Handoff commit 54e2a9f was subsequently published. L17 changes passed local checks before this snapshot.
 
 ## Current Objective
 
-- Task ID — D04, B02 and L02 production validation.
-- Objective — Verify the latest hosted profile extension checkpoint, then prepare authorized history and provider configuration for actual validation.
-- Acceptance criteria — Keep paid requests and real channel sends disabled without approved inputs. Reuse the shared quality and monitoring paths, verify offline and retain exact continuation evidence.
+- Task ID — L17.
+- Objective — Review and publish the polling slice, verify hosted checks, then continue the next unblocked data-integrity task.
+- Acceptance criteria — Preserve actual public receipt clocks, cadence and failure evidence; prevent duplicate concurrent requests; reconstruct restart and backup state; expose health without automatically adopting monitor context.
 
 ## Completed Work
 
-- D01–D08 — CSV, Parquet and normalized HTTPS OHLCV, reviewed dated exchange schedules, completed aggregation, dated contract selection and separate continuous research prices. Normalized trade prints and standalone bid/ask series preserve exact UTC nanoseconds, source sequence and raw bytes. Reconciliation compares distinct compatible imports without lifting replay gates. Quote lookups enforce strict precedence, freshness and reviewed open windows.
-- D09–D11 — `verify-dataset`, `verify-quote-series` and `verify-store --verify-normalized` rebuild normalized records from preserved source bytes. `backup --verify-normalized` audits the private staged copy before publication. Synthetic altered-row tests verify fail-closed publication.
-- S01–S03 — Deterministic causal structure, liquidity proxies and sweeps, FVG/IFVG evidence, mirrored setup state, higher-timeframe context, score and integer paper risk.
-- B01 and B03–B06 — Shared conservative paper replay and explicit costs. The ordered-print variant resolves dual touches from stored prints and has a separate run identity. Intrabar sensitivity pairs saved runs. Quote reports assess observed spread and optionally reprice the paired subset at fixed fills.
-- Q01–Q06 — Chronological validation, Monte Carlo, LucidFlex paper rules, development-fitted matched control, grouped execution diagnostics and pre-holdout one-factor sensitivity. Staged selection excludes all final outcomes and final evaluation starts paper execution flat after embargo. The browser exercised both reports. No historical strategy performance has been measured.
-- L01 and L03–L13 — Durable normalized WebSocket monitoring, gap backfill, restart, health and optional Telegram/Discord delivery. Transient SQLite retries preserve transport receipt and record later processing while suppressing affected alert and forward eligibility. Economic snapshots can be imported from reviewed local iCalendar captures, can represent causal revisions and can be supplied through direct monitoring or provider profiles. Source-close and observation-time event risk remain separate. Standalone reviewed schedules can configure a worker before any dataset import. Ordered local iCalendar comparisons preserve capture digests, first observations and explicit cancellations. Composed partial snapshots retain isolated source IDs and per-source provenance. Indexed event assessment matched its prior output digest. Official BEA capture archived 43,459 bytes and normalized two selected releases using the saved clock. BLS returned HTTP 403. Normalized store and backup checks validate archived receipts and bytes. The offline API preview does not change the store.
-- U01–U02 and F01 — Loopback API and dashboard, chart evidence with original availability, local report creation, provider settings, rollover and continuous preview. A forward consumer registers at an applied cursor, audits observed paper execution and can save completed daily, weekly and monthly periods. Browser checks exercised synthetic matched controls, reconciliation, provider settings, rollover and adjusted versus dated prices.
-- O01 — The repeatable 21,600-minute synthetic workload measured 4.44 s batched monitor ingestion, approximately 0.81 s restart and 6, 10 and 12 ms for the three chart projections. All projection SHA-256 digests matched the recorded baseline. See `docs/PERFORMANCE.md`.
+- Data — D01–D03 and D05–D12 implement exact dated MGC candles, reviewed exchange schedules, aggregation, CSV/Parquet/HTTPS, normalized prints and quotes, reconciliation, contract rolls and separate continuous research prices. Preserved bytes and normalized rows are auditable offline.
+- Detection — S01–S03 share causal replay and monitoring for confirmed pivots, BOS/MSS, liquidity proxies/sweeps, FVG/IFVG, context, versioned scoring and integer paper sizing.
+- Research — B01/B03–B06 and Q01–Q06 implement conservative paper execution, ordered-print ambiguity resolution, quote cost comparisons, chronological selection, flat final holdout, matched controls, bootstrap, Monte Carlo and LucidFlex scenarios. No empirical MGC strategy performance has been measured.
+- Monitoring — L01/L03–L16 implement durable streaming, gap recovery, storage retries, archived public iCalendar capture/comparison/composition, reviewed runtime economic activations and native Databento SDK minute feeds. Replay bars remain historical until explicit completion. Native mapping and OHLCV DBN bytes are retained.
+- Product — U01/U02/F01 provide loopback API, Next.js dashboard, traceable chart overlays, report/configuration workspaces and independent forward paper tracking. Native profiles store environment names only. Browser verified saving a synthetic profile with zero monitors started and the correct primary strategy default.
+- Delivery — N04/N05 and L03 implement Telegram/Discord/email transport and durable report notifications. All channel tests use fake transports. No actual message has been sent.
+- Operations — O02/O03 package unprivileged services and explicit workers, with pinned dependencies and hosted Python/frontend/container gates. CI verified synthetic data survives replacement, normalized worker audit, standalone assets and API authorization. Local macOS Colima is stopped after its VM download failed.
 
 ## Work In Progress
 
-- Schema v15. Temporary preview services and the failed Colima runtime are stopped.
-- L13 picker browser verification prepared and copied the expected synthetic capture without creating a provider profile. L15 adds reviewed CLI/API activations, observation/source-time gating and restart reconstruction through immutable activation history.
-- Docker CLI and standalone `docker-compose` are installed locally, but no daemon is running. The user-provided GitHub destination was empty. The checkpoint was published without overwriting remote work. Hosted run 43001928370 on `03c3da4` passed Python, frontend and containers. Container verification included two synthetic minute imports, persisted data after replacement, normalized worker audit, standalone assets and direct API 401. Local macOS container verification remains unavailable.
-- D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
-- N04 adds authenticated STARTTLS/implicit TLS email with durable retry and uncertain acknowledgement handling. Profiles persist environment names only. Eleven fake SMTP cases passed. External email was not sent.
-- N05 queues saved daily/weekly/monthly report summaries atomically with publication. Manual `notify-report` deduplicates saved report IDs. Existing channel preferences and audit apply. Source classification, actual sample, net costs, coverage and uncertainty remain visible. No external message was sent.
-- L16 implements native SDK minute monitoring with DBN evidence, dated mapping, bounded callbacks, integrity gates and historical intraday recovery. Settings saves native profiles with key variable names only; explicit workers bind the shared next-minute resume. Sixteen synthetic native cases and 276 total tests passed. Hosted native core passed. Browser saved one synthetic profile, and SQL confirmed zero monitors/minutes. A rebuilt reload verified the corrected primary strategy default. No authorized vendor connection opened.
-- Completion is 92.2 percent, 47 of 51 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
-- User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
-- D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
+- L17 uses schema v16 tables economic_pollers and economic_poll_attempts. An explicit foreground worker claims before HTTP, preserves successful receipts separately, backs off after failure and marks expired leases uncertain. Read-only CLI/API and Settings show health. Reviewed monitor adoption remains separate.
+- Nine synthetic polling cases passed, including concurrency, interruption after receipt, migration, failures and fail-closed verified backups. Full suite passed 285 tests. Frontend typecheck/build and browser health display passed.
+- Actual public BEA receipt 54bfea8b12144d5b197f1e1d82c2573a245bd239f63a606c70f66536fb692b5a was captured at 2026-11-11 18:36:20.778515 UTC. BLS returned HTTP 403. Ignored local data/public-economics.sqlite holds one capture, two pollers and two attempts. Source and normalized store audits passed.
+- No foreground preview or polling process remains running.
+- Roadmap currently lists 47/52 DONE (90.4 percent), with L17 IN_PROGRESS until the hosted checkpoint and three BLOCKED tasks. Once L17 is complete, use 48/52 (92.3 percent).
+- O01 optimization remains open. Existing 21,600-minute synthetic benchmarks retained identical chart digests, approximately 4.4 s batched ingestion and 0.8 s restart. Optional ML awaits historical evidence.
 
 ## Important Decisions
 
-- Source bytes and normalized evidence have immutable identities. Preserve dated contract identity and separate adjusted research prices from executable references.
-- Read bounded pages from immutable data and stage replay computation outside long SQLite locks. Keep received, processing and source confirmation clocks distinct.
-- Keep the final holdout out of configuration selection and sensitivity reports. Matched-control replications are conditional on shared structural opportunities.
-- Use conservative paper fills by default. Opt-in ordered prints establish crossing order. Quote cost projections retain the original fill prices and use only the paired subset.
-- Use environment variable references for authorized credentials. Live brokerage execution, funded accounts and real position management remain out of scope.
+- UTC source availability, callback receipt and processing clocks stay distinct. Never backdate confirmations or use stale prices for new alerts.
+- Exact source bytes and dated contract identity stay separate from adjusted research prices.
+- Keep final holdout outcomes outside configuration selection. Keep synthetic, assumed, historical and forward results distinct.
+- Runtime profiles persist variable names, not secret values. No live execution or brokerage connections.
+- ADR-035 defines durable public capture and reviewed adoption. See DECISIONS.md and ARCHITECTURE.md.
 
 ## Known Issues
 
-- DATA-001 and CAL-002 — Authorized historical MGC and a matching reviewed production schedule are absent. Real outcomes and operating coverage remain unverified.
-- DATA-002 and DATA-003 — Sparse expected minutes block replay, and normalization buffers source data. Use bounded exports for large sources.
-- EVENT-001 — Scheduled economic polling remains open. Reviewed updates can be adopted through CLI/API. The official BLS iCalendar request returned HTTP 403 from this runtime. Local reviewed captures are supported.
-- MONITOR-001 and STORE-001 — Legacy journals can lack observed timestamps. Long SQLite transactions still serialize. Conflicting duplicates require a corrected monitor run after investigation.
-- ACCOUNT-001 — Public LucidFlex documentation leaves unrealized breach treatment and optional DLL amount open. Keep those simulation assumptions explicit.
+- D04/B02/L02 — Authorized bounded MGC history, its matching reviewed schedule, production feed and approved channel configuration are absent.
+- DATA-002/003 — Sparse omitted minutes block replay; large imports are buffered. Do not fabricate bars.
+- EVENT-001 — BLS public iCalendar returns 403 here. FOMC ingestion remains open. Public receipts are partial and require review; successful polling does not establish clear risk.
+- MONITOR-001/STORE-001 — Legacy rows can lack observation clocks; SQLite bulk writers serialize.
+- ACCOUNT-001 — Provider unrealized-breach/DLL ambiguities remain explicit simulation assumptions.
+- Local containers lack a running macOS daemon. Hosted Linux verification passed.
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (276), native/API focused tests (24), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (95 files), pip check, actionlint and Git whitespace checks. Four hosted CI runs passed all jobs through `6a0bcf0`.
-- Frontend — Five tests, TypeScript and production build passed. Browser verified native profile saving and the corrected primary strategy default after a rebuilt reload. Earlier archive receipt selection was also verified.
-- Failed — No outstanding automated failures.
-- Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
-- Limitations — The performance workload, socket and delivery exercises, quotes and strategy outcomes are synthetic. Delivery tests use fake transports.
+- Last full command — .venv/bin/python -m pytest -q — 285 passed.
+- Static — Ruff check/format, strict mypy (97 files), Git whitespace and frontend typecheck/build passed. Five frontend tests passed at the prior verified checkpoint.
+- Integration — Real public BEA/BLS one-shot attempts and browser capture health verified. Source/normalized audit passed on the ignored public-data store.
+- Hosted — All jobs passed for 1d6d92c. New polling slice awaits hosted execution.
+- Failed — No outstanding automated failure.
+- Not run — Authorized MGC reconciliation, actual feed/channel trials and empirical out-of-sample evaluation. Do not interpret fixture outcomes as evidence.
 
 ## Environment
 
-- Python 3.12.7, macOS arm64, SQLite 3.45.3. SQLite 3.37+ required.
-- Install `.venv/bin/python -m pip install -e '.[dev,parquet,stream,api,calendar]'`. Frontend commands run through `npm --prefix frontend`.
-- No external services are needed for tests. Keep licensed inputs, SQLite files and credentials out of Git.
+- Python 3.12.7, macOS arm64, SQLite 3.45.3; SQLite 3.37+ required.
+- Local .venv includes pinned runtime extras and Databento SDK 0.90.0. Native SDK tests use constructed records and fake clients.
+- npm --prefix frontend runs frontend commands. No external service is needed for automated tests.
+- Market keys, destinations, licensed data and SQLite files stay outside Git.
 
 ## Immediate Next Actions
 
-1. Inspect `gh run view 43004980567 --repo davesm-jpg/AURUM` for published commit `1d6d92c`. Fix any actual failures before further features. Do not dispatch duplicate workflows. Temporary API/dashboard services were stopped. The final handoff-only commit is local; publish it after inspecting this run.
-2. Obtain authorized bounded MGC history and a matching reviewed schedule. Preserve D04/B02/L02 as blocked until actual verification. Keep keys local, and do not query paid endpoints without confirmed authorization.
-3. When approved inputs arrive, run historical reconciliation and integrity checks before any empirical backtest or production monitor trial. Recommended provider is Databento CME Standard; keys must stay in local environment variables.
-
-Session stopped at the user's requested five-hour usage boundary, with 5 percent remaining. No worker or preview service was left running. GitHub CI is an actual hosted workflow, not ongoing agent work.
+1. Review the L17 diff and run remaining focused checks. Commit and push, inspect the exact hosted run, then mark L17 DONE and update this handoff.
+2. Continue an offline-testable integrity slice, such as reconstructing persisted monitor minutes from preserved normalized/native frames. Inspect existing monitor storage and recovery before choosing scope.
+3. For D04/B02/L02, wait for authorized data/configuration. Recommended provider was Databento; no purchase or access has been confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat
 
-- Reuse verified ingestion, structure, replay, cost, report and monitoring paths. Keep test outcomes and historical evidence distinct.
-- Preserve earlier monitor, profile, dataset and report identities where defaults are unchanged.
-- Keep live order execution and brokerage credentials outside the repository.
+- Reuse existing detection, execution, audit, profile and delivery paths.
+- Preserve existing dataset, report, monitor and legacy profile identities.
+- Do not restart Colima or duplicate hosted runs without a new reason.
+- Do not leave a foreground worker running or promise ongoing agent work.
 
 ## Continuation Instruction
 

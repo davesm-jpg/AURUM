@@ -281,3 +281,19 @@ the production build. The browser saved one explicitly labeled synthetic native
 profile in an isolated temporary store; SQL confirmed zero monitors and minutes.
 Reloading the rebuilt dashboard confirmed the primary sweep/MSS/IFVG default
 survives asynchronous option loading. No subscription was started.
+
+## Durable public calendar polling
+
+The complete Python suite passed 285 tests. Nine polling cases cover migration,
+retained cadence, concurrent claims, HTTP 403, invalid bodies, bounded backoff,
+receipt-before-acknowledgement interruption, redacted failures, API/CLI parity,
+state reconstruction and rejection of corrupted backups. Ruff, mypy (97 files),
+TypeScript and the frontend production build passed. Browser verification showed
+BEA captured and BLS failed/HTTP 403 beside the preserved BEA receipt.
+
+Actual public BEA receipt `54bfea8b12144d5b197f1e1d82c2573a245bd239f63a606c70f66536fb692b5a`
+was observed at 2026-11-11 18:36:20.778515 UTC in ignored local
+`data/public-economics.sqlite`. BLS returned HTTP 403 at its one explicit attempt.
+The store passed source checksums and normalized audit with one capture, two
+pollers and two attempts. No market data, monitor adoption or external message
+was involved. Native preview processes were stopped after browser verification.

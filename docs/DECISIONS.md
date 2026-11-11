@@ -320,3 +320,13 @@
 - Consequences — No credentials enter persisted configuration. No paid history query or live connection is required for synthetic SDK tests. Longer gaps and missing no-trade intervals remain blocked. Native subscription behavior still needs authorized verification under L02.
 - Sources — [Client](https://databento.com/docs/api-live/client?lang=python), [symbology](https://databento.com/docs/conventions/symbology), [OHLCV](https://databento.com/docs/schemas/ohlcv).
 - Files — `databento_live.py`, shared streaming, CLI, dependency pins and native tests.
+
+## ADR-035 — Poll public calendars through durable receipt claims
+
+- Date — 2026-11-11.
+- Context — Official economic publications need periodic capture and explicit outage status without rewriting reviewed monitor context.
+- Alternatives — An external cron with no shared state, automatic monitor replacement or a durable foreground capture worker.
+- Decision — Store versioned cadence, exclusive attempt leases, actual receipt references and bounded exponential backoff. Fetch outside write transactions. Treat an expired claim as uncertain and retain any separately archived receipt. Adoption stays explicit and reviewed.
+- Consequences — Concurrent workers avoid repeated requests, restart preserves due time, and read-only health remains available. Source failure does not mean no event exists. Normalized backup audit reconstructs attempt cadence. Scheduled service hosting is an operator action.
+- Sources — [BEA release schedule](https://www.bea.gov/news/schedule), [BLS calendar](https://www.bls.gov/help/hlpiCAL.htm).
+- Files — `economic_polling.py`, schema v16, CLI/API, source health UI and polling tests.

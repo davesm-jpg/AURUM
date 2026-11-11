@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type RecordData } from "./client";
+import { EconomicPollingStatus } from "./economic-polling-status";
 import { rows, utcDateTime } from "./format";
 
 type Capture = {
@@ -78,6 +79,7 @@ export function EconomicCapturePicker({
       }}
     >
       <summary>Prepare a snapshot from archived captures</summary>
+      <EconomicPollingStatus active={open} />
       {error && <p className="notice" role="alert">{error}</p>}
       {!captures ? (
         !error && <p className="muted">Loading local capture receipts…</p>

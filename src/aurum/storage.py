@@ -30,7 +30,7 @@ from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 from aurum.timestamps import TradeTimestamp, trade_timestamp
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 
 def is_transient_lock(error: sqlite3.OperationalError) -> bool:
@@ -302,6 +302,30 @@ SCHEMA_V15 = """CREATE TABLE monitor_economic_updates (
         PRIMARY KEY (monitor_id, sequence),
         UNIQUE (monitor_id, activated_at)
     ) STRICT, WITHOUT ROWID"""
+SCHEMA_V16 = (
+    """CREATE TABLE economic_pollers (
+        id TEXT PRIMARY KEY NOT NULL,
+        definition TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        next_due_at TEXT NOT NULL,
+        last_success_at TEXT,
+        last_capture_id TEXT REFERENCES economic_captures(id),
+        consecutive_failures INTEGER NOT NULL CHECK (consecutive_failures >= 0)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE TABLE economic_poll_attempts (
+        poller_id TEXT NOT NULL REFERENCES economic_pollers(id),
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        claimed_at TEXT NOT NULL,
+        lease_until TEXT NOT NULL,
+        completed_at TEXT,
+        outcome TEXT NOT NULL CHECK (outcome IN ('fetching', 'captured', 'failed', 'uncertain')),
+        capture_id TEXT REFERENCES economic_captures(id),
+        error_code TEXT,
+        PRIMARY KEY (poller_id, sequence)
+    ) STRICT, WITHOUT ROWID""",
+    """CREATE UNIQUE INDEX economic_poll_active ON economic_poll_attempts(poller_id)
+        WHERE outcome = 'fetching'""",
+)
 
 
 class DatasetDescription(TypedDict):
@@ -944,4 +968,7 @@ class DatasetStore:
             db.execute(SCHEMA_V14)
         if write and version < 15:
             db.execute(SCHEMA_V15)
-            db.execute("PRAGMA user_version = 15")
+        if write and version < 16:
+            for statement in SCHEMA_V16:
+                db.execute(statement)
+            db.execute("PRAGMA user_version = 16")

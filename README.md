@@ -151,6 +151,17 @@ also check archived receipt metadata, raw checksums and iCalendar structure.
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm) ·
 [BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar)
 
+`poll-economic-calendar bea` captures only when its durable cadence is due.
+Add `--watch` for an explicitly running foreground worker. The default interval
+is one hour; `--interval-seconds`, `--retry-seconds` and `--max-retry-seconds`
+configure bounded cadence and exponential failure recovery. Restart retains the
+next due time. Concurrent copies share a claim, and an interrupted claim becomes
+uncertain after its lease. `--watch --max-attempts 1` stops after one due fetch.
+Use `economic-pollers` and `economic-poll-attempts POLLER_ID` for stored health
+and audit. Settings displays these states beside archived captures. Polling
+preserves receipts for review; it does not adopt changes into a monitor or
+establish complete event coverage. Verified backups audit the attempt journal.
+
 Use `compose-economic-calendars A.json B.json --source "Reviewed US releases"`
 to combine separately reviewed publications. Provide 2–16 original
 snapshots with matching explicit source classes and distinct source names.

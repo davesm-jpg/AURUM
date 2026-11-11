@@ -20,6 +20,7 @@ token boundary on 2026-11-11. See `OPERATIONS.md` for remaining host limits.
 | `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
 | `databento_csv.py` | Strict pretty-formatted native minute exports normalized through the shared validation and integrity path |
 | `databento_live.py` | Explicit native SDK minute subscriptions with dated symbol proof, exact DBN evidence, bounded callback queue and intraday replay classification |
+| `economic_polling.py` | Durable public calendar cadence, exclusive fetch claims, failure/lease recovery, health and offline journal reconstruction |
 | `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
 | `quotes.py`, `spread_reports.py`, `quote_costs.py` | Immutable authorized-format historical top-of-book series and offline normalized quote verification, precise freshness- and exchange-window-aware quote lookup, spread diagnostics from paper audit references and an opt-in fixed-fill paired quote cost projection |
 | `storage_admin.py` | Local validated SQLite snapshots, preserved-source checksums and opt-in pre-publication normalization audits |
@@ -81,7 +82,7 @@ comparison rejects an unmatched adopted economic history.
 
 ## Current database
 
-SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and earlier input schemas remain readable. The first write applies pending migrations through v11 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
+SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite user version identify the database. Read commands open in read-only mode, and earlier input schemas remain readable. The first write applies pending migrations through v16 transactionally. Writes use an immediate transaction, foreign keys and rollback on error.
 
 - `source_blobs` keys raw CSV bytes by SHA-256 and deduplicates repeated source content.
 - `datasets` keys records by dataset ID and references the source blob. It stores versioned provenance with the normalized schedule, actual range, import time, count, quality issues and replay eligibility. The calendar format has its own independent version in provenance JSON.
@@ -92,6 +93,7 @@ SQLite 3.37+ is required for STRICT tables. The AURUM application ID and SQLite 
 - `forward_paper_research` reports freeze a forward cursor and event sequence. They attribute events to source-minute exchange trade dates and separate descriptive comparisons, missing coverage and unresolved outcomes. Independent historical baselines must predate registration and match strategy and cost assumptions. Schema v8 records idempotent completed-period publications. Earlier reports are anchored to their own source-minute period end.
 - `forward_runs` and `forward_events` persist the registration boundary, execution settings, cursor and paper audit. Schema v7 stores whether a monitor minute was directly and promptly applied. Forward runs leave interrupted positions unresolved.
 - `runtime_profiles` stores immutable provider and delivery settings with variable names only. Schema v9 preserves existing monitor and forward identities.
+- Schema v16 adds `economic_pollers` and `economic_poll_attempts`. A transaction claims the next due fetch, then releases the database before HTTP. Receipt archival and attempt completion remain separate so interruption preserves source evidence and an expired claim becomes uncertain. Restart retains due time and exponential backoff. Read-only health and Settings distinguish failed, interrupted and overdue capture. A fresh public receipt still requires review and cannot establish complete economic coverage. Whole-store normalized verification reconstructs cadence and terminal state from the attempt journal.
 - `notification_deliveries`, `notification_attempts` and `notification_cancellations` track claims, provider results, retries, expiry and queued cancellation. Destination keys are hashes. Tokens and webhook URLs remain in environment-managed configuration.
 
 The import parser holds a CSV and its normalized rows in memory. SQLite is a local, single-machine deployment. Schedule, provider and contract assertions are caller supplied. This checkpoint does not independently authenticate them. [CME trading hours and holiday schedules](https://www.cmegroup.com/trading-hours.html)

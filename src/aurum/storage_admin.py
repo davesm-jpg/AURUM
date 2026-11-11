@@ -8,6 +8,7 @@ from time import monotonic
 
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_archive import verify_economic_capture
+from aurum.economic_polling import verify_economic_poller
 from aurum.quotes import verify_quote_series
 from aurum.storage import DatasetStore
 
@@ -58,6 +59,11 @@ def verify_store(
             if schema >= 14
             else ()
         )
+        pollers = (
+            tuple(row[0] for row in db.execute("SELECT id FROM economic_pollers ORDER BY id"))
+            if schema >= 16
+            else ()
+        )
 
     blocked = 0
     for dataset_id in datasets:
@@ -76,11 +82,25 @@ def verify_store(
             verify_economic_capture(store, capture_id)
         except ValueError as exc:
             raise ValueError(f"economic capture {capture_id} failed archive audit: {exc}") from exc
+    poll_attempts = 0
+    for poller_id in pollers:
+        try:
+            poll_attempts += verify_economic_poller(store, poller_id)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"economic poller {poller_id} failed journal audit: {exc}") from exc
     summary["normalized"] = {
         "datasets_verified": len(datasets),
         "quote_series_verified": len(quote_series),
         "datasets_blocked_for_replay": blocked,
         **({"economic_captures_verified": len(economic_captures)} if economic_captures else {}),
+        **(
+            {
+                "economic_pollers_verified": len(pollers),
+                "economic_poll_attempts_verified": poll_attempts,
+            }
+            if pollers
+            else {}
+        ),
     }
     return summary
 

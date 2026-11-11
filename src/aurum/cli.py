@@ -31,6 +31,14 @@ from aurum.economic_archive import (
 from aurum.economic_composition import compose_economic_calendars
 from aurum.economic_events import MAX_ECONOMIC_PUBLICATIONS, EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
+from aurum.economic_polling import (
+    EconomicPollConfig,
+    describe_economic_poller,
+    economic_poll_attempts,
+    economic_pollers,
+    poll_economic_calendar,
+    register_economic_poller,
+)
 from aurum.economic_updates import adopt_economic_snapshot, economic_updates
 from aurum.email_transport import SmtpAlertChannel, SmtpSettings
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
@@ -216,6 +224,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "capture-economic-ics", help="archive an official economic iCalendar publication"
     )
     fetch_calendar.add_argument("publisher", type=EconomicPublisher, choices=EconomicPublisher)
+    calendar_poll = commands.add_parser(
+        "poll-economic-calendar", help="capture due public calendar receipts for later review"
+    )
+    calendar_poll.add_argument("publisher", type=EconomicPublisher, choices=EconomicPublisher)
+    calendar_poll.add_argument("--interval-seconds", type=int, default=3600)
+    calendar_poll.add_argument("--retry-seconds", type=int, default=300)
+    calendar_poll.add_argument("--max-retry-seconds", type=int, default=21600)
+    calendar_poll.add_argument("--watch", action="store_true")
+    calendar_poll.add_argument("--max-attempts", type=int)
+    pollers = commands.add_parser("economic-pollers", help="read public calendar polling health")
+    pollers.add_argument("--limit", type=int, default=100)
+    poll_audit = commands.add_parser("economic-poll-attempts", help="read durable polling attempts")
+    poll_audit.add_argument("poller_id")
+    poll_audit.add_argument("--after", type=int, default=0)
+    poll_audit.add_argument("--limit", type=int, default=100)
     receipt = commands.add_parser("economic-captures", help="read archived capture receipts")
     receipt.add_argument("capture_id", nargs="?")
     receipt.add_argument("--limit", type=int, default=100)
@@ -581,6 +604,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "capture-economic-ics":
             print(canonical_json(capture_official_ics(store, args.publisher).as_dict()))
+        elif args.command == "poll-economic-calendar":
+            print(canonical_json(_poll_calendar(store, args)))
+        elif args.command == "economic-pollers":
+            print(canonical_json(economic_pollers(store, args.limit)))
+        elif args.command == "economic-poll-attempts":
+            print(
+                canonical_json(
+                    economic_poll_attempts(
+                        store, args.poller_id, after=args.after, limit=args.limit
+                    )
+                )
+            )
         elif args.command == "economic-captures":
             capture_details = (
                 economic_receipt(store, args.capture_id).as_dict()
@@ -1092,6 +1127,40 @@ def _execution_config(args: Namespace) -> ExecutionConfig:
         carry_across_closures=args.carry_across_closures,
         initial_equity_cents=args.initial_equity_cents,
     )
+
+
+def _poll_calendar(store: DatasetStore, args: Namespace) -> dict[str, object]:
+    if args.max_attempts is not None and args.max_attempts < 1:
+        raise ValueError("economic poll maximum attempts must be positive")
+    if args.max_attempts is not None and not args.watch:
+        raise ValueError("economic poll attempt limit requires --watch")
+    config = EconomicPollConfig(
+        args.publisher, args.interval_seconds, args.retry_seconds, args.max_retry_seconds
+    )
+    reference = register_economic_poller(store, config)
+    print(f"aurum: public economic poller {reference}", file=sys.stderr)
+    previous = signal.signal(signal.SIGTERM, _stop_monitor)
+    attempts = 0
+    try:
+        while True:
+            status = poll_economic_calendar(store, reference)
+            if status["attempted"]:
+                attempts += 1
+                print(
+                    f"aurum: {config.publisher.value.upper()} calendar capture {status['state']}",
+                    file=sys.stderr,
+                )
+            if not args.watch or args.max_attempts is not None and attempts >= args.max_attempts:
+                return status
+            next_due = datetime.fromisoformat(str(status["next_due_at"]))
+            latest = status["latest_attempt"]
+            if isinstance(latest, dict) and latest["outcome"] == "fetching":
+                next_due = datetime.fromisoformat(latest["lease_until"])
+            sleep(max(0.25, min(30, (next_due - datetime.now(UTC)).total_seconds())))
+    except KeyboardInterrupt:
+        return describe_economic_poller(store, reference)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def _sync_forward(store: DatasetStore, args: Namespace) -> dict[str, object]:

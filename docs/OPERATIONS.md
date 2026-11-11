@@ -60,6 +60,14 @@ and run the integrity checks before restarting workers.
 
 ## Verification limits
 
+Run `docker compose run --rm worker poll-economic-calendar bea --watch` to host
+public receipt polling explicitly. The foreground process records cadence and
+leases in the shared volume. `economic-pollers`, `economic-poll-attempts` and
+Settings expose stored health. A stopped worker does not schedule future work;
+an overdue or interrupted state remains visible. Review each publication before
+adopting monitor updates. The application does not automatically install a
+system scheduler or start an external notification channel.
+
 The packaged worker includes the pinned native Databento SDK. Set
 `DATABENTO_API_KEY` in the local environment to use `monitor-databento` after
 authorization. Launch it explicitly with the reviewed schedule under `/imports`

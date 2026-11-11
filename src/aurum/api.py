@@ -41,6 +41,11 @@ from aurum.candles import CandleAggregator, Timeframe, completed_bar_start
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
 from aurum.continuous import replay_series
 from aurum.economic_archive import economic_receipt, economic_receipts
+from aurum.economic_polling import (
+    describe_economic_poller,
+    economic_poll_attempts,
+    economic_pollers,
+)
 from aurum.economic_updates import economic_updates
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
@@ -205,6 +210,20 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @router.get("/economic-captures")
     def archived_economic_receipts(limit: PageLimit = 100) -> list[dict[str, object]]:
         return [receipt.as_dict() for receipt in economic_receipts(store, limit)]
+
+    @router.get("/economic-pollers")
+    def calendar_pollers(limit: PageLimit = 100) -> list[dict[str, object]]:
+        return economic_pollers(store, limit)
+
+    @router.get("/economic-pollers/{poller_id}")
+    def calendar_poller(poller_id: RecordId) -> dict[str, object]:
+        return describe_economic_poller(store, poller_id)
+
+    @router.get("/economic-pollers/{poller_id}/attempts")
+    def calendar_poll_attempts(
+        poller_id: RecordId, after: Annotated[int, Query(ge=0)] = 0, limit: PageLimit = 100
+    ) -> list[dict[str, object]]:
+        return economic_poll_attempts(store, poller_id, after=after, limit=limit)
 
     @router.get("/monitors/{monitor_id}/economic-updates")
     def monitor_economic_updates(monitor_id: RecordId) -> list[dict[str, object]]:

@@ -111,6 +111,8 @@ def test_archive_preserves_receipts_and_bytes_across_schema_migration(
 ) -> None:
     store = DatasetStore(tmp_path / "synthetic-economic.sqlite")
     with store.connection(write=True) as db:
+        db.execute("DROP TABLE economic_poll_attempts")
+        db.execute("DROP TABLE economic_pollers")
         db.execute("DROP TABLE economic_captures")
         db.execute("DROP TABLE monitor_economic_updates")
         db.execute("PRAGMA user_version = 13")
