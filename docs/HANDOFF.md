@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — L14 browser review and L15 immutable reviewed economic activation are verified. Next is O02 local deployment packaging.
+- Current milestone — Reviewed economic activations and native Databento minute CSV import are verified. Local deployment packaging passed native smoke and configuration. Next is N04 email delivery and O03 automated quality gates.
 - Current branch — `main`.
-- Last verified code commit — `802e098`.
+- Last verified code commit — `847ab4ceaef91e383d5cc31c3da6f03d2f54efa5`.
 
 ## Current Objective
 
-- Task ID — O02.
-- Objective — Package local API, dashboard and explicitly launched workers reproducibly.
-- Acceptance criteria — Preserve data, localhost access and token protection. Validate builds and configuration where available, and document container-runtime limitations.
+- Task ID — N04, then O03.
+- Objective — Complete email notification transport and add reproducible repository verification.
+- Acceptance criteria — Reuse durable delivery rules and audit. Require authenticated TLS, resolve credentials only in the worker, and test with synthetic transports. CI runs the documented Python and frontend gates.
 
 ## Completed Work
 
@@ -29,6 +29,9 @@
 - Schema v15. Recent changes are committed. Temporary preview services are stopped.
 - L13 picker browser verification prepared and copied the expected synthetic capture without creating a provider profile. L15 adds reviewed CLI/API activations, observation/source-time gating and restart reconstruction through immutable activation history.
 - Docker CLI is installed, but its daemon and Compose/buildx plugins are unavailable. Inspect installed runtime options before treating containers as verified.
+- Standalone `docker-compose` exists and validated the service configuration. Pinned image manifests and runtime lock are committed. Native standalone dashboard served assets and proxied the authenticated API. Starting Colima failed on a GitHub VM image download, and it was stopped. Container execution remains O02.
+- D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
+- User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
 ## Important Decisions
@@ -49,7 +52,7 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (233), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (87 files) and Git whitespace checks. Prior checkpoint pip check passed.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (246), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (89 files) and Git whitespace checks. Deployment checkpoint pip check passed.
 - Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
@@ -63,8 +66,8 @@
 
 ## Immediate Next Actions
 
-1. Inspect existing API loopback protections and package a local deployment that preserves them.
-2. Validate image references, Compose configuration and native production launch. Container execution needs an available daemon.
+1. Inspect notification channel validation, durable dispatcher, runtime profiles and Settings. Add email using the same delivery lifecycle.
+2. Add CI for documented offline Python/frontend checks. Container execution still needs an available runtime.
 3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
 
 ## Do Not Repeat
