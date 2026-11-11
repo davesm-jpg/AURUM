@@ -74,6 +74,8 @@ jobs:
           curl --fail --silent http://127.0.0.1:3000/api/health
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8765/api/health)" = 401
           docker compose run --rm worker verify-store --verify-sources --verify-normalized
+      - name: Verify synthetic data persistence and standalone assets
+        run: python3 scripts/synthetic_container_smoke.py
       - name: Stop isolated CI services
         if: always()
         run: docker compose down --volumes --remove-orphans
