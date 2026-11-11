@@ -235,3 +235,12 @@ rejection, uncertain acknowledgement, accepted messages followed by disconnect,
 profile credential isolation and recipient injection rejection. The full Python
 suite passed 257 tests. TypeScript and the production frontend build passed.
 Tests used fake SMTP transports and did not send external email.
+
+## Repository verification workflow
+
+The GitHub Actions workflow defines independent Python and frontend checks plus
+an isolated container smoke job. It uses verified immutable action revisions,
+read-only repository permission, explicit interpreter versions and the runtime
+dependency lock. `actionlint .github/workflows/verify.yml` passed locally.
+Python, frontend and native smoke commands passed in this workspace. Hosted
+workflow execution is pending. No remote push or workflow dispatch occurred.

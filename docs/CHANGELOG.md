@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-11 — Repository quality workflow
+
+- Added isolated Python, frontend and container verification jobs with pinned action revisions and read-only repository access.
+
 ## 2026-11-11 — Email research delivery
 
 - Added authenticated TLS email transport through the existing durable delivery system, CLI, profiles and Settings.

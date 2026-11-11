@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — Reviewed economic activations and native Databento minute CSV import are verified. Local deployment packaging passed native smoke and configuration. Next is N04 email delivery and O03 automated quality gates.
+- Current milestone — Email delivery is verified on synthetic SMTP transports. Local deployment packaging passed native smoke and configuration. The CI workflow passed local actionlint. Container and hosted execution remain open.
 - Current branch — `main`.
-- Last verified code commit — `847ab4ceaef91e383d5cc31c3da6f03d2f54efa5`.
+- Last verified code commit — `3b99888`.
 
 ## Current Objective
 
-- Task ID — N04, then O03.
-- Objective — Complete email notification transport and add reproducible repository verification.
-- Acceptance criteria — Reuse durable delivery rules and audit. Require authenticated TLS, resolve credentials only in the worker, and test with synthetic transports. CI runs the documented Python and frontend gates.
+- Task ID — O03 and O02.
+- Objective — Validate the workflow and attempt the isolated container smoke test when a runtime is available.
+- Acceptance criteria — CI passes local linting and runs the documented gates. Confirm API authorization, standalone assets, persistent data and worker integrity inside the packaged services. Disclose unavailable execution environments.
 
 ## Completed Work
 
@@ -31,6 +31,8 @@
 - Docker CLI is installed, but its daemon and Compose/buildx plugins are unavailable. Inspect installed runtime options before treating containers as verified.
 - Standalone `docker-compose` exists and validated the service configuration. Pinned image manifests and runtime lock are committed. Native standalone dashboard served assets and proxied the authenticated API. Starting Colima failed on a GitHub VM image download, and it was stopped. Container execution remains O02.
 - D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
+- N04 adds authenticated STARTTLS/implicit TLS email with durable retry and uncertain acknowledgement handling. Profiles persist environment names only. Eleven fake SMTP cases passed. External email was not sent.
+- Completion is 87.8 percent, 43 of 49 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O02/O03 execution evidence is still incomplete, and optional ML awaits historical evidence.
 - User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
@@ -52,7 +54,7 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (246), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (89 files) and Git whitespace checks. Deployment checkpoint pip check passed.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (257), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy` (91 files), actionlint and Git whitespace checks. Deployment checkpoint pip check passed.
 - Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
@@ -66,8 +68,8 @@
 
 ## Immediate Next Actions
 
-1. Inspect notification channel validation, durable dispatcher, runtime profiles and Settings. Add email using the same delivery lifecycle.
-2. Add CI for documented offline Python/frontend checks. Container execution still needs an available runtime.
+1. Inspect the current Colima start attempt. Stop it when container validation is finished or its image download fails. All unrelated existing Colima profiles were stopped before this session.
+2. Commit the locally validated CI workflow and record whether container execution succeeded. Hosted workflow execution requires the repository's normal remote workflow.
 3. When approved inputs arrive, run the historical reconciliation and integrity checks before any empirical backtest or production monitor trial.
 
 ## Do Not Repeat
