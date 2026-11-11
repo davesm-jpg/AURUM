@@ -292,3 +292,12 @@
 - Decision — Separate API and dashboard containers share the API network namespace. Host port mappings bind to localhost. The API accepts an explicit container bind only with an access token. Base manifests and runtime dependencies are pinned.
 - Consequences — Services share a network lifecycle, and Compose restarts the dashboard with its API dependency. Workers launch explicitly and share persistent data. Native launch and configuration passed. Container runtime verification is pending.
 - Files — Dockerfiles, `compose.yaml`, `requirements-runtime.lock`, `frontend/next.config.mjs`, `docs/OPERATIONS.md`.
+
+## ADR-032 — Preserve native vendor exports through shared validation
+
+- Date — 2026-11-11.
+- Context — Databento offers MGC history and live data, and its native exports contain vendor-specific identity and timestamp conventions.
+- Alternatives — Rewrite source files externally or normalize the preserved source through an explicit adapter.
+- Decision — Add a versioned Databento minute CSV format, requiring explicit pretty export options, one dated MGC symbol and one publisher/instrument pair. Reuse exact tick, calendar, duplicate, gap and provenance logic.
+- Consequences — Normalized rows can be reproduced from their original bytes. Epoch timestamps and fixed-point price encodings require an explicitly supported format. A missing vendor bar cannot establish a no-trade interval by itself, so affected research stays gated.
+- Files — `databento_csv.py`, `market_data.py`, `providers.py`, CLI, dataset audit and adapter tests.

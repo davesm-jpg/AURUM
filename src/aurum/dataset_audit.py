@@ -5,6 +5,7 @@ from hashlib import sha256
 from importlib.metadata import version
 from itertools import zip_longest
 
+from aurum.databento_csv import DATABENTO_CSV_VERSION
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.instruments import MgcContract
 from aurum.market_data import (
@@ -51,6 +52,13 @@ def verify_dataset(store: DatasetStore, dataset_id: str) -> dict[str, object]:
     if origin is not None and not isinstance(origin, str):
         raise ValueError("stored source origin is invalid")
     source = _PreservedSource(SourceFormat(str(provenance["format"])), origin, raw)
+    if (
+        source.format is SourceFormat.DATABENTO_OHLCV_CSV
+        and provenance.get("databento_normalization_version") != DATABENTO_CSV_VERSION
+    ):
+        raise ValueError(
+            "dataset verification requires the original Databento normalization version"
+        )
     config = ImportConfig(
         str(provenance["provider"]),
         MgcContract(str(provenance["contract"])),

@@ -11,6 +11,11 @@ from itertools import groupby
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from aurum.databento_csv import (
+    DATABENTO_CSV_VERSION,
+    DATABENTO_OHLCV_COLUMNS,
+    normalized_ohlcv_rows,
+)
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MAX_SQLITE_INTEGER, MGC, MgcContract
 from aurum.parquet_rows import parquet_rows
@@ -180,6 +185,11 @@ def prepare_history(
     if source.format is SourceFormat.CSV:
         rows = csv_rows(raw)
         row_label = "CSV line"
+    elif source.format is SourceFormat.DATABENTO_OHLCV_CSV:
+        if config.source_timezone != "UTC" or config.timestamp_label is not TimestampLabel.OPEN:
+            raise ValueError("Databento minute exports require UTC and open timestamp labels")
+        rows = normalized_ohlcv_rows(csv_rows(raw, DATABENTO_OHLCV_COLUMNS), config.contract)
+        row_label = "Databento CSV line"
     else:
         rows = parquet_rows(raw, COLUMNS)
         row_label = "Parquet row"
@@ -217,6 +227,13 @@ def _prepared_history(
     }
     if source.origin is not None:
         provenance["source_origin"] = source.origin
+    if source.format is SourceFormat.DATABENTO_OHLCV_CSV:
+        provenance.update(
+            databento_normalization_version=DATABENTO_CSV_VERSION,
+            source_schema="ohlcv-1m",
+            source_timestamp_basis="vendor_receive_interval",
+            source_empty_interval_policy="omitted_without_price_filling",
+        )
     if source.format is not SourceFormat.CSV or source.origin is not None:
         provenance["source_status"] = (
             FeedStatus.SIMULATED

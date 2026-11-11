@@ -12,6 +12,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 class SourceFormat(StrEnum):
     CSV = "csv"
     PARQUET = "parquet"
+    DATABENTO_OHLCV_CSV = "databento_ohlcv_csv"
 
 
 class FeedStatus(StrEnum):
@@ -72,7 +73,9 @@ class HttpsHistorySource:
 
     def read(self) -> bytes:
         headers = {
-            "Accept": "text/csv" if self.format is SourceFormat.CSV else "application/octet-stream"
+            "Accept": "application/octet-stream"
+            if self.format is SourceFormat.PARQUET
+            else "text/csv"
         }
         if self.token_env is not None:
             token = os.environ.get(self.token_env)

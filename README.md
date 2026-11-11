@@ -14,6 +14,17 @@ mkdir -p data
 
 ## Import and replay
 
+`import-databento-csv` accepts single-contract `ohlcv-1m` exports created with
+`pretty_ts=True`, `pretty_px=True` and `map_symbols=True`. Use UTC source time,
+the dated AURUM contract, a reviewed calendar and the usual import flags.
+Prices must have the nine decimal places produced by this export mode.
+The importer validates the raw MGC month/year symbol, publisher and instrument
+identity and retains the original CSV bytes for integrity reproduction.
+Vendor interval timestamps follow received-trade aggregation. Missing records
+stay missing and keep the ordinary replay gate in place.
+[Databento CSV export](https://databento.com/docs/api-historical/helpers?lang=python) ·
+[Databento OHLCV conventions](https://databento.com/docs/schemas/ohlcv)
+
 Provide an authorized UTF-8 CSV with this exact header.
 
 ```csv

@@ -17,6 +17,7 @@ start explicitly. Container launch verification remains open. See `OPERATIONS.md
 | `exchange_calendar.py` | Validation and lookup of covered open windows and exchange trading dates in a supplied, versioned MGC schedule |
 | `market_data.py` | Import configuration, 1m candles, normalized trade prints, minute derivation, provenance and gap detection |
 | `providers.py`, `parquet_rows.py` | Interchangeable local and authorized HTTPS sources with shared normalized CSV/Parquet validation |
+| `databento_csv.py` | Strict pretty-formatted native minute exports normalized through the shared validation and integrity path |
 | `contracts.py`, `continuous.py` | Reviewed listings, point-in-time roll decisions and separately priced continuous research series |
 | `quotes.py`, `spread_reports.py`, `quote_costs.py` | Immutable authorized-format historical top-of-book series and offline normalized quote verification, precise freshness- and exchange-window-aware quote lookup, spread diagnostics from paper audit references and an opt-in fixed-fill paired quote cost projection |
 | `storage_admin.py` | Local validated SQLite snapshots, preserved-source checksums and opt-in pre-publication normalization audits |

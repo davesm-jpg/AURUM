@@ -1,5 +1,9 @@
 # AURUM changelog
 
+## 2026-11-11 — Native Databento minute export import
+
+- Added strict Databento pretty-formatted CSV normalization with original byte provenance and existing missing-minute research gates.
+
 ## 2026-11-11 — Local service packaging
 
 - Added pinned container base images and runtime dependencies, persistent local Compose services and standalone dashboard output.

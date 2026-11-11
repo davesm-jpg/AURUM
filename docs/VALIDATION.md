@@ -217,3 +217,12 @@ token before creating the database. The full suite passed 234 tests, and five
 frontend tests, TypeScript and the standalone production build passed.
 Container builds remain unverified because the available Colima VM image
 download timed out. The attempted runtime was stopped.
+
+## Databento minute CSV adapter
+
+Twelve synthetic cases verified the strict pretty export format, dated MGC
+month/year checks, one instrument and publisher, exact prices and raw checksum
+reproduction. Duplicate minutes and conflicting identities are rejected. A
+missing interval remains absent and blocks ordinary replay. The complete
+Python suite passed 246 tests. No paid historical query was issued, and no
+authorized Databento file has been validated yet.

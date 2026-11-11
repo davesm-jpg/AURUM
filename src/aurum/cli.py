@@ -132,6 +132,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parquet = commands.add_parser("import-parquet", help="validate and store Parquet MGC candles")
     parquet.add_argument("parquet", type=Path)
     _import_options(parquet)
+    databento = commands.add_parser(
+        "import-databento-csv", help="import pretty-formatted Databento ohlcv-1m exports"
+    )
+    databento.add_argument("csv", type=Path)
+    _import_options(databento, candle_labels=False)
     historical = commands.add_parser(
         "import-https", help="import from an authorized normalized endpoint"
     )
@@ -490,7 +495,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 )
             )
-        elif args.command in ("import-csv", "import-parquet", "import-https", "import-trades"):
+        elif args.command in (
+            "import-csv",
+            "import-parquet",
+            "import-https",
+            "import-trades",
+            "import-databento-csv",
+        ):
             print(canonical_json(store.describe(_import_history(store, args))))
         elif args.command == "import-quotes":
             calendar = SessionCalendar.from_json(args.calendar.read_text(encoding="utf-8"))
@@ -1137,6 +1148,8 @@ def _import_history(store: DatasetStore, args: Namespace) -> str:
     source: FileHistorySource | HttpsHistorySource
     if args.command == "import-csv":
         source = FileHistorySource(args.csv, SourceFormat.CSV)
+    elif args.command == "import-databento-csv":
+        source = FileHistorySource(args.csv, SourceFormat.DATABENTO_OHLCV_CSV)
     elif args.command == "import-parquet":
         source = FileHistorySource(args.parquet, SourceFormat.PARQUET)
     else:
