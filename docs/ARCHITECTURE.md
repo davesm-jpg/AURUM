@@ -4,6 +4,12 @@
 
 The Python 3.12+ modular monolith runs as a CLI. The optional dashboard adds a loopback FastAPI process and a local Next.js server. The editable package exposes the `aurum` executable.
 
+Local Compose packaging uses separate unprivileged API and standalone dashboard
+containers in one network namespace. Published ports bind to localhost, and the
+server-side proxy continues to use a loopback API address. An explicit all-interface
+API bind requires an access token. Workers share the persistent data volume and
+start explicitly. Container launch verification remains open. See `OPERATIONS.md`.
+
 | Module | Current responsibility |
 | --- | --- |
 | `instruments.py` | CME-sourced MGC tick economics, exact decimal-to-integer tick conversion and dated contract identity |

@@ -2,6 +2,7 @@
 
 | ID | Severity | Module | Reproduction / evidence | Status | Workaround | Resolution |
 | --- | --- | --- | --- | --- | --- | --- |
+| DEPLOY-001 | Medium | Local containers | Colima VM image download from GitHub timed out on 2026-11-11. No Docker daemon was available. | OPEN | Native API and standalone dashboard were verified. Compose configuration passes. | Run the documented build and container smoke test with an available runtime. |
 | DATA-001 | High | Historical validation | Run the checkpoint in a fresh repository. It contains synthetic fixtures and no authorized market sample. | BLOCKED | Exercise the importer and the two-export reconciliation report using synthetic fixtures. | Complete D04 with a licensed or otherwise authorized sample and matching schedule. |
 | CAL-001 | Medium | Exchange calendar | Inspect a legacy snapshot with only a top-level `windows` array. It has no exchange trade dates. | RESOLVED | Re-import with a reviewed dated snapshot when trade dates are needed. | D02 added schema v2 with full windows grouped by date. Legacy import and replay are supported. |
 | CAL-002 | Medium | Exchange calendar | Run the importer without a reviewed schedule. The CLI requires the caller's schedule and trusts its coverage and trade-date assignments. | OPEN | Review effective exchange hours and exceptions before importing. | Validate a production snapshot in D04. Automated schedule retrieval remains unimplemented. |

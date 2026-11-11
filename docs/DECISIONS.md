@@ -283,3 +283,12 @@
 - Decision — Append immutable reviewed snapshots with an activation time later than all processed source and observation clocks. Source context resolves the snapshot at candle close. Alert and new paper-entry checks resolve it at actual observation. Restart replays the same activation timeline. A recorded unavailable update produces unknown risk.
 - Consequences — Each affected decision identifies the applied update. Publication knowledge cannot predate activation. Existing alerts and outcomes retain their evidence. Historical baseline comparison requires compatible economic context, including adopted updates.
 - Files — Planned `economic_updates.py`, `monitoring.py`, `strategy.py`, CLI and update tests.
+
+## ADR-031 — Keep local service traffic in one network namespace
+
+- Date — 2026-11-11.
+- Context — Container services need to communicate while preserving the dashboard's loopback proxy and token boundary.
+- Alternatives — Allow arbitrary Docker hostnames in the proxy, package both processes into one container or share an API network namespace.
+- Decision — Separate API and dashboard containers share the API network namespace. Host port mappings bind to localhost. The API accepts an explicit container bind only with an access token. Base manifests and runtime dependencies are pinned.
+- Consequences — Services share a network lifecycle, and Compose restarts the dashboard with its API dependency. Workers launch explicitly and share persistent data. Native launch and configuration passed. Container runtime verification is pending.
+- Files — Dockerfiles, `compose.yaml`, `requirements-runtime.lock`, `frontend/next.config.mjs`, `docs/OPERATIONS.md`.

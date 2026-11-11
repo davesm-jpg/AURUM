@@ -4,6 +4,8 @@ AURUM is a paper-only research project for COMEX Micro Gold futures. This checkp
 
 ## Install
 
+For the local container service workflow, see [operations](docs/OPERATIONS.md).
+
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'

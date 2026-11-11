@@ -1,0 +1,80 @@
+name: aurum
+
+services:
+  api:
+    build: .
+    image: aurum-backend:local
+    environment:
+      AURUM_API_TOKEN: ${AURUM_API_TOKEN:?Set a local AURUM_API_TOKEN}
+    ports:
+      - "127.0.0.1:8765:8765"
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - aurum-data:/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os,urllib.request;
+          r=urllib.request.Request('http://127.0.0.1:8765/api/health',
+          headers={'Authorization':'Bearer '+os.environ['AURUM_API_TOKEN']});
+          urllib.request.urlopen(r,timeout=3).read()
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: aurum-dashboard:local
+    network_mode: service:api
+    environment:
+      AURUM_API_BASE: http://127.0.0.1:8765
+      AURUM_API_TOKEN: ${AURUM_API_TOKEN:?Set a local AURUM_API_TOKEN}
+    depends_on:
+      api:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build: .
+    image: aurum-backend:local
+    profiles: [tools]
+    volumes:
+      - aurum-data:/data
+      - ./data:/imports:ro
+    environment:
+      AURUM_MARKET_ENDPOINT: ${AURUM_MARKET_ENDPOINT:-}
+      AURUM_STREAM_TOKEN: ${AURUM_STREAM_TOKEN:-}
+      AURUM_BACKFILL_ENDPOINT: ${AURUM_BACKFILL_ENDPOINT:-}
+      AURUM_BACKFILL_TOKEN: ${AURUM_BACKFILL_TOKEN:-}
+      AURUM_TELEGRAM_TOKEN: ${AURUM_TELEGRAM_TOKEN:-}
+      AURUM_TELEGRAM_CHAT_ID: ${AURUM_TELEGRAM_CHAT_ID:-}
+      AURUM_DISCORD_WEBHOOK: ${AURUM_DISCORD_WEBHOOK:-}
+    command: [verify-store]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  aurum-data:

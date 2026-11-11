@@ -206,3 +206,14 @@ corrupted-record rejection. CLI audit matched the API journal, and the API
 rejected client-supplied activation times. The full suite passed 233 tests.
 The reviewed update workflow is manual. Delivery of previously queued alerts
 continues to use their recorded evidence and the existing freshness policy.
+
+## Local service packaging
+
+Compose configuration passed `docker-compose config --quiet` with a synthetic
+test token. The standalone dashboard build served its JavaScript asset and
+proxied the API health route with HTTP 200. Direct API access without a token
+returned 401. A regression test verifies that all-interface binding requires a
+token before creating the database. The full suite passed 234 tests, and five
+frontend tests, TypeScript and the standalone production build passed.
+Container builds remain unverified because the available Colima VM image
+download timed out. The attempted runtime was stopped.

@@ -28,6 +28,36 @@ from aurum.strategy import DEFAULT_STRATEGY_CONFIG
 from aurum.timestamps import MINUTE, minute_timestamp
 
 
+def test_container_api_bind_requires_token_before_store_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from argparse import Namespace
+    from importlib import import_module
+    from types import SimpleNamespace
+
+    from aurum import cli
+
+    store = DatasetStore(tmp_path / "synthetic-bind.sqlite")
+    args = Namespace(port=8765, host="0.0.0.0", token_env=None)
+    with pytest.raises(ValueError, match="requires a configured access token"):
+        cli._serve(store, args)
+    assert not store.path.exists()
+    monkeypatch.setenv("AURUM_TEST_API_TOKEN", "synthetic-test-only")
+    args.token_env = "AURUM_TEST_API_TOKEN"
+    observed = {}
+
+    def run(_app: object, **kwargs: object) -> None:
+        observed.update(kwargs)
+
+    monkeypatch.setattr(
+        cli,
+        "import_module",
+        lambda name: SimpleNamespace(run=run) if name == "uvicorn" else import_module(name),
+    )
+    cli._serve(store, args)
+    assert observed == {"host": "0.0.0.0", "port": 8765, "access_log": False}
+
+
 def test_api_reads_validated_history_and_builds_paper_run(tmp_path: Path) -> None:
     api = pytest.importorskip("aurum.api")
     http = pytest.importorskip("fastapi.testclient")

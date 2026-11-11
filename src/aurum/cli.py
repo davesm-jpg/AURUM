@@ -449,6 +449,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     serve = commands.add_parser("serve", help="serve the local AURUM research API")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--host", choices=("127.0.0.1", "0.0.0.0"), default="127.0.0.1")
     serve.add_argument("--token-env")
 
     backup = commands.add_parser("backup", help="save a verified local SQLite snapshot")
@@ -1240,6 +1241,8 @@ def _serve(store: DatasetStore, args: Namespace) -> None:
     token = os.environ.get(args.token_env) if args.token_env else None
     if args.token_env and not token:
         raise ValueError("configured API token variable is unset")
+    if args.host == "0.0.0.0" and not token:
+        raise ValueError("binding the API to all interfaces requires a configured access token")
     try:
         api = import_module("aurum.api")
         uvicorn = import_module("uvicorn")
@@ -1252,7 +1255,7 @@ def _serve(store: DatasetStore, args: Namespace) -> None:
     app.add_middleware(
         hosts.TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"]
     )
-    uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
+    uvicorn.run(app, host=args.host, port=args.port, access_log=False)
 
 
 def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:

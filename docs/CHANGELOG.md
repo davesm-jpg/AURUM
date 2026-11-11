@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Local service packaging
+
+- Added pinned container base images and runtime dependencies, persistent local Compose services and standalone dashboard output.
+- Added an explicit API bind option that requires a token for all-interface binding. Verified native production startup and proxy health.
+
 ## 2026-11-11 — Reviewed monitoring calendar updates
 
 - Verified the archived snapshot picker in the browser.
