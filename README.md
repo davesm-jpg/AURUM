@@ -264,6 +264,11 @@ new forward entries. A longer gap requires separately authorized historical
 data. Missing no-trade minutes remain explicit gaps. The worker preserves DBN
 record and symbol-mapping bytes. SDK behavior is tested offline with synthetic
 records; production subscription timing and entitlements remain unverified.
+Settings also saves native profiles with the verified raw symbol and an
+`AURUM_` key-variable name, such as `AURUM_DATABENTO_API_KEY`. Launch the saved
+profile through `monitor-profile PROFILE_ID`. Saving and listing a profile
+does not start a subscription. Legacy normalized profile identities remain
+unchanged.
 
 Email delivery uses the same durable preferences and attempt audit as other
 channels. Set the recipient in `AURUM_EMAIL_TO`, an ASCII app password in

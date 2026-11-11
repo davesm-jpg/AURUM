@@ -273,3 +273,11 @@ connection handling, reconnect retry, resume cursor and missing credentials.
 Ruff, strict mypy (95 files), pip check, actionlint and whitespace checks passed.
 The adapter uses the existing monitor and paper eligibility gates. Native timing,
 entitlements, calendar reconciliation and sparse data remain production tasks.
+
+Hosted run [43004011688](https://github.com/davesm-jpg/AURUM/actions/runs/43004011688)
+passed all three jobs on native core commit `6a0bcf0`. Native profile extensions
+then passed 276 total local tests, Ruff, mypy, frontend tests (5), TypeScript and
+the production build. The browser saved one explicitly labeled synthetic native
+profile in an isolated temporary store; SQL confirmed zero monitors and minutes.
+Reloading the rebuilt dashboard confirmed the primary sweep/MSS/IFVG default
+survives asynchronous option loading. No subscription was started.

@@ -5,6 +5,8 @@
 - Added explicit dated MGC minute subscriptions using a pinned SDK, raw mapping/record evidence and the existing stream monitor.
 - Bounded buffering, strict record validation, historical recovery classification and durable next-minute resume preserve alert eligibility boundaries.
 - Fifteen native synthetic cases and the full 275-test suite passed locally. No vendor connection or paid history request was opened.
+- Added native provider profiles and Settings controls with local key-variable references and shared resume. Legacy profile identities are preserved. API and browser checks passed, and the full suite reached 276 tests.
+- Fixed asynchronous strategy choices selecting MSS-only instead of the primary hypothesis. Browser reload verified the intended default.
 
 ## 2026-11-11 — Forward report notifications and hosted verification
 

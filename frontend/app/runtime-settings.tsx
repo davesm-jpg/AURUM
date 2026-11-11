@@ -76,6 +76,8 @@ export function RuntimeSettings({
   const [profiles, setProfiles] = useState<Saved[]>([]);
   const [defaults, setDefaults] = useState<Defaults>();
   const [mode, setMode] = useState("simulated");
+  const [transport, setTransport] = useState("normalized");
+  const [providerVariant, setProviderVariant] = useState("sweep_mss_ifvg");
   const [scheduleSource, setScheduleSource] = useState(
     datasets.length ? "dataset" : "snapshot",
   );
@@ -131,6 +133,9 @@ export function RuntimeSettings({
             timeframe: fields.get("timeframe"),
             variant: fields.get("variant"),
             stale_seconds: int("stale_seconds"),
+            ...(transport === "databento"
+              ? { databento_raw_symbol: fields.get("databento_raw_symbol") }
+              : {}),
           }
         : {
             name,
@@ -213,7 +218,7 @@ export function RuntimeSettings({
           <h2>Provider profile</h2>
           <form onSubmit={(event) => void save(event, "providers")}>
             <p className="muted">
-              Use an authorized normalized feed. Enter environment variable
+              Use an authorized data feed. Enter environment variable
               names here and set their values in the worker environment.
             </p>
             <label>
@@ -221,9 +226,20 @@ export function RuntimeSettings({
               <input name="name" required maxLength={80} />
             </label>
             <label>
+              Provider transport
+              <select value={transport} onChange={(event) => {
+                setTransport(event.target.value);
+                if (event.target.value === "databento") setMode("real_time");
+              }}>
+                <option value="normalized">Normalized WebSocket</option>
+                <option value="databento">Databento native minute feed</option>
+              </select>
+            </label>
+            <label>
               Source class
               <select
                 value={mode}
+                disabled={transport === "databento"}
                 onChange={(event) => setMode(event.target.value)}
               >
                 <option value="simulated">Simulated</option>
@@ -288,13 +304,24 @@ export function RuntimeSettings({
                 )}
               </>
             )}
-            <EnvironmentName
+            {transport === "databento" ? (
+              <>
+                <label>
+                  Verified dated MGC raw symbol
+                  <input name="databento_raw_symbol" pattern="MGC[FGHJKMNQUVXZ][0-9]{1,4}" required />
+                </label>
+                <EnvironmentName name="token_env" title="Databento API key variable"
+                  sample="AURUM_DATABENTO_API_KEY" required />
+                <p className="muted">GLBX.MDP3 minute bars. Intraday recovery stays
+                  historical. Saving this profile does not start a subscription.</p>
+              </>
+            ) : <EnvironmentName
               name="endpoint_env"
               title="WebSocket endpoint variable"
               sample="AURUM_MARKET_ENDPOINT"
               required
-            />
-            {mode !== "simulated" && (
+            />}
+            {mode !== "simulated" && transport === "normalized" && (
               <div className="form-grid">
                 <EnvironmentName
                   name="token_env"
@@ -326,7 +353,8 @@ export function RuntimeSettings({
               </label>
               <label>
                 Strategy variant
-                <select name="variant" defaultValue="sweep_mss_ifvg">
+                <select name="variant" value={providerVariant}
+                  onChange={(event) => setProviderVariant(event.target.value)}>
                   {defaults?.choices.variants.map((item) => (
                     <option key={item} value={item}>
                       {label(item)}

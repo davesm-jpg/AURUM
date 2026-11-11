@@ -2,6 +2,7 @@
 
 | ID | Severity | Module | Reproduction / evidence | Status | Workaround | Resolution |
 | --- | --- | --- | --- | --- | --- | --- |
+| UI-001 | Medium | Provider settings | Open Settings before strategy choices load. The uncontrolled select could choose the first MSS-only option. | RESOLVED | Use the controlled strategy selection. | Browser reload verified the sweep/MSS/IFVG default after the fix on 2026-11-11. |
 | DEPLOY-001 | Low | Local containers | Local Colima VM image download timed out on 2026-11-11. | OPEN | Hosted Linux run 43001928370 passed container startup, persisted synthetic import, replacement, assets and authorization. Native services remain available locally. | Validate macOS containers when a local runtime is available. |
 | DATA-001 | High | Historical validation | Run the checkpoint in a fresh repository. It contains synthetic fixtures and no authorized market sample. | BLOCKED | Exercise the importer and the two-export reconciliation report using synthetic fixtures. | Complete D04 with a licensed or otherwise authorized sample and matching schedule. |
 | CAL-001 | Medium | Exchange calendar | Inspect a legacy snapshot with only a top-level `windows` array. It has no exchange trade dates. | RESOLVED | Re-import with a reviewed dated snapshot when trade dates are needed. | D02 added schema v2 with full windows grouped by date. Legacy import and replay are supported. |

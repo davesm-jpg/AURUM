@@ -15,6 +15,7 @@ from aurum.databento_live import DatabentoConnection, DatabentoSource
 from aurum.instruments import MgcContract
 from aurum.monitoring import MonitorState
 from aurum.providers import FeedStatus
+from aurum.runtime_profiles import provider_runtime
 from aurum.streaming import FeedDisconnected, run_stream
 from aurum.timestamps import MINUTE
 
@@ -302,3 +303,53 @@ def test_native_cli_requires_local_key_and_does_not_expose_it(tmp_path: Path) ->
         result.returncode == 1
         and "access variable AURUM_SYNTHETIC_MISSING is unset" in result.stderr
     )
+
+
+def test_native_profile_api_preserves_only_names_and_pins_shared_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = pytest.importorskip("aurum.api")
+    http = pytest.importorskip("fastapi.testclient")
+    fixture = fixture_monitor(tmp_path)
+    profile = {
+        "name": "Synthetic native profile verification",
+        "source_status": "real_time",
+        "endpoint_env": None,
+        "token_env": "AURUM_DATABENTO_API_KEY",
+        "databento_raw_symbol": "MGCJ5",
+        # This is a synthetic test of the operator's reviewed assertion, not
+        # evidence that the fixture is an actual exchange schedule.
+        "calendar_snapshot": {
+            "contract": CONTRACT.code,
+            "calendar": fixture.calendar.as_dict(),
+            "synthetic": False,
+        },
+    }
+    monkeypatch.setenv("AURUM_DATABENTO_API_KEY", "synthetic-private-key")
+
+    def forbidden(**_: Any) -> None:
+        raise AssertionError("profile operations must not open a vendor connection")
+
+    monkeypatch.setattr(db, "Live", forbidden)
+    with http.TestClient(api.create_app(fixture.store)) as client:
+        route = "/api/configuration/providers"
+        saved = client.post(route, json={"profile": profile})
+        assert saved.status_code == 201
+        reference = saved.json()["profile_id"]
+        assert client.post(route, json={"profile": profile}).json()["profile_id"] == reference
+        monitor, transport, backfill = provider_runtime(fixture.store, reference)
+        assert isinstance(transport, DatabentoSource) and backfill is None
+        assert transport.raw_symbol == "MGCJ5" and transport.key_env == "AURUM_DATABENTO_API_KEY"
+        assert transport.resume_from is not None and transport.resume_from() == START
+        assert monitor.config.source_fingerprint == transport.fingerprint
+        listing = client.get("/api/configuration/runtime")
+        assert "synthetic-private-key" not in listing.text and "MGCJ5" in listing.text
+        for changes in (
+            {"endpoint_env": "AURUM_ENDPOINT"},
+            {"source_status": "delayed"},
+            {"token_env": None},
+            {"databento_raw_symbol": "MGCZ5"},
+            {"backfill_endpoint_env": "AURUM_BACKFILL_ENDPOINT"},
+        ):
+            assert client.post(route, json={"profile": profile | changes}).status_code == 422

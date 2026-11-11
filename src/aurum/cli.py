@@ -18,7 +18,7 @@ from aurum.continuous import SeriesPlan, replay_series, save_series
 from aurum.contract_reports import save_contract_assessment
 from aurum.contracts import ContractCatalog, RollPolicy
 from aurum.control import ControlConfig, ControlStrata, save_matched_control
-from aurum.databento_live import DatabentoSource
+from aurum.databento_live import DatabentoSource, bind_native_resume
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_archive import (
     EconomicPublisher,
@@ -1256,16 +1256,7 @@ def _monitor_databento(store: DatasetStore, args: Namespace) -> dict[str, object
         economic=_economic_calendar(args.economic_calendar),
     )
 
-    def resume() -> datetime:
-        expected = describe_monitor(store, instance.monitor_id)["next_expected_open"]
-        if not isinstance(expected, str):
-            raise ValueError("Databento monitoring requires additional reviewed schedule coverage")
-        next_open = datetime.fromisoformat(expected)
-        if source.start is not None and source.start > next_open:
-            raise ValueError("Databento replay start cannot skip an expected monitor minute")
-        return next_open
-
-    return _watch_monitor(instance, replace(source, resume_from=resume), None, args.max_frames)
+    return _watch_monitor(instance, bind_native_resume(source, instance), None, args.max_frames)
 
 
 def _stop_monitor(signum: int, frame: object) -> None:

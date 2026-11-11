@@ -3,14 +3,14 @@
 ## Project Status
 
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
-- Current milestone — Email and period-report notifications are verified with synthetic transports. Hosted Python, frontend and complete container smoke passed. Authorized market-data validation remains blocked.
+- Current milestone — Native Databento core, email, report notifications and packaged services passed hosted CI. Native provider Settings and profile extensions passed local and browser verification. Authorized market-data validation remains blocked.
 - Current branch — `codex/verified-research-platform`, tracking the same branch at `https://github.com/davesm-jpg/AURUM.git`.
-- Last verified code commit — `1b55d11`, including report notifications, passed all three hosted jobs in run 43002289883. The subsequent native adapter slice passed full local verification before this checkpoint.
+- Last verified code commit — `6a0bcf0`, native core, passed all three hosted jobs in run 43004011688. Native profile/Settings extensions passed full local and browser verification before this checkpoint.
 
 ## Current Objective
 
-- Task ID — Production adapter readiness and D04 preparation.
-- Objective — Continue the next independent implementation slice while awaiting authorized history and provider configuration.
+- Task ID — D04, B02 and L02 production validation.
+- Objective — Verify the latest hosted profile extension checkpoint, then prepare authorized history and provider configuration for actual validation.
 - Acceptance criteria — Keep paid requests and real channel sends disabled without approved inputs. Reuse the shared quality and monitoring paths, verify offline and retain exact continuation evidence.
 
 ## Completed Work
@@ -32,8 +32,8 @@
 - D12 imports pretty-formatted Databento `ohlcv-1m` CSV with exact raw provenance and audit reconstruction. Missing vendor bars remain gated. No authorized Databento data has been imported.
 - N04 adds authenticated STARTTLS/implicit TLS email with durable retry and uncertain acknowledgement handling. Profiles persist environment names only. Eleven fake SMTP cases passed. External email was not sent.
 - N05 queues saved daily/weekly/monthly report summaries atomically with publication. Manual `notify-report` deduplicates saved report IDs. Existing channel preferences and audit apply. Source classification, actual sample, net costs, coverage and uncertainty remain visible. No external message was sent.
-- L16 implements native SDK minute monitoring with exact DBN evidence, mapping checks, bounded callback buffering, shared integrity gates and historical intraday recovery. Fifteen synthetic native cases and 275 total tests passed locally. No authorized vendor connection opened. Hosted validation remains pending for this slice.
-- Completion is 90.2 percent, 46 of 51 roadmap tasks DONE while L16 awaits hosted verification. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
+- L16 implements native SDK minute monitoring with DBN evidence, dated mapping, bounded callbacks, integrity gates and historical intraday recovery. Settings saves native profiles with key variable names only; explicit workers bind the shared next-minute resume. Sixteen synthetic native cases and 276 total tests passed. Hosted native core passed. Browser saved one synthetic profile, and SQL confirmed zero monitors/minutes. A rebuilt reload verified the corrected primary strategy default. No authorized vendor connection opened.
+- Completion is 92.2 percent, 47 of 51 roadmap tasks DONE. Three tasks are BLOCKED on production inputs. O01 remains IN_PROGRESS; optional ML awaits historical evidence.
 - User asked which provider to obtain. Recommended Databento CME Standard using current official MGC coverage and pricing, USD 199/month for personal use. User has not yet confirmed a purchase or provided account access. Keep keys local.
 - D04, B02 and L02 need authorized history, a matching reviewed schedule and approved production feed or delivery configuration.
 
@@ -55,8 +55,8 @@
 
 ## Test Status
 
-- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (275), native tests (15), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (95 files), pip check, actionlint and Git whitespace checks. Three hosted CI runs passed all three jobs through `1b55d11`.
-- Frontend — Five tests, TypeScript typecheck and production build passed at the prior code checkpoint. Browser verified archive receipt selection, preview and copied JSON with zero profiles saved.
+- Passed at the latest checkpoint — `.venv/bin/python -m pytest -q` (276), native/API focused tests (24), `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/mypy .` (95 files), pip check, actionlint and Git whitespace checks. Four hosted CI runs passed all jobs through `6a0bcf0`.
+- Frontend — Five tests, TypeScript and production build passed. Browser verified native profile saving and the corrected primary strategy default after a rebuilt reload. Earlier archive receipt selection was also verified.
 - Failed — No outstanding automated failures.
 - Not run — Authorized historical reconciliation, real provider or channel verification, and empirical out-of-sample analysis.
 - Limitations — The performance workload, socket and delivery exercises, quotes and strategy outcomes are synthetic. Delivery tests use fake transports.
@@ -69,8 +69,8 @@
 
 ## Immediate Next Actions
 
-1. Publish the locally verified L16 native adapter slice and inspect its hosted checks. Do not dispatch a duplicate workflow while a push run is starting.
-2. Once hosted checks pass, mark L16 complete and checkpoint the exact commit. Preserve production L02 as blocked until authorized verification. Do not query paid endpoints or assume an account is authorized.
+1. Inspect the hosted native-profile/Settings commit checks and record its exact successful commit. Do not dispatch duplicate workflows during push startup. Temporary native browser services should be stopped before session end.
+2. Obtain authorized bounded MGC history and a matching reviewed schedule. Preserve D04/B02/L02 as blocked until actual verification. Keep keys local, and do not query paid endpoints without confirmed authorization.
 3. When approved inputs arrive, run historical reconciliation and integrity checks before any empirical backtest or production monitor trial. Recommended provider is Databento CME Standard; keys must stay in local environment variables.
 
 ## Do Not Repeat

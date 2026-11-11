@@ -7,6 +7,7 @@ from re import fullmatch
 from typing import Any, Literal
 
 from aurum.candles import Timeframe
+from aurum.databento_live import DatabentoSource, bind_native_resume
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind
 from aurum.exchange_calendar import SessionCalendar
 from aurum.instruments import MgcContract
@@ -18,7 +19,7 @@ from aurum.notifications import DEFAULT_DELIVERY_PREFERENCES, Channel, DeliveryP
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
-from aurum.streaming import HttpsGapBackfill, WebSocketSource
+from aurum.streaming import FrameSource, HttpsGapBackfill, WebSocketSource
 
 RUNTIME_PROFILE_VERSION = 1
 
@@ -51,7 +52,7 @@ class ProviderSchedule:
 @dataclass(frozen=True, slots=True)
 class ProviderProfile:
     name: str
-    endpoint_env: str
+    endpoint_env: str | None
     source_status: FeedStatus
     calendar_dataset_id: str | None = None
     token_env: str | None = None
@@ -63,6 +64,7 @@ class ProviderProfile:
     economic_calendar: dict[str, object] | None = None
     require_clear_event_risk: bool = False
     calendar_snapshot: ProviderSchedule | None = None
+    databento_raw_symbol: str | None = None
 
     def __post_init__(self) -> None:
         _validate_label(self.name)
@@ -73,6 +75,17 @@ class ProviderProfile:
         _validate_env(
             self.endpoint_env, self.token_env, self.backfill_endpoint_env, self.backfill_token_env
         )
+        if self.databento_raw_symbol is None:
+            if self.endpoint_env is None:
+                raise ValueError("normalized provider requires an endpoint variable")
+        elif (
+            self.source_status is not FeedStatus.REAL_TIME
+            or self.endpoint_env is not None
+            or self.token_env is None
+            or self.backfill_endpoint_env is not None
+            or self.backfill_token_env is not None
+        ):
+            raise ValueError("native Databento requires real-time class and only a key variable")
         if self.source_status not in (
             FeedStatus.REAL_TIME,
             FeedStatus.DELAYED,
@@ -135,6 +148,11 @@ def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
     settings = asdict(profile)
     if isinstance(profile, ProviderProfile):
         calendar, contract = _provider_calendar(store, profile)
+        if profile.databento_raw_symbol is None:
+            del settings["databento_raw_symbol"]
+        else:
+            assert profile.token_env is not None
+            DatabentoSource(contract, profile.databento_raw_symbol, profile.token_env)
         if profile.calendar_snapshot is None:
             del settings["calendar_snapshot"]
         else:
@@ -247,7 +265,7 @@ def _env_value(name: str) -> str:
 
 def provider_runtime(
     store: DatasetStore, profile_id: str
-) -> tuple[MarketMonitor, WebSocketSource, HttpsGapBackfill | None]:
+) -> tuple[MarketMonitor, FrameSource, HttpsGapBackfill | None]:
     raw = _settings(store, profile_id, "provider")
     snapshot = raw.get("calendar_snapshot")
     profile = ProviderProfile(
@@ -260,9 +278,15 @@ def provider_runtime(
         }
     )
     calendar, contract = _provider_calendar(store, profile)
-    source = WebSocketSource(
-        _env_value(profile.endpoint_env), profile.source_status, profile.token_env
-    )
+    source: WebSocketSource | DatabentoSource
+    if profile.databento_raw_symbol is not None:
+        assert profile.token_env is not None
+        source = DatabentoSource(contract, profile.databento_raw_symbol, profile.token_env)
+    else:
+        assert profile.endpoint_env is not None
+        source = WebSocketSource(
+            _env_value(profile.endpoint_env), profile.source_status, profile.token_env
+        )
     backfill = (
         HttpsGapBackfill(_env_value(profile.backfill_endpoint_env), profile.backfill_token_env)
         if profile.backfill_endpoint_env
@@ -288,7 +312,11 @@ def provider_runtime(
         ),
         economic=profile.economic_events(),
     )
-    return monitor, source, backfill
+    return (
+        monitor,
+        bind_native_resume(source, monitor) if isinstance(source, DatabentoSource) else source,
+        backfill,
+    )
 
 
 def load_delivery_profile(store: DatasetStore, profile_id: str) -> DeliveryProfile:

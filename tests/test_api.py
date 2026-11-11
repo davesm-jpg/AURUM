@@ -211,6 +211,7 @@ def test_api_provider_profiles_keep_environment_values_out_of_storage(
         assert "economic_calendar" not in saved.json()["settings"]
         assert "require_clear_event_risk" not in saved.json()["settings"]
         assert "calendar_snapshot" not in saved.json()["settings"]
+        assert "databento_raw_symbol" not in saved.json()["settings"]
 
         invalid = client.post(route, json={"profile": {**profile, "economic_calendar": {}}})
         assert invalid.status_code == 422

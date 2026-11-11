@@ -3,7 +3,7 @@
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from importlib import import_module
@@ -16,6 +16,7 @@ from typing import Any
 from aurum.feed_frames import FeedFrame
 from aurum.instruments import MgcContract
 from aurum.market_data import Candle, canonical_json
+from aurum.monitoring import MarketMonitor, describe_monitor
 from aurum.providers import FeedStatus
 from aurum.streaming import FeedDisconnected, FrameConnection
 
@@ -25,6 +26,19 @@ DATASET = "GLBX.MDP3"
 SCHEMA = "ohlcv-1m"
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _UNDEFINED = 2**64 - 1
+
+
+def bind_native_resume(source: "DatabentoSource", monitor: MarketMonitor) -> "DatabentoSource":
+    def resume() -> datetime:
+        expected = describe_monitor(monitor.store, monitor.monitor_id)["next_expected_open"]
+        if not isinstance(expected, str):
+            raise ValueError("Databento monitoring requires additional reviewed schedule coverage")
+        next_open = datetime.fromisoformat(expected)
+        if source.start is not None and source.start > next_open:
+            raise ValueError("Databento replay start cannot skip an expected monitor minute")
+        return next_open
+
+    return replace(source, resume_from=resume)
 
 
 @dataclass(frozen=True, slots=True)
