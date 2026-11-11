@@ -209,6 +209,10 @@ def run_stream(
             )
 
     try:
+        # A previous process can have left a fresh READY row. Do not let an
+        # independent delivery worker treat that as an established connection
+        # while this process is still opening its transport.
+        _retry_store(lambda _: monitor.set_connection(False, clock()), sleeper)
         while max_frames is None or handled < max_frames:
             try:
                 with source.connect() as connection:

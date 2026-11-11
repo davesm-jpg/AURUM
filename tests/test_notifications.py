@@ -1,5 +1,7 @@
 import json
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from io import BytesIO
@@ -20,12 +22,14 @@ from aurum.notifications import (
     DeliveryFailure,
     DeliveryPreferences,
     DeliveryWorker,
+    Severity,
     cancel_delivery,
     delivery_status,
 )
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG
+from aurum.streaming import WebSocketSource, run_stream
 from aurum.timestamps import MINUTE, minute_timestamp
 
 START = minute_timestamp("2025-03-10T13:00Z")
@@ -88,6 +92,43 @@ def add_alert(monitor: MarketMonitor, alert_id: str, *, score: int | None = None
             "INSERT INTO monitor_alerts VALUES (?, ?, ?, ?)",
             (monitor.monitor_id, alert_id, json.dumps(payload), AT.isoformat()),
         )
+
+
+def test_stream_startup_suspends_prior_ready_alerts_before_opening_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monitor = fixture_monitor(tmp_path)
+    add_alert(monitor, "synthetic-prior-process-signal", score=80)
+    channel = SyntheticChannel()
+    worker = DeliveryWorker(
+        monitor.store,
+        monitor.monitor_id,
+        channel,
+        DeliveryPreferences(severities=(Severity.RESEARCH,)),
+    )
+
+    class StartupConnection:
+        def recv(self, timeout: float | None = None) -> str:
+            raise KeyboardInterrupt
+
+    @contextmanager
+    def connect(_: WebSocketSource) -> Iterator[StartupConnection]:
+        assert worker.run_once(clock=lambda: AT) == 0
+        assert not channel.sent
+        yield StartupConnection()
+
+    monkeypatch.setattr(WebSocketSource, "connect", connect)
+    status = run_stream(
+        monitor,
+        WebSocketSource("wss://synthetic.invalid", FeedStatus.REAL_TIME),
+        max_frames=1,
+        clock=lambda: AT,
+    )
+    assert status["alerts_suspended"] is True
+    assert any(
+        item["state"] == "pending" for item in delivery_status(monitor.store, monitor.monitor_id)
+    )
 
 
 def test_retry_attempts_and_concurrent_duplicate_suppression(tmp_path: Path) -> None:

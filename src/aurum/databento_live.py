@@ -28,6 +28,22 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _UNDEFINED = 2**64 - 1
 
 
+def _transient_subscription_error(error: Exception, sdk: Any) -> bool:
+    """The pinned SDK wraps socket/auth-timeout failures in BentoError.
+
+    Inspect exception types and causal context, never provider error text. An
+    unqualified SDK authorization rejection remains a permanent failure.
+    """
+    current: BaseException | None = error
+    for _ in range(8):
+        if isinstance(current, OSError):
+            return True
+        if not isinstance(current, sdk.BentoError):
+            return False
+        current = current.__cause__ if current.__cause__ is not None else current.__context__
+    return False
+
+
 def bind_native_resume(source: "DatabentoSource", monitor: MarketMonitor) -> "DatabentoSource":
     def resume() -> datetime:
         expected = describe_monitor(monitor.store, monitor.monitor_id)["next_expected_open"]
@@ -134,8 +150,8 @@ class DatabentoSource:
             raise ValueError("Databento client initialization failed") from None
         connection = DatabentoConnection(self, client, sdk, replay_start=replay_start)
         try:
-            client.add_callback(connection.on_record, connection.on_error)
             try:
+                client.add_callback(connection.on_record, connection.on_error)
                 client.subscribe(
                     dataset=DATASET,
                     schema=SCHEMA,
@@ -144,9 +160,9 @@ class DatabentoSource:
                     start=replay_start,
                 )
                 client.start()
-            except OSError:
-                raise FeedDisconnected("databento_transport_unavailable") from None
-            except Exception:
+            except Exception as exc:
+                if _transient_subscription_error(exc, sdk):
+                    raise FeedDisconnected("databento_transport_unavailable") from None
                 raise ValueError(
                     "Databento subscription failed; verify authorized access"
                 ) from None

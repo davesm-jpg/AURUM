@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Reconnect safeguards
+
+- Fixed transient native subscription failures wrapped by the pinned SDK while keeping authorization failures permanent and provider text private.
+- Suspend persisted prior-process readiness before opening a replacement stream, holding queued research alerts until a fresh connection is established.
+- Full suite passed 307 tests. N06's preceding hosted checks passed all three jobs.
+
 ## 2026-11-11 — Optional setup lifecycle notifications
 
 - Added opt-in developing notices and withdrawals with same-close collapse and durable cancellation of queued advisories.

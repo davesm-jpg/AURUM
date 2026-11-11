@@ -1,5 +1,12 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, reconnect safeguards
+
+- `.venv/bin/pytest -q` passed 307 tests. Ruff and strict mypy passed (100 files).
+- Native synthetic recovery covers direct socket errors and the pinned SDK's wrapped socket/timeout errors, preserving historical recovery eligibility. Authorization and callback registration failures stay permanent and redacted.
+- A delivery-worker test observes startup before transport creation and verifies a prior READY checkpoint cannot release queued research. No provider connection or external message was used.
+- Hosted run 43085850744 passed Python, frontend and container jobs on e9e78b2, completing N06. Current reconnect changes await their own hosted run.
+
 ## Verified checkpoint — 2026-11-10
 
 - Environment. macOS arm64, Python 3.12.7, SQLite 3.45.3 and the timezone package pinned in `pyproject.toml`.

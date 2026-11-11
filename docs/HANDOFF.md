@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Offline research, forward paper simulation, monitoring and dashboard. Production data validation remains blocked.
-- Current milestone — L17 public polling and D13 monitor input verification passed hosted CI. N06 optional setup lifecycle alerts passed local and browser verification and are ready for hosted checks.
+- Current milestone — L17 public polling, D13 monitor input verification and N06 optional setup lifecycle alerts passed hosted CI. Reconnect safeguards passed local verification.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — 808d76e passed all hosted jobs in run 43083044878. N06 passed 302 local tests and browser verification before this snapshot.
+- Last verified commit — e9e78b2 passed all three hosted jobs in run 43085850744. Subsequent reconnect safeguards passed 307 local tests and static checks before this snapshot.
 
 ## Current Objective
 
-- Task ID — N06.
-- Objective — Publish opt-in lifecycle alerts, verify hosted gates and continue the next independent reliability task.
-- Acceptance criteria — Collapse developing transitions, retain freshness/risk/preference gates, cancel queued stale notices, label recovered withdrawals and preserve legacy disabled-default identities.
+- Task ID — O01 reliability maintenance of L01/L16, then STORE-001.
+- Objective — Publish reconnect safeguards and remove the reproduced public replay reader lock.
+- Acceptance criteria — Retry typed wrapped transport errors, redact private provider text, suspend prior-process readiness at startup, then release public replay readers before yielding to writers without changing candle order or quality gates.
 
 ## Completed Work
 
@@ -31,7 +31,8 @@
 - Nine synthetic polling cases passed, including concurrency, interruption after receipt, migration, failures and fail-closed verified backups. Full suite passed 285 tests. Frontend typecheck/build and browser health display passed.
 - Actual public BEA receipt 54bfea8b12144d5b197f1e1d82c2573a245bd239f63a606c70f66536fb692b5a was captured at 2026-11-11 18:36:20.778515 UTC. BLS returned HTTP 403. Ignored local data/public-economics.sqlite holds one capture, two pollers and two attempts. Source and normalized store audits passed.
 - No foreground preview or polling process remains running.
-- Roadmap currently lists 49/54 DONE (90.7 percent), with N06 IN_PROGRESS pending hosted checks and three BLOCKED tasks. Once N06 is complete, use 50/54 (92.6 percent).
+- Roadmap lists 50/54 DONE (92.6 percent), three BLOCKED tasks and O01 IN_PROGRESS.
+- Reconnect maintenance recognizes OSError causes/context wrapped by the pinned SDK's BentoError, including suppressed timeout context. Unqualified authorization errors remain permanent. Callback registration is inside the same sanitized boundary. Shared run_stream suspends the saved connection before opening a replacement transport. Five added synthetic cases passed; no actual provider or delivery call was made.
 - O01 optimization remains open. The 21,600-minute synthetic benchmark retained all chart digests after restart source validation. Ingestion measured 4.519 s and restart 1.168 s versus the prior approximately 0.8 s. See PERFORMANCE.md. Optional ML awaits historical evidence.
 
 ## Important Decisions
@@ -53,10 +54,10 @@
 
 ## Test Status
 
-- Last full command — .venv/bin/python -m pytest -q — 302 passed. Subsequent focused lifecycle/email checks cover the small risk-text rendering change.
+- Last full command — .venv/bin/pytest -q — 307 passed, including native wrapped failure recovery and a startup delivery hold.
 - Static — Ruff check/format, strict mypy (100 files), Git whitespace, pip check and actionlint passed. Frontend typecheck/build and five tests passed for lifecycle Settings. Browser verified unchecked default, enabled profile saving and zero monitor creation.
 - Integration — Real public BEA/BLS one-shot attempts and browser capture health verified. Source/normalized audit passed on the ignored public-data store.
-- Hosted — All jobs passed for 808d76e. The lifecycle notification slice awaits hosted execution.
+- Hosted — All jobs passed for e9e78b2 in run 43085850744. Reconnect maintenance awaits publication and its own run.
 - Failed — No outstanding automated failure.
 - Not run — Authorized MGC reconciliation, actual feed/channel trials and empirical out-of-sample evaluation. Do not interpret fixture outcomes as evidence.
 
@@ -69,8 +70,8 @@
 
 ## Immediate Next Actions
 
-1. Commit/push N06 and inspect its hosted run. Once all gates pass, mark N06 DONE and record the exact commit.
-2. Inspect native SDK subscription error taxonomy next. The source retries OSError and disconnected sessions but converts other subscription exceptions to ValueError. Verify whether supported SDK temporary versus authorization errors need distinct sanitized handling before changing behavior.
+1. Commit/push verified reconnect maintenance and inspect its hosted run.
+2. Resolve STORE-001's public DatasetStore.replay generator holding a read connection across yields. Reuse bounded immutable batches and test a paused iterator while another connection commits. Preserve ordering, span semantics and replayability checks.
 3. For D04/B02/L02, wait for authorized data/configuration. Recommended provider was Databento; no purchase or access has been confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat

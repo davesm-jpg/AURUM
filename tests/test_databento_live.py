@@ -164,9 +164,11 @@ def test_native_queue_bounds_timeouts_gateway_errors_and_disconnect() -> None:
         assert "private error body" not in str(failure.value)
 
 
+@pytest.mark.parametrize("failure_kind", ("direct", "wrapped_timeout", "wrapped_socket"))
 def test_native_transport_uses_shared_monitor_and_preserves_recovery_eligibility(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
 ) -> None:
     monitor = fixture_monitor(tmp_path)
     transport = source(start=START, key_env="AURUM_SYNTHETIC_KEY", resume_from=lambda: AT)
@@ -182,7 +184,14 @@ def test_native_transport_uses_shared_monitor_and_preserves_recovery_eligibility
     disconnected = SyntheticClient()
 
     def unavailable(**_: Any) -> None:
-        raise OSError("synthetic private failure body")
+        if failure_kind == "direct":
+            raise OSError("synthetic private failure body")
+        try:
+            if failure_kind == "wrapped_timeout":
+                raise TimeoutError("synthetic private timeout body")
+            raise ConnectionRefusedError("synthetic private socket body")
+        except OSError:
+            raise db.BentoError("synthetic private SDK wrapper") from None
 
     monkeypatch.setattr(disconnected, "subscribe", unavailable)
     attempts = 0
@@ -218,6 +227,29 @@ def test_native_transport_uses_shared_monitor_and_preserves_recovery_eligibility
     ]
     assert json.loads(rows[0]["raw"])["adapter"] == transport.definition()
     assert "synthetic-key-only" not in repr(transport) + str(result)
+    with monitor.store.connection() as sql:
+        retained = " ".join(row[0] for row in sql.execute("SELECT payload FROM monitor_events"))
+    assert "synthetic private" not in retained
+
+
+@pytest.mark.parametrize("registration", (False, True))
+def test_native_authorization_or_callback_rejection_is_permanent_and_redacted(
+    monkeypatch: pytest.MonkeyPatch,
+    registration: bool,
+) -> None:
+    monkeypatch.setenv("AURUM_SYNTHETIC_KEY", "synthetic-private-key")
+    client = SyntheticClient()
+
+    def rejected(*_: Any, **__: Any) -> None:
+        raise db.BentoError("synthetic-private-key or provider-private-response")
+
+    monkeypatch.setattr(client, "add_callback" if registration else "subscribe", rejected)
+    monkeypatch.setattr(db, "Live", lambda **_: client)
+    with pytest.raises(ValueError) as failure, source(key_env="AURUM_SYNTHETIC_KEY").connect():
+        pass
+    assert client.terminated
+    assert "synthetic-private-key" not in str(failure.value)
+    assert "provider-private-response" not in str(failure.value)
 
 
 def test_native_integrity_fault_latches_monitor_without_accepting_queued_bars(
