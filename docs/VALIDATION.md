@@ -226,3 +226,12 @@ reproduction. Duplicate minutes and conflicting identities are rejected. A
 missing interval remains absent and blocks ordinary replay. The complete
 Python suite passed 246 tests. No paid historical query was issued, and no
 authorized Databento file has been validated yet.
+
+## Email delivery
+
+Eleven synthetic tests verified explicit and implicit TLS, certificate checks,
+authentication order, stable message ID, redacted errors, temporary/permanent
+rejection, uncertain acknowledgement, accepted messages followed by disconnect,
+profile credential isolation and recipient injection rejection. The full Python
+suite passed 257 tests. TypeScript and the production frontend build passed.
+Tests used fake SMTP transports and did not send external email.

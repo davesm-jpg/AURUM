@@ -31,6 +31,7 @@ from aurum.economic_composition import compose_economic_calendars
 from aurum.economic_events import MAX_ECONOMIC_PUBLICATIONS, EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
 from aurum.economic_updates import adopt_economic_snapshot, economic_updates
+from aurum.email_transport import SmtpAlertChannel, SmtpSettings
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
@@ -423,6 +424,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     delivery.add_argument("--channel", type=Channel, choices=Channel, required=True)
     delivery.add_argument("--destination-env", required=True)
     delivery.add_argument("--token-env")
+    delivery.add_argument("--smtp-env")
     delivery.add_argument("--timezone", default="Europe/Prague")
     delivery.add_argument("--quiet", nargs=2, type=_clock_minute, metavar=("START", "END"))
     delivery.add_argument("--min-score", type=int, default=0)
@@ -622,6 +624,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         profile.token_env,
                         profile.preferences,
                         args.watch,
+                        profile.smtp_env,
                     )
                 )
             )
@@ -1292,6 +1295,7 @@ def _deliver(store: DatasetStore, args: Namespace) -> dict[str, object]:
         args.token_env,
         prefs,
         args.watch,
+        args.smtp_env,
     )
 
 
@@ -1303,11 +1307,19 @@ def _run_delivery(
     token_env: str | None,
     preferences: DeliveryPreferences,
     watch: bool,
+    smtp_env: str | None = None,
 ) -> dict[str, object]:
     destination = os.environ.get(destination_env)
     if not destination:
         raise ValueError("configured notification destination variable is unset")
-    if channel is Channel.TELEGRAM:
+    transport: HttpAlertChannel | SmtpAlertChannel
+    if channel is Channel.EMAIL:
+        settings = os.environ.get(smtp_env) if smtp_env else None
+        password = os.environ.get(token_env) if token_env else None
+        if not settings or not password:
+            raise ValueError("configured SMTP settings or password variable is unset")
+        transport = SmtpAlertChannel(SmtpSettings.from_json(settings), destination, password)
+    elif channel is Channel.TELEGRAM:
         token = os.environ.get(token_env) if token_env else None
         if not token:
             raise ValueError("configured Telegram token variable is unset")

@@ -37,6 +37,7 @@ start explicitly. Container launch verification remains open. See `OPERATIONS.md
 | `feed_frames.py`, `monitoring.py`, `streaming.py` | Normalized WebSocket, reviewed continuity, restart recovery, HTTPS backfill and in-app alert journal |
 | `forward.py` | Registration-bound paper execution over observed monitor minutes, durable cursor and independent ledger |
 | `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
+| `email_transport.py` | Authenticated STARTTLS or implicit TLS email with acknowledgement-aware retry classification |
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |
 

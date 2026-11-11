@@ -16,6 +16,7 @@ from aurum.timestamps import source_timezone
 class Channel(StrEnum):
     TELEGRAM = "telegram"
     DISCORD = "discord"
+    EMAIL = "email"
 
 
 class Severity(StrEnum):

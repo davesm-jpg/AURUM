@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Email research delivery
+
+- Added authenticated TLS email transport through the existing durable delivery system, CLI, profiles and Settings.
+- Added recipient validation, stable message identity and acknowledgement-aware failure handling.
+
 ## 2026-11-11 — Native Databento minute export import
 
 - Added strict Databento pretty-formatted CSV normalization with original byte provenance and existing missing-minute research gates.

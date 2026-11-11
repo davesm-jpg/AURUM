@@ -149,6 +149,7 @@ export function RuntimeSettings({
               max_attempts: int("attempts"),
               expiry_minutes: int("expiry"),
             },
+            ...(channel === "email" ? { smtp_env: env("smtp_env") } : {}),
           };
     setPending(true);
     setError("");
@@ -416,6 +417,7 @@ export function RuntimeSettings({
               >
                 <option value="telegram">Telegram</option>
                 <option value="discord">Discord</option>
+                <option value="email">Email</option>
               </select>
             </label>
             <EnvironmentName
@@ -424,6 +426,8 @@ export function RuntimeSettings({
               sample={
                 channel === "telegram"
                   ? "AURUM_TELEGRAM_CHAT_ID"
+                  : channel === "email"
+                  ? "AURUM_EMAIL_TO"
                   : "AURUM_DISCORD_WEBHOOK"
               }
               required
@@ -435,6 +439,22 @@ export function RuntimeSettings({
                 sample="AURUM_TELEGRAM_TOKEN"
                 required
               />
+            )}
+            {channel === "email" && (
+              <>
+                <EnvironmentName
+                  name="smtp_env"
+                  title="SMTP settings variable"
+                  sample="AURUM_SMTP_SETTINGS"
+                  required
+                />
+                <EnvironmentName
+                  name="token_env"
+                  title="SMTP password variable"
+                  sample="AURUM_SMTP_PASSWORD"
+                  required
+                />
+              </>
             )}
             <div className="form-grid">
               <label>

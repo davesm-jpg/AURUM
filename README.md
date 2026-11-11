@@ -237,6 +237,23 @@ monthly publication requires reviewed schedule coverage into the next period.
 
 ## Runtime profiles
 
+Email delivery uses the same durable preferences and attempt audit as other
+channels. Set the recipient in `AURUM_EMAIL_TO`, an ASCII app password in
+`AURUM_SMTP_PASSWORD`, and JSON in `AURUM_SMTP_SETTINGS` with `host`, `port`,
+`username`, `sender` and `tls`. Select `starttls` for explicit TLS negotiation
+or `implicit` for a TLS connection from the outset. The worker authenticates
+only after TLS and certificate verification.
+
+```sh
+aurum --db data/aurum.sqlite deliver MONITOR_ID --channel email \
+  --destination-env AURUM_EMAIL_TO --token-env AURUM_SMTP_PASSWORD \
+  --smtp-env AURUM_SMTP_SETTINGS
+```
+
+Settings can save an email profile using those environment variable names.
+The worker records a missing send acknowledgement as uncertain. An explicit
+temporary SMTP rejection can retry under the configured delivery limits.
+
 Use `monitor-economic-update MONITOR_ID --snapshot REVIEWED.json --reason TEXT`
 to activate a reviewed calendar for an existing monitor. Use `--unavailable`
 to record missing economic context. The command uses its current UTC clock.

@@ -111,15 +111,16 @@ class DeliveryProfile:
     destination_env: str
     token_env: str | None = None
     preferences: DeliveryPreferences = DEFAULT_DELIVERY_PREFERENCES
+    smtp_env: str | None = None
 
     def __post_init__(self) -> None:
         _validate_label(self.name)
         _validate_reference(self.monitor_id)
-        _validate_env(self.destination_env, self.token_env)
-        if (self.channel is Channel.TELEGRAM) != (self.token_env is not None):
-            raise ValueError(
-                "Telegram requires a token variable and Discord uses its webhook variable"
-            )
+        _validate_env(self.destination_env, self.token_env, self.smtp_env)
+        if (self.channel in (Channel.TELEGRAM, Channel.EMAIL)) != (self.token_env is not None):
+            raise ValueError("Telegram and email require an authentication variable")
+        if (self.channel is Channel.EMAIL) != (self.smtp_env is not None):
+            raise ValueError("email requires an SMTP settings variable")
         for session in self.preferences.allowed_sessions:
             ResearchSession(session)
         if max(self.preferences.expiry_minutes, self.preferences.lease_seconds) > 10_080:
@@ -151,6 +152,8 @@ def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
         if not profile.require_clear_event_risk:
             del settings["require_clear_event_risk"]
     else:
+        if profile.smtp_env is None:
+            del settings["smtp_env"]
         status = describe_monitor(store, profile.monitor_id)
         definition = status["definition"]
         assert isinstance(definition, dict)
