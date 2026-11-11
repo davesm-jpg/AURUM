@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Processing-clock rollback guard
+
+- Preserve newly received candles as pending when processing time moves behind the last known check, recording the actual clock without backdating discovery.
+- Recovery after restart uses a later actual frame clock and suppresses fresh eligibility for the recovered prefix. Existing observations remain unchanged.
+
 ## 2026-11-11 — Nonblocking monitor exports
 
 - Monitor event exports freeze their starting sequence. Alert exports capture ordered IDs and read bounded payload pages. Both close readers before yielding.

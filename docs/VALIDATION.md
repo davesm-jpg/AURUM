@@ -1,5 +1,12 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, processing-clock rollback
+
+- Real-time and delayed synthetic regressions failed before the fix because the monitor applied input and returned READY after its processing clock moved backward.
+- Focused monitoring, source audit, lifecycle and forward-report checks passed 37 tests. The tests preserve exact raw bytes, pending null application time, suspended alerts, original receipt and versioned clock notice; restart then recovers at the actual later time with zero fresh execution eligibility. Source audits pass before and after recovery.
+- Full suite passed 315 tests. Ruff check/format and strict mypy passed across 100 files. No schema or strategy rule changed, and old recorded observation times are retained.
+- Monitor export commit eee1a60 passed Python, frontend and container jobs in hosted run 43090738305.
+
 ## Verified checkpoint — 2026-11-11, monitor journal readers
 
 - The synthetic journal regression failed before the change with `database is locked` after five seconds. It now pauses an export, commits new notes before and after a 1,000-row page boundary and verifies exact output against the captured prefix. A fresh export sees the later appends.

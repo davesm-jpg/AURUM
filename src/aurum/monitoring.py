@@ -341,6 +341,22 @@ class MarketMonitor:
                VALUES (?, ?, ?, ?, ?, ?, 0)""",
             (self.monitor_id, opened, normalized, frame.raw, received, frame.source_status),
         )
+        if row["checked_at"] is not None and now < datetime.fromisoformat(row["checked_at"]):
+            # Preserve the actual receipt instead of inventing a later
+            # application timestamp. A subsequent frame at a trustworthy clock
+            # drains this pending prefix through the normal recovery path.
+            self._record(
+                db,
+                {
+                    "event": "feed_clock_regressed",
+                    "clock_policy_version": 1,
+                    "at": now.isoformat(),
+                    "previous_checked_at": row["checked_at"],
+                    "opened_at": opened,
+                    "source_received_at": received,
+                },
+            )
+            return self._refresh_state(db, now)
         if storage_retry:
             self._record(
                 db,

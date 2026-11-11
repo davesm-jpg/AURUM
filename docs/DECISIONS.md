@@ -366,3 +366,12 @@
 - Decision — Capture the maximum event sequence and page through that fixed prefix. Alerts lack an insertion sequence and timestamps may tie or be backdated, so capture their ordered IDs first and read 256 payloads at a time. Close every reader before yielding.
 - Consequences — Slow CLI consumers no longer retain database locks. Concurrent appends stay outside the export. Alert ID memory is proportional to alert count, while payload memory is bounded. No schema, rule, monitor or dataset identity changes. Application journals remain immutable; direct unauthorized edits are outside the snapshot contract.
 - Files — `monitoring.py`, monitoring export regressions and architecture documentation.
+
+## ADR-040 — Hold input through processing-clock rollback
+
+- Date — 2026-11-11.
+- Context — Health check time was monotonic, but new candle application could still use an earlier wall-clock observation after rollback. This could backdate discovery relative to prior decisions.
+- Alternatives — Invent a clamped observation, permanently fault the monitor or hold preserved input pending recovery.
+- Decision — Preserve each raw frame and actual receipt, record feed_clock_regressed with policy version 1 and leave it unapplied while processing time precedes the known check. A later frame at or beyond that bound drains the prefix using its actual processing observation and ordinary recovery eligibility rules.
+- Consequences — Alerts remain suspended while input is pending. Restart preserves the hold. Clock recovery alone does not advance the detector without another frame. Existing observations and monitor IDs stay unchanged. No synthetic future clock is substituted for an actual application.
+- Files — `monitoring.py` and real-time/delayed clock rollback tests.

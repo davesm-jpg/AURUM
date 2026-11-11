@@ -17,6 +17,7 @@ from aurum.feed_frames import FeedFrame
 from aurum.instruments import MgcContract
 from aurum.market_data import Candle
 from aurum.market_structure import DEFAULT_STRUCTURE_CONFIG
+from aurum.monitor_audit import verify_monitor
 from aurum.monitoring import (
     HeartbeatStatus,
     MarketMonitor,
@@ -354,6 +355,53 @@ def test_application_clock_after_receipt_controls_live_eligibility(tmp_path: Pat
     with store.connection() as db:
         row = db.execute("SELECT received_at, applied_at, execution_eligible FROM monitor_minutes")
         assert tuple(row.fetchone()) == (value.received_at.isoformat(), applied.isoformat(), 0)
+
+
+@pytest.mark.parametrize("mode", (FeedStatus.REAL_TIME, FeedStatus.DELAYED))
+def test_clock_rollback_preserves_pending_input_until_processing_time_catches_up(
+    tmp_path: Path, mode: FeedStatus
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic-clock-rollback.sqlite")
+    schedule = calendar((0, 8))
+    monitor = fixture_monitor(store, schedule, mode)
+    monitor.set_connection(True, START)
+    prior = START + 4 * MINUTE
+    monitor.ingest(frame(0, mode=mode), application_clock=lambda: prior)
+    held = frame(1, mode=mode)
+    status = monitor.ingest(held)
+    assert status["state"] == MonitorState.RECOVERING
+    assert status["pending_minutes"] == 1
+    assert status["last_applied_open"] == START.isoformat()
+    assert status["checked_at"] == prior.isoformat()
+    assert status["alerts_suspended"] is True
+    with store.connection() as db:
+        row = db.execute(
+            "SELECT raw, received_at, applied_at, execution_eligible FROM monitor_minutes "
+            "WHERE opened_at = ?",
+            (held.candle.opened_at.isoformat(),),
+        ).fetchone()
+    assert tuple(row) == (held.raw, held.received_at.isoformat(), None, None)
+    assert verify_monitor(store, monitor.monitor_id)["verified"] is True
+    notices = [
+        event
+        for event in monitor_events(store, monitor.monitor_id)
+        if event["event"] == "feed_clock_regressed"
+    ]
+    assert len(notices) == 1
+    assert notices[0]["at"] == held.received_at.isoformat()
+    assert notices[0]["previous_checked_at"] == prior.isoformat()
+    restarted = fixture_monitor(store, schedule, mode)
+    recovered = restarted.ingest(frame(2, received=4, mode=mode))
+    assert recovered["pending_minutes"] == 0
+    assert recovered["last_applied_open"] == (START + 2 * MINUTE).isoformat()
+    with store.connection() as db:
+        recovered_rows = db.execute(
+            "SELECT applied_at, execution_eligible FROM monitor_minutes ORDER BY opened_at"
+        ).fetchall()
+    assert [tuple(row) for row in recovered_rows] == [(prior.isoformat(), 0)] * 3
+    resumed = restarted.ingest(frame(3, mode=mode))
+    assert resumed["state"] == MonitorState.READY
+    assert verify_monitor(store, monitor.monitor_id)["verified"] is True
 
 
 def test_invalid_stream_frame_latches_fault_and_disconnects(
