@@ -164,11 +164,53 @@ def test_shuffle_keeps_fixed_returns_and_bootstrap_can_extend() -> None:
     assert result["observations"] == 3
 
 
+def test_monte_carlo_stops_account_at_breach_despite_unrestricted_recovery() -> None:
+    config = MonteCarloConfig(paths=1, trades=2, seed=1)
+    result = simulate(config, SamplingMode.SHUFFLE, (-100_000, 200_000))
+    assert result["monte_carlo_version"] == 2
+    assert result["strategy_path_basis"] == "unrestricted_full_horizon_including_after_breach"
+    assert result["ending_equity_cents"] == {
+        "mean": 2_600_000,
+        "median": 2_600_000,
+        "quantiles": {str(p): 2_600_000 for p in (5, 25, 50, 75, 95)},
+        "min": 2_600_000,
+        "max": 2_600_000,
+    }
+    assert result["breached_paths"] == 1
+    account = result["account"]
+    assert isinstance(account, dict)
+    assert account["stops_at_first_breach"] is True
+    assert account["measurement"] == "trade_close_only"
+    assert account["terminal_equity_cents"]["median"] == 2_400_000
+    assert account["maximum_drawdown_cents"]["median"] == 100_000
+    assert account["completed_trades"]["median"] == 1
+    assert account["maximum_losing_streak"]["median"] == 1
+
+
+def test_monte_carlo_account_retains_breach_overshoot_and_no_breach_horizon() -> None:
+    config = MonteCarloConfig(paths=4, trades=100)
+    result = simulate(config, SamplingMode.SCENARIO, scenario=WinRateScenario(0))
+    account = result["account"]
+    assert isinstance(account, dict)
+    assert account["terminal_equity_cents"]["median"] == 2_394_800
+    assert account["completed_trades"]["median"] == 20
+    assert account["maximum_losing_streak"]["median"] == 20
+    streaks = result["maximum_losing_streak"]
+    assert isinstance(streaks, dict) and streaks["median"] == 100
+    winners = simulate(config, SamplingMode.SCENARIO, scenario=WinRateScenario(10_000))
+    surviving_account = winners["account"]
+    assert isinstance(surviving_account, dict)
+    assert surviving_account["terminal_equity_cents"] == winners["ending_equity_cents"]
+    assert surviving_account["completed_trades"]["median"] == 100
+
+
 def test_monte_carlo_cli_persists_assumptions_and_result(tmp_path: Path) -> None:
     aurum = [str(Path(executable).with_name("aurum")), "--db", str(tmp_path / "test.sqlite")]
     args = [*aurum, "monte-carlo", "--paths", "4", "--trades", "100", "--win-rate-bps", "3000"]
     result = subprocess.run(args, check=True, capture_output=True, text=True)
     report = json.loads(result.stdout)
+    assert report["definition"]["monte_carlo_version"] == 2
+    assert report["result"]["simulations"][0]["account"]["stops_at_first_breach"] is True
     assert report["definition"]["scenarios"][0]["win_rate_bps"] == 3000
     assert report["result"]["source"] == {"data_kind": "assumed", "observations": 0}
     assert subprocess.run(args, check=True, capture_output=True, text=True).stdout == result.stdout

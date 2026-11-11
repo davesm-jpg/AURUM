@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Monte Carlo account breach boundary
+
+- Added version 2 account distributions stopped at the first loss-limit breach while retaining seeded unrestricted strategy paths.
+- Dashboard labels full-horizon continuation, trade-close-only measurement and legacy missing metrics. Existing saved reports remain unchanged.
+- Full suite passed 311 tests; frontend build and browser result/legacy checks passed.
+
 ## 2026-11-11 — Nonblocking public replay
 
 - Closed public replay readers before yielding candles, fixing a reproduced same-store writer timeout without buffering the entire dataset.

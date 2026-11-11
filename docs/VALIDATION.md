@@ -1,5 +1,13 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, stopped Monte Carlo accounts
+
+- Full Python suite passed 311 tests, Ruff check/format and strict mypy passed (100 files). Frontend typecheck, five tests and production build passed.
+- Synthetic cases verify that an unrestricted recovery after an exact-floor breach cannot restore account equity, crossing losses are not clamped to the floor, surviving accounts complete their full horizon and trailing-floor paths retain distinct stopped outcomes.
+- CLI and API persist Monte Carlo version 2 and the stopped-account policy with stable repeated IDs. Existing v1 reports are not rewritten.
+- Browser verified separate unrestricted and stopped-account tables. An explicitly assumed 0% win scenario with four paths and 100 trades had zero market observations. A temporary legacy-shaped fixture showed unavailable account metrics and the re-run explanation. No market performance inference follows.
+- Hosted run 43088753935 passed all three jobs for paused-reader fix f6a1d63. Monte Carlo changes await publication.
+
 ## Verified checkpoint — 2026-11-11, paused replay readers
 
 - Full Python suite passed 309 tests, Ruff check/format passed and strict mypy passed across 100 files.

@@ -200,6 +200,13 @@ For a matched random control, choose a broader opportunity variant before inspec
 
 Monte Carlo defaults to the reference assumed win rates of 30%, 35%, 40%, 45%, 50% and 60%. Set `--mode block_bootstrap --backtest RUN_ID` to resample net backtest outcomes, or use `shuffle` with a trade count at or below the observed sample size. Simulated paths use a generic fixed floor at trade closes. They are conditional on the source and assumptions.
 
+Reports separate unrestricted strategy paths, which continue through the full
+horizon even after breach, from account outcomes stopped at the first breach.
+The stopped account retains the crossing loss, including any floor overshoot.
+Surviving accounts complete the configured horizon. Both use trade closes and
+exclude intratrade equity fluctuations. Older saved reports lack the account
+distributions; re-run their assumptions to create a version 2 report.
+
 The account command models a separate $25K LucidFlex paper ledger. Supply a dated schedule adjusted for the provider's applicable closing cutoff and holidays. The ledger has `data_kind` (`synthetic` or `paper_marks`), `source`, `started_at` and chronological `actions`. A `mark` action uses `at`, `trade_date`, optional `closed_trade_nets_cents`, `unrealized_cents`, `open_micros` and `end_of_day`. The EOD mark must be flat and match the scheduled final close. `payout` actions use `at` and `gross_cents`. `activate_funded` uses `at` after a simulated pass. All action objects include `kind`.
 
 Use `--consistency-bps 5000` for the evaluation add-on profile and supply an explicit `--daily-loss-cents` for a daily-loss scenario. Default marked-equity checks are a conservative research assumption. Add `--lucidflex-trades-per-session` to Monte Carlo for an EOD-trailing drawdown scenario using trade closes and the specified session grouping. See the [rule sources and assumptions](docs/VALIDATION.md).

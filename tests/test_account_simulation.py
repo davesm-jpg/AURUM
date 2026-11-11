@@ -166,6 +166,15 @@ def test_trailing_monte_carlo_counts_trade_close_breaches_under_assumptions() ->
     assert isinstance(breaches, int) and 0 < breaches < config.paths
     assert eod["breached_paths"] == config.paths
     assert eod["breach_rule"] == "eod_trailing_floor_reached_or_crossed_after_trade"
+    account = eod["account"]
+    assert isinstance(account, dict)
+    assert account["terminal_equity_cents"]["min"] == 2_400_000
+    assert account["terminal_equity_cents"]["max"] == 2_500_000
+    assert account["completed_trades"]["min"] == 1
+    assert account["completed_trades"]["max"] == 2
+    unrestricted = eod["ending_equity_cents"]
+    assert isinstance(unrestricted, dict)
+    assert unrestricted["min"] == unrestricted["max"] == 2_500_000
 
 
 def test_account_cli_persists_full_synthetic_ledger(tmp_path: Path) -> None:

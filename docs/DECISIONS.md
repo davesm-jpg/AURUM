@@ -348,3 +348,12 @@
 - Decision — Explicitly opt in on real-time monitors. Collapse same-close stages per setup, retain fresh/risk gates for developing ideas and cancel queued developing deliveries when the setup is withdrawn. Recovered invalidations may issue a source-labeled informational withdrawal without presenting a new opportunity. Existing channel attempt and preference controls remain shared.
 - Consequences — Disabled default identities remain compatible. Unknown scores require a zero threshold. Withdrawal delivery does not depend on current feed freshness. Acknowledged or in-flight provider messages cannot be recalled. No live execution or automatic channel configuration is introduced.
 - Files — Monitoring, profiles, delivery preferences, transports, CLI, Settings and lifecycle tests.
+
+## ADR-038 — Separate strategy paths from stopped account outcomes
+
+- Date — 2026-11-11.
+- Context — Monte Carlo equity and drawdown continued through all trades after the first breach, but the dashboard did not disclose that boundary. A later recovery could be mistaken for a surviving account.
+- Alternatives — Stop generating all returns at breach or retain unrestricted strategy paths and separately freeze account metrics.
+- Decision — Monte Carlo v2 retains the seeded full-horizon strategy path and reports separate account terminal equity, drawdown, losing streak and completed-trade distributions stopped after the crossing loss. Continue consuming all returns so path RNG behavior remains unchanged. Keep trade-close-only measurement explicit.
+- Consequences — Breached accounts cannot recover in the account distribution. Breach overshoots remain visible. A version change gives new immutable report IDs; older reports retain their saved results and display missing account metrics. No actual trading or empirically achieved win rate is implied.
+- Files — `monte_carlo.py`, report summary UI, research/account/API tests and README.

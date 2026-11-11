@@ -35,11 +35,17 @@ function MonteCarloReport({ result }: { result: RecordData }) {
   });
   return (
     <section className="analytics-section">
-      <h3>Simulated equity and survival</h3>
+      <h3>Unrestricted strategy paths</h3>
       <p className="muted">
         {source.data_kind === "assumed"
           ? "Assumed outcomes · Zero market observations"
           : `Resampled backtest · ${label(source.data_kind)} · Run ${String(source.backtest_run_id ?? "").slice(0, 8)}`}
+      </p>
+      <p className="muted">
+        Full-horizon equity, drawdown and losing streaks continue after the
+        first simulated breach. They do not represent an account permitted to
+        keep trading. Breach checks use trade closes and exclude intratrade
+        equity fluctuations.
       </p>
       <DataTable
         labelHeading="Scenario"
@@ -75,8 +81,62 @@ function MonteCarloReport({ result }: { result: RecordData }) {
             value: (row) =>
               money(record(record(row.ending_equity_cents).quantiles)["95"]),
           },
+          {
+            title: "Median full-horizon drawdown",
+            value: (row) => money(record(row.maximum_drawdown_cents).median),
+          },
+          {
+            title: "Median full-horizon losing streak",
+            value: (row) => String(record(row.maximum_losing_streak).median ?? "—"),
+          },
         ]}
       />
+      <h3>Account stopped at first breach</h3>
+      {simulations.some((sim) => !sim.account) && (
+        <p className="muted">
+          Older reports contain unrestricted paths only. Re-run the saved
+          assumptions to obtain account results that stop at breach.
+        </p>
+      )}
+      <p className="muted">
+        Terminal equity includes the loss that reaches or crosses the floor.
+        After breach it remains fixed. Surviving paths run to their configured
+        trade horizon. These distributions include both breached and surviving
+        paths and are conditional on the stated assumptions.
+      </p>
+      <DataTable
+        labelHeading="Scenario"
+        items={scenarios}
+        columns={[
+          {
+            title: "5th percentile terminal equity",
+            value: (row) =>
+              money(record(record(record(row.account).terminal_equity_cents).quantiles)["5"]),
+          },
+          {
+            title: "Median terminal equity",
+            value: (row) => money(record(record(row.account).terminal_equity_cents).median),
+          },
+          {
+            title: "95th percentile terminal equity",
+            value: (row) =>
+              money(record(record(record(row.account).terminal_equity_cents).quantiles)["95"]),
+          },
+          {
+            title: "Median account drawdown",
+            value: (row) => money(record(record(row.account).maximum_drawdown_cents).median),
+          },
+          {
+            title: "Median account losing streak",
+            value: (row) => String(record(record(row.account).maximum_losing_streak).median ?? "—"),
+          },
+          {
+            title: "Median trades completed",
+            value: (row) => String(record(record(row.account).completed_trades).median ?? "—"),
+          },
+        ]}
+      />
+      <h3>Breach and survival</h3>
       <DataTable
         labelHeading="Scenario"
         items={scenarios}
@@ -84,15 +144,6 @@ function MonteCarloReport({ result }: { result: RecordData }) {
           {
             title: "Breach rate",
             value: (row) => percentage(row.breach_probability),
-          },
-          {
-            title: "Median drawdown",
-            value: (row) => money(record(row.maximum_drawdown_cents).median),
-          },
-          {
-            title: "Median losing streak",
-            value: (row) =>
-              String(record(row.maximum_losing_streak).median ?? "—"),
           },
           {
             title: "Median trades to breach",

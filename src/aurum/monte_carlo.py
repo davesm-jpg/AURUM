@@ -6,7 +6,7 @@ from random import Random
 from aurum.account_simulation import ACCOUNT_VERSION, AccountRules, LossTrail
 from aurum.statistics import block_sample, quantile
 
-MONTE_CARLO_VERSION = 1
+MONTE_CARLO_VERSION = 2
 REFERENCE_WIN_RATES_BPS = (3_000, 3_500, 4_000, 4_500, 5_000, 6_000)
 _HORIZONS = (100, 500, 1_000)
 
@@ -73,6 +73,18 @@ class TrailingLossScenario:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class _PathResult:
+    ending: int
+    drawdown: int
+    losing_streak: int
+    breach: int | None
+    account_ending: int
+    account_drawdown: int
+    account_losing_streak: int
+    account_trades: int
+
+
 def simulate(
     config: MonteCarloConfig,
     mode: SamplingMode,
@@ -97,6 +109,7 @@ def simulate(
     effective_block = min(config.block_length, len(observations), config.trades)
     rng = Random(config.seed)
     endings, drawdowns, streaks, breach_times = [], [], [], []
+    account_endings, account_drawdowns, account_streaks, account_trades = [], [], [], []
     for _ in range(config.paths):
         if scenario is not None:
             moves = _scenario_returns(scenario, config.trades, rng)
@@ -104,12 +117,16 @@ def simulate(
             moves = rng.sample(observations, config.trades)
         else:
             moves = block_sample(observations, config.trades, effective_block, rng)
-        ending, drawdown, streak, breach = _path(moves, config, trailing)
-        endings.append(ending)
-        drawdowns.append(drawdown)
-        streaks.append(streak)
-        if breach is not None:
-            breach_times.append(breach)
+        path = _path(moves, config, trailing)
+        endings.append(path.ending)
+        drawdowns.append(path.drawdown)
+        streaks.append(path.losing_streak)
+        account_endings.append(path.account_ending)
+        account_drawdowns.append(path.account_drawdown)
+        account_streaks.append(path.account_losing_streak)
+        account_trades.append(path.account_trades)
+        if path.breach is not None:
+            breach_times.append(path.breach)
 
     result: dict[str, object] = {
         "monte_carlo_version": MONTE_CARLO_VERSION,
@@ -119,6 +136,15 @@ def simulate(
         "config": asdict(config),
         "scenario": asdict(scenario) if scenario else None,
         "effective_block_length": effective_block if mode is SamplingMode.BLOCK_BOOTSTRAP else None,
+        "strategy_path_basis": "unrestricted_full_horizon_including_after_breach",
+        "account": {
+            "measurement": "trade_close_only",
+            "stops_at_first_breach": True,
+            "terminal_equity_cents": _distribution(account_endings),
+            "maximum_drawdown_cents": _distribution(account_drawdowns),
+            "maximum_losing_streak": _distribution(account_streaks),
+            "completed_trades": _distribution(account_trades),
+        },
         "breach_rule": (
             "eod_trailing_floor_reached_or_crossed_after_trade"
             if trailing
@@ -146,11 +172,13 @@ def _path(
     moves: Iterable[int],
     config: MonteCarloConfig,
     trailing: TrailingLossScenario | None,
-) -> tuple[int, int, int, int | None]:
+) -> _PathResult:
     equity = peak = config.initial_equity_cents
     floor = equity - config.loss_allowance_cents
     worst_drawdown = streak = max_streak = 0
     breach = None
+    account_equity = equity
+    account_drawdown = account_streak = account_trades = 0
     trail = LossTrail(trailing.rules) if trailing else None
     for index, move in enumerate(moves, start=1):
         equity += move
@@ -158,8 +186,13 @@ def _path(
         worst_drawdown = max(worst_drawdown, peak - equity)
         streak = streak + 1 if move < 0 else 0
         max_streak = max(max_streak, streak)
-        if breach is None and equity <= floor:
-            breach = index
+        if breach is None:
+            account_equity = equity
+            account_drawdown = worst_drawdown
+            account_streak = max_streak
+            account_trades = index
+            if equity <= floor:
+                breach = index
         if (
             breach is None
             and trail is not None
@@ -168,7 +201,16 @@ def _path(
         ):
             trail.settle(equity)
             floor = trail.floor_cents
-    return equity, worst_drawdown, max_streak, breach
+    return _PathResult(
+        equity,
+        worst_drawdown,
+        max_streak,
+        breach,
+        account_equity,
+        account_drawdown,
+        account_streak,
+        account_trades,
+    )
 
 
 def _scenario_returns(scenario: WinRateScenario, count: int, rng: Random) -> Iterable[int]:

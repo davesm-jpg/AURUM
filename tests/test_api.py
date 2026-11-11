@@ -323,6 +323,8 @@ def test_api_saves_assumed_and_explicit_synthetic_paper_reports(tmp_path: Path) 
         result = saved.json()
         assert result["result"]["source"] == {"data_kind": "assumed", "observations": 0}
         assert result["result"]["simulations"][0]["config"]["seed"] == 19
+        assert result["definition"]["monte_carlo_version"] == 2
+        assert result["result"]["simulations"][0]["account"]["stops_at_first_breach"] is True
         assert client.post(scenario_route, json=scenario).json() == result
         oversized = {**scenario, "config": {"paths": 1_000_000, "trades": 20}}
         assert client.post(scenario_route, json=oversized).status_code == 422
