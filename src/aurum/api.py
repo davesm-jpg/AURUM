@@ -17,6 +17,7 @@ from aurum.api_config import (
     BacktestRequest,
     DeliveryProfileRequest,
     EconomicCapturePreview,
+    EconomicUpdateRequest,
     ForwardStartRequest,
     ProviderProfileRequest,
     backtest_configuration,
@@ -40,6 +41,7 @@ from aurum.candles import CandleAggregator, Timeframe, completed_bar_start
 from aurum.chart_evidence import CHART_EVENT_KINDS, ChartEvidence, chart_evidence, span_lookback
 from aurum.continuous import replay_series
 from aurum.economic_archive import economic_receipt, economic_receipts
+from aurum.economic_updates import economic_updates
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.forward import (
     ForwardPaper,
@@ -203,6 +205,16 @@ def create_app(store: DatasetStore, access_token: str | None = None) -> FastAPI:
     @router.get("/economic-captures")
     def archived_economic_receipts(limit: PageLimit = 100) -> list[dict[str, object]]:
         return [receipt.as_dict() for receipt in economic_receipts(store, limit)]
+
+    @router.get("/monitors/{monitor_id}/economic-updates")
+    def monitor_economic_updates(monitor_id: RecordId) -> list[dict[str, object]]:
+        return economic_updates(store, monitor_id)
+
+    @router.post("/monitors/{monitor_id}/economic-updates", status_code=201)
+    def activate_economic_update(
+        monitor_id: RecordId, request: EconomicUpdateRequest
+    ) -> dict[str, str]:
+        return {"update_id": request.adopt(store, monitor_id)}
 
     @router.get("/economic-captures/{capture_id}")
     def archived_economic_receipt(capture_id: RecordId) -> dict[str, object]:

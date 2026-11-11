@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
+from aurum.economic_updates import economic_timeline
 from aurum.exchange_calendar import SessionCalendar
 from aurum.forward import describe_forward, forward_events
 from aurum.market_context import DEFAULT_CONTEXT_CONFIG
@@ -337,6 +338,9 @@ def _coverage(
 def _historical_baseline(
     store: DatasetStore, report_id: str, run: dict[str, object], monitor: dict[str, Any]
 ) -> dict[str, Any]:
+    with store.connection() as db:
+        if economic_timeline(db, str(run["monitor_id"]), None).updates:
+            raise ValueError("historical comparison requires matching economic activation history")
     report = store.describe_analysis(report_id)
     result = report["result"]
     if report["kind"] not in (

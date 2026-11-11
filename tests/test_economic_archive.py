@@ -112,6 +112,7 @@ def test_archive_preserves_receipts_and_bytes_across_schema_migration(
     store = DatasetStore(tmp_path / "synthetic-economic.sqlite")
     with store.connection(write=True) as db:
         db.execute("DROP TABLE economic_captures")
+        db.execute("DROP TABLE monitor_economic_updates")
         db.execute("PRAGMA user_version = 13")
     assert economic_receipts(store) == []
     first_body = synthetic_ics("20250310T123000Z")
@@ -141,7 +142,7 @@ def test_archive_preserves_receipts_and_bytes_across_schema_migration(
     assert inspected.byte_count == len(first_body)
     assert economic_capture_bytes(store, inspected) == first_body
     verification = verify_store(store, verify_sources=True)
-    assert verification["schema_version"] == SCHEMA_VERSION == 14
+    assert verification["schema_version"] == SCHEMA_VERSION
     assert verification["source_checksums_verified"] == 2
 
     cli = [str(Path(executable).with_name("aurum")), "--db", str(store.path)]

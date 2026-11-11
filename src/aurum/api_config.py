@@ -7,6 +7,7 @@ from aurum.candles import Timeframe
 from aurum.economic_archive import normalize_archived_ics
 from aurum.economic_events import EconomicCalendar
 from aurum.economic_ics import MAX_ECONOMIC_CAPTURES
+from aurum.economic_updates import adopt_economic_snapshot
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
@@ -24,6 +25,25 @@ from aurum.runtime_profiles import DeliveryProfile, ProviderProfile
 from aurum.storage import DatasetStore
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, StrategyConfig, Variant
 from aurum.timestamps import minute_timestamp
+
+
+class EconomicUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    economic_calendar: dict[str, object] | None
+    reason: str = Field(min_length=1, max_length=1000)
+
+    def adopt(self, store: DatasetStore, monitor_id: str) -> str:
+        from datetime import UTC, datetime
+
+        snapshot = (
+            EconomicCalendar.from_dict(self.economic_calendar)
+            if self.economic_calendar is not None
+            else None
+        )
+        return adopt_economic_snapshot(
+            store, monitor_id, snapshot, activated_at=datetime.now(UTC), reason=self.reason
+        )
 
 
 class EconomicCapturePreview(BaseModel):

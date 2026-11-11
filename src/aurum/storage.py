@@ -30,7 +30,7 @@ from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
 from aurum.timestamps import TradeTimestamp, trade_timestamp
 
 APPLICATION_ID = 0x4155524D
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 def is_transient_lock(error: sqlite3.OperationalError) -> bool:
@@ -290,6 +290,17 @@ SCHEMA_V14 = """CREATE TABLE economic_captures (
         byte_count INTEGER NOT NULL CHECK (byte_count > 0),
         archive_version INTEGER NOT NULL CHECK (archive_version > 0),
         UNIQUE (publisher, observed_at)
+    ) STRICT, WITHOUT ROWID"""
+SCHEMA_V15 = """CREATE TABLE monitor_economic_updates (
+        monitor_id TEXT NOT NULL REFERENCES monitor_runs(id),
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        id TEXT NOT NULL UNIQUE,
+        activated_at TEXT NOT NULL,
+        calendar TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        rule_version INTEGER NOT NULL,
+        PRIMARY KEY (monitor_id, sequence),
+        UNIQUE (monitor_id, activated_at)
     ) STRICT, WITHOUT ROWID"""
 
 
@@ -931,4 +942,6 @@ class DatasetStore:
                 db.execute(statement)
         if write and version < 14:
             db.execute(SCHEMA_V14)
-            db.execute("PRAGMA user_version = 14")
+        if write and version < 15:
+            db.execute(SCHEMA_V15)
+            db.execute("PRAGMA user_version = 15")

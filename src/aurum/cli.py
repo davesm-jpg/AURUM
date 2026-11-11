@@ -30,6 +30,7 @@ from aurum.economic_archive import (
 from aurum.economic_composition import compose_economic_calendars
 from aurum.economic_events import MAX_ECONOMIC_PUBLICATIONS, EconomicCalendar, EconomicSourceKind
 from aurum.economic_ics import compare_economic_ics, normalize_economic_ics
+from aurum.economic_updates import adopt_economic_snapshot, economic_updates
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import DEFAULT_EXECUTION_CONFIG, ExecutionConfig
@@ -374,6 +375,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("monitor-status", "monitor-events", "monitor-alerts"):
         command = commands.add_parser(name)
         command.add_argument("monitor_id")
+    economic_update = commands.add_parser(
+        "monitor-economic-update", help="activate a reviewed economic snapshot for a monitor"
+    )
+    economic_update.add_argument("monitor_id")
+    update_source = economic_update.add_mutually_exclusive_group(required=True)
+    update_source.add_argument("--snapshot", type=Path)
+    update_source.add_argument("--unavailable", action="store_true")
+    economic_update.add_argument("--reason", required=True)
+    update_audit = commands.add_parser(
+        "monitor-economic-updates", help="read adopted economic updates"
+    )
+    update_audit.add_argument("monitor_id")
 
     forward_start = commands.add_parser("forward-start", help="register a forward paper run")
     forward_start.add_argument("monitor_id")
@@ -556,6 +569,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 title_prefixes=tuple(args.title_prefix),
             )
             print(canonical_json(snapshot.as_dict()))
+        elif args.command == "monitor-economic-update":
+            update_id = adopt_economic_snapshot(
+                store,
+                args.monitor_id,
+                _economic_calendar(args.snapshot),
+                activated_at=datetime.now(UTC),
+                reason=args.reason,
+            )
+            print(canonical_json({"update_id": update_id}))
+        elif args.command == "monitor-economic-updates":
+            print(canonical_json(economic_updates(store, args.monitor_id)))
         elif args.command == "contracts":
             inventory = ContractCatalog.from_json(args.catalog.read_text(encoding="utf-8"))
             policy = RollPolicy(

@@ -11,6 +11,7 @@ from threading import Lock
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind, EventAssessment, EventRisk
+from aurum.economic_updates import economic_timeline
 from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.feed_frames import FeedFrame, candle_from_dict
@@ -335,6 +336,8 @@ class MarketMonitor:
             and frame.source_status is FeedStatus.REAL_TIME
             and self.calendar.permits(now.replace(second=0, microsecond=0))
         )
+        timeline = economic_timeline(db, self.monitor_id, self._economic)
+        observation_calendar, observation_update = timeline.at(db, datetime.fromisoformat(observed))
         while expected is not None:
             available = db.execute(
                 """SELECT candle, source_status, received_at FROM monitor_minutes
@@ -344,6 +347,8 @@ class MarketMonitor:
             if available is None:
                 break
             minute = candle_from_dict(json.loads(available["candle"]))
+            source_calendar, source_update = timeline.at(db, minute.available_at)
+            self._engine.set_economic_calendar(source_calendar)
             step = self._engine.step(minute)
             db.execute(
                 """UPDATE monitor_minutes SET applied = 1, applied_at = ?, execution_eligible = ?
@@ -351,17 +356,21 @@ class MarketMonitor:
                 (observed, int(direct and expected == opened), self.monitor_id, expected),
             )
             if step is not None:
-                self._record_market(db, minute, step)
+                self._record_market(db, minute, step, source_update)
             for event in step.setups if step is not None else ():
                 qualified = event.state is SetupState.PAPER_SIGNAL
-                observed_economic = (
-                    self._economic.assess(
-                        datetime.fromisoformat(observed),
-                        DEFAULT_CONTEXT_CONFIG.event_buffer_minutes,
+                observed_economic = None
+                if qualified:
+                    observed_economic = (
+                        observation_calendar.assess(
+                            datetime.fromisoformat(observed),
+                            DEFAULT_CONTEXT_CONFIG.event_buffer_minutes,
+                        )
+                        if observation_calendar is not None
+                        else EventAssessment(EventRisk.UNKNOWN)
+                        if observation_update is not None
+                        else None
                     )
-                    if qualified and self._economic is not None
-                    else None
-                )
                 event_gate = not self._strategy_config.require_clear_event_risk or (
                     observed_economic is not None and observed_economic.risk is EventRisk.CLEAR
                 )
@@ -374,6 +383,12 @@ class MarketMonitor:
                         "source_received_at": available["received_at"],
                         "observed_at": observed,
                         "alert_eligible": alert_eligible,
+                        **({"source_economic_update_id": source_update} if source_update else {}),
+                        **(
+                            {"observed_economic_update_id": observation_update}
+                            if qualified and observation_update
+                            else {}
+                        ),
                         **(
                             {
                                 "observed_economic": observed_economic.as_dict(),
@@ -385,7 +400,7 @@ class MarketMonitor:
                     },
                 )
                 if alert_eligible:
-                    self._alert(db, event, now, observed_economic)
+                    self._alert(db, event, now, observed_economic, observation_update)
             last_applied = expected
             expected = self._next_open(minute.opened_at)
         db.execute(
@@ -413,11 +428,16 @@ class MarketMonitor:
         span = TradingWindow(
             datetime.fromisoformat(expected), datetime.fromisoformat(checkpoint) + MINUTE
         )
+        with self.store.connection() as db:
+            timeline = economic_timeline(db, self.monitor_id, self._economic)
         for batch in applied_minute_batches(self.store, self.monitor_id, span):
-            for candle, _source in batch:
+            with self.store.connection() as db:
+                contexts = [timeline.at(db, candle.available_at)[0] for candle, _ in batch]
+            for (candle, _source), economic in zip(batch, contexts, strict=True):
                 opened = candle.opened_at.isoformat()
                 if opened != expected:
                     raise ValueError("durable monitor checkpoint contains an applied gap")
+                self._engine.set_economic_calendar(economic)
                 self._engine.push(candle)
                 previous = opened
                 expected = self._next_open(candle.opened_at)
@@ -526,7 +546,13 @@ class MarketMonitor:
             (self.monitor_id, canonical_json(payload), self.monitor_id),
         )
 
-    def _record_market(self, db: sqlite3.Connection, minute: Candle, step: StrategyStep) -> None:
+    def _record_market(
+        self,
+        db: sqlite3.Connection,
+        minute: Candle,
+        step: StrategyStep,
+        source_economic_update: str | None = None,
+    ) -> None:
         sequence = db.execute(
             "SELECT coalesce(max(sequence), 0) FROM monitor_market_events WHERE run_id = ?",
             (self.monitor_id,),
@@ -537,6 +563,11 @@ class MarketMonitor:
                 "event": "market_context_observed",
                 "confirmed_at": minute.available_at.isoformat(),
                 "context": step.context.as_dict(),
+                **(
+                    {"source_economic_update_id": source_economic_update}
+                    if source_economic_update
+                    else {}
+                ),
             }
         )
         db.executemany(
@@ -559,6 +590,7 @@ class MarketMonitor:
         event: SetupEvent,
         now: datetime,
         observed_economic: EventAssessment | None,
+        economic_update_id: str | None = None,
     ) -> None:
         alert_id = f"{self.monitor_id}/{event.setup_id}"
         payload = {
@@ -577,6 +609,7 @@ class MarketMonitor:
                 source_timezone("Europe/Prague")
             ).isoformat(),
             "setup": event.as_dict(),
+            **({"observed_economic_update_id": economic_update_id} if economic_update_id else {}),
             **(
                 {"observed_economic": observed_economic.as_dict()}
                 if observed_economic is not None

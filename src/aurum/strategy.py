@@ -476,6 +476,9 @@ class StrategyReplay:
         step = self.step(candle)
         return step.setups if step else ()
 
+    def set_economic_calendar(self, economic: EconomicCalendar | None) -> None:
+        self._context.economic = economic
+
     def step(self, candle: Candle) -> StrategyStep | None:
         step = self._evidence.step(candle)
         if step is None:

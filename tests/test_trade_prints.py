@@ -226,6 +226,7 @@ def test_trade_pages_and_timestamps_preserve_order_below_a_microsecond(tmp_path:
         db.execute("DROP TABLE quote_series")
         db.execute("DROP TABLE trade_prints")
         db.execute("DROP TABLE economic_captures")
+        db.execute("DROP TABLE monitor_economic_updates")
         db.execute("PRAGMA user_version = 11")
     path = _write(
         tmp_path / "synthetic-many.csv",

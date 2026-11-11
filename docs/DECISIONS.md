@@ -274,3 +274,12 @@
 - Decision — Accept an explicit fetch from a fixed official publisher. Bound the response, refuse redirects and capture the time after receiving the body. Store exact bytes once per checksum, with a receipt per observation. Normalize independently using the receipt.
 - Consequences — Failed requests produce no receipt. Current captures cannot be used as earlier historical evidence. The worker continues to use a frozen reviewed snapshot. Polling and runtime refresh remain open.
 - Files — `economic_archive.py`, `economic_ics.py`, `storage.py`, CLI and archive tests.
+
+## ADR-030 — Activate reviewed economic updates on a durable clock
+
+- Date — 2026-11-11.
+- Context — A running monitor needs reviewed publication updates while retaining the evidence available for earlier decisions and restart.
+- Alternatives — Replace the initial monitor definition, restart with a new identity or append timestamped updates to the monitor journal.
+- Decision — Append immutable reviewed snapshots with an activation time later than all processed source and observation clocks. Source context resolves the snapshot at candle close. Alert and new paper-entry checks resolve it at actual observation. Restart replays the same activation timeline. A recorded unavailable update produces unknown risk.
+- Consequences — Each affected decision identifies the applied update. Publication knowledge cannot predate activation. Existing alerts and outcomes retain their evidence. Historical baseline comparison requires compatible economic context, including adopted updates.
+- Files — Planned `economic_updates.py`, `monitoring.py`, `strategy.py`, CLI and update tests.

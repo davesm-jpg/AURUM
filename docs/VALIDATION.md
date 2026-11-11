@@ -193,5 +193,16 @@ availability and authorized MGC research remain separate.
 The archived preview API matched offline normalization and left the SQLite
 file checksum unchanged. Tests altered archive bytes and receipt metadata
 and verified audit rejection and no backup publication. The Settings picker
-compiled in the production frontend build. Interactive browser verification
-of that picker remains open.
+compiled in the production frontend build. On 2026-11-11, browser verification
+prepared and copied a synthetic capture snapshot, confirmed the observation
+clock and partial coverage, and left the store with zero provider profiles.
+
+## Reviewed monitoring updates
+
+Five synthetic tests verified immutable activation, concurrent idempotency,
+rejection of changes to processed history, publication knowledge checks,
+independent source and observation clocks, unavailable risk, restart and
+corrupted-record rejection. CLI audit matched the API journal, and the API
+rejected client-supplied activation times. The full suite passed 233 tests.
+The reviewed update workflow is manual. Delivery of previously queued alerts
+continues to use their recorded evidence and the existing freshness policy.

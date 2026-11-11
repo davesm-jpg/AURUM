@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Reviewed monitoring calendar updates
+
+- Verified the archived snapshot picker in the browser.
+- Added immutable calendar activation through CLI and API, with distinct source and observation clocks, restart recovery and recorded unavailable context.
+
 ## 2026-11-10 — Archived economic snapshot review
 
 - Added local capture previews in provider Settings and included archive receipt and byte validation in verified backups.

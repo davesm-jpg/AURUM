@@ -39,6 +39,16 @@ Staged validation selects from an exclusive availability bound on the backtest j
 
 ## Flow and invariants
 
+Schema v15 adds immutable reviewed economic activations for each monitor.
+Activation follows all already processed source and observation clocks, and
+each snapshot retains its own publication availability. Source context resolves
+the activation timeline at candle close. New alert and forward-entry checks
+resolve it at processing observation. Restart reads the same timeline while
+reconstructing detector state. A missing source is an explicit unknown-risk
+activation. The baseline monitor identity remains the original frozen manifest,
+and affected journal decisions carry activation IDs. Historical forward
+comparison rejects an unmatched adopted economic history.
+
 1. The caller supplies an authorized unadjusted single-contract CSV, source timezone, timestamp labeling, provider, data kind and reviewed schedule. Calendar coverage is the expected export interval. The dated snapshot groups full half-open open windows by exchange trade date. The calendar intersects those windows with coverage for candle validation. Closed intervals are represented by the absence of open windows, and split windows can share a trade date. Legacy snapshots keep their original clipped window representation.
 2. Ingestion reads the exact source bytes, validates the fixed CSV schema and every bar, converts UTC or source-local timestamps to UTC, and maps close labels back one minute. Timezone conversion uses the pinned package, and the package version enters dataset provenance.
 3. Normalization sorts uniquely timestamped bars and checks each expected open minute, including boundary and entirely absent windows. Invalid rows, duplicates or contract mismatches reject the import. Disorder and zero volume are reported. Gaps are retained as diagnostics and gate replay.

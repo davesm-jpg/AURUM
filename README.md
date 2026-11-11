@@ -224,6 +224,16 @@ monthly publication requires reviewed schedule coverage into the next period.
 
 ## Runtime profiles
 
+Use `monitor-economic-update MONITOR_ID --snapshot REVIEWED.json --reason TEXT`
+to activate a reviewed calendar for an existing monitor. Use `--unavailable`
+to record missing economic context. The command uses its current UTC clock.
+It rejects activation at or before processed source and observation times.
+Inspect the immutable history with `monitor-economic-updates MONITOR_ID`.
+Snapshots require an explicit source classification. Source-candle context and
+new alert or paper-entry checks each use the snapshot active at their own
+clock. Restart uses the recorded activation history. A monitor with adopted
+updates requires a matching economic history for historical baseline comparison.
+
 The **Settings** tab saves provider and notification profiles. Set their
 `AURUM_` environment variable values in the corresponding worker environment.
 Use the command shown with the saved profile, or list profiles with
