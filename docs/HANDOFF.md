@@ -5,7 +5,7 @@
 - Current phase — Local historical research, paper execution, monitoring and the dashboard are verified on labeled synthetic fixtures. Production data and delivery verification remain blocked.
 - Current milestone — Native Databento core, email, report notifications and packaged services passed hosted CI. Native provider Settings and profile extensions passed local and browser verification. Authorized market-data validation remains blocked.
 - Current branch — `codex/verified-research-platform`, tracking the same branch at `https://github.com/davesm-jpg/AURUM.git`.
-- Last verified code commit — `6a0bcf0`, native core, passed all three hosted jobs in run 43004011688. Native profile/Settings extensions passed full local and browser verification before this checkpoint.
+- Last verified code commit — `1d6d92c` passed 276 local tests, static/frontend checks and browser verification, and is published. Its hosted run 43004980567 was queued at shutdown. Native core `6a0bcf0` passed all hosted jobs in run 43004011688.
 
 ## Current Objective
 
@@ -69,9 +69,11 @@
 
 ## Immediate Next Actions
 
-1. Inspect the hosted native-profile/Settings commit checks and record its exact successful commit. Do not dispatch duplicate workflows during push startup. Temporary native browser services should be stopped before session end.
+1. Inspect `gh run view 43004980567 --repo davesm-jpg/AURUM` for published commit `1d6d92c`. Fix any actual failures before further features. Do not dispatch duplicate workflows. Temporary API/dashboard services were stopped. The final handoff-only commit is local; publish it after inspecting this run.
 2. Obtain authorized bounded MGC history and a matching reviewed schedule. Preserve D04/B02/L02 as blocked until actual verification. Keep keys local, and do not query paid endpoints without confirmed authorization.
 3. When approved inputs arrive, run historical reconciliation and integrity checks before any empirical backtest or production monitor trial. Recommended provider is Databento CME Standard; keys must stay in local environment variables.
+
+Session stopped at the user's requested five-hour usage boundary, with 5 percent remaining. No worker or preview service was left running. GitHub CI is an actual hosted workflow, not ongoing agent work.
 
 ## Do Not Repeat
 
