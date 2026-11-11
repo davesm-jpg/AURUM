@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
@@ -25,6 +25,7 @@ from aurum.monitoring import (
     describe_monitor,
     market_events_page,
     market_evidence_started_at,
+    monitor_alerts,
     monitor_events,
     operational_monitor_status,
 )
@@ -105,6 +106,89 @@ def test_pending_gap_and_restart_recover_durable_prefix(tmp_path: Path) -> None:
     assert (
         restarted.ingest(frame(3, received=4))["last_applied_open"] == filled["last_applied_open"]
     )
+
+
+def test_monitor_journal_export_releases_readers_and_freezes_initial_sequence(
+    tmp_path: Path,
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic-journal.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 8)))
+    with store.connection(write=True) as db:
+        db.executemany(
+            "INSERT INTO monitor_events VALUES (?, ?, ?)",
+            (
+                (
+                    monitor.monitor_id,
+                    index + 1,
+                    json.dumps({"event": "synthetic_note", "index": index}),
+                )
+                for index in range(1002)
+            ),
+        )
+    expected = list(monitor_events(store, monitor.monitor_id))
+    journal = monitor_events(store, monitor.monitor_id)
+    assert isinstance(journal, Generator)
+    try:
+        assert next(journal) == expected[0]
+        monitor.note(START, "synthetic_after_export_started", "must stay outside captured prefix")
+        assert [next(journal) for _ in range(999)] == expected[1:1000]
+        assert next(journal) == expected[1000]
+        monitor.note(START, "synthetic_after_second_page", "must stay outside captured prefix")
+        assert list(journal) == expected[1001:]
+    finally:
+        journal.close()
+    fresh = list(monitor_events(store, monitor.monitor_id))
+    assert fresh[:1002] == expected
+    assert [event["event"] for event in fresh[1002:]] == [
+        "synthetic_after_export_started",
+        "synthetic_after_second_page",
+    ]
+
+
+def test_monitor_alert_export_releases_readers_and_freezes_membership_with_ties(
+    tmp_path: Path,
+) -> None:
+    store = DatasetStore(tmp_path / "synthetic-alert-export.sqlite")
+    monitor = fixture_monitor(store, calendar((0, 8)))
+    created = START.isoformat()
+    with store.connection(write=True) as db:
+        db.executemany(
+            "INSERT INTO monitor_alerts VALUES (?, ?, ?, ?)",
+            (
+                (
+                    monitor.monitor_id,
+                    f"{index:04d}",
+                    json.dumps({"alert_id": f"{index:04d}", "event": "synthetic_alert"}),
+                    created,
+                )
+                for index in range(1002)
+            ),
+        )
+    expected = list(monitor_alerts(store, monitor.monitor_id))
+    alerts = monitor_alerts(store, monitor.monitor_id)
+    assert isinstance(alerts, Generator)
+    try:
+        for offset in (0, 1000):
+            assert next(alerts) == expected[offset]
+            with store.connection(write=True) as db:
+                db.execute("PRAGMA busy_timeout = 100")
+                db.execute(
+                    "INSERT INTO monitor_alerts VALUES (?, ?, ?, ?)",
+                    (
+                        monitor.monitor_id,
+                        f"{offset:04d}-late",
+                        json.dumps({"alert_id": f"{offset:04d}-late", "event": "synthetic_late"}),
+                        created,
+                    ),
+                )
+            if offset == 0:
+                assert [next(alerts) for _ in range(999)] == expected[1:1000]
+        assert list(alerts) == expected[1001:]
+    finally:
+        alerts.close()
+    fresh = list(monitor_alerts(store, monitor.monitor_id))
+    assert len(fresh) == 1004
+    assert [alert for alert in fresh if alert["event"] == "synthetic_alert"] == expected
 
 
 def test_market_closure_disconnection_staleness_and_unknown_coverage(tmp_path: Path) -> None:

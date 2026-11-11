@@ -5,13 +5,13 @@
 - Current phase — Offline research, forward paper simulation, monitoring and dashboard. Production data validation remains blocked.
 - Current milestone — L17 public polling, D13 monitor input verification, N06 lifecycle alerts, reconnect safeguards and replay reader fix passed hosted CI. Monte Carlo account breach reporting passed local/browser checks.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — f6a1d63 passed all three hosted jobs in run 43088753935. Subsequent Monte Carlo v2 passed 311 local tests before this snapshot.
+- Last verified commit — 8f2be56 passed all three hosted jobs in run 43089679113. Subsequent monitor journal export maintenance passed focused checks before this snapshot.
 
 ## Current Objective
 
-- Task ID — O01 maintenance of Monte Carlo/reporting (MC-001).
-- Objective — Publish verified separate stopped-account distributions and inspect hosted gates.
-- Acceptance criteria — Account equity and diagnostics freeze after the first crossing loss, unrestricted paths remain explicitly labeled, RNG streams remain unchanged and older saved results are preserved.
+- Task ID — O01 reliability maintenance (STORE-002).
+- Objective — Publish verified nonblocking monitor exports and inspect hosted checks.
+- Acceptance criteria — Captured event sequence and alert membership stay fixed while payload pages release readers before yielding; concurrent writes commit and remain outside the export.
 
 ## Completed Work
 
@@ -35,6 +35,7 @@
 - Reconnect maintenance recognizes OSError causes/context wrapped by the pinned SDK's BentoError, including suppressed timeout context. Unqualified authorization errors remain permanent. Callback registration is inside the same sanitized boundary. Shared run_stream suspends the saved connection before opening a replacement transport. Five added synthetic cases passed; no actual provider or delivery call was made.
 - STORE-001 is resolved: DatasetStore.replay reuses immutable 1,000-row pages and closes the reader before yielding. Two regressions failed with database-is-locked before the fix and now commit another writer before/after the page boundary, preserving all full/bounded candles. No schema or rule version changed.
 - MC-001 is resolved: Monte Carlo v2 separately retains unrestricted full-horizon strategy paths and stopped-account distributions, including crossing losses. Full return consumption preserves seeded paths. CLI/API persist the version and policy. Browser verified the all-loss assumed case and unavailable metrics on a legacy-shaped fixture; zero market observations. ADR-038 records the boundary. Temporary store: /var/folders/m4/rknhph5d7v15y87fjlx_4vgc0000gn/T/aurum-breach-preview-1yq0s6jn/assumed.sqlite. Preview servers are stopped.
+- STORE-002 fixes demonstrated writer locks in both monitor exports. Events use a captured maximum sequence; alerts retain ordered starting IDs and read at most 256 payloads per page. Regressions verify writes, fixed membership and timestamp ties across pages. ID metadata memory remains proportional to alert count; no schema/identity changed. ADR-039 documents this choice.
 - O01 optimization remains open. The 21,600-minute synthetic benchmark retained all chart digests after restart source validation. Ingestion measured 4.519 s and restart 1.168 s versus the prior approximately 0.8 s. See PERFORMANCE.md. Optional ML awaits historical evidence.
 
 ## Important Decisions
@@ -56,10 +57,10 @@
 
 ## Test Status
 
-- Last full command — .venv/bin/pytest -q — 311 passed. Focused account/research/API checks cover subsequent trailing-account assertions.
+- Last full command — .venv/bin/pytest -q — 313 passed, including both paused monitor exports. Ruff check/format and strict mypy (100 files) passed.
 - Static — Ruff check/format, strict mypy (100 files), Git whitespace, pip check and actionlint passed. Frontend typecheck/build and five tests passed for lifecycle Settings. Browser verified unchecked default, enabled profile saving and zero monitor creation.
 - Integration — Real public BEA/BLS one-shot attempts and browser capture health verified. Source/normalized audit passed on the ignored public-data store.
-- Hosted — All three jobs passed for replay maintenance f6a1d63 in run 43088753935. Monte Carlo v2 awaits publication.
+- Hosted — All three jobs passed for Monte Carlo v2 8f2be56 in run 43089679113. Monitor export maintenance awaits publication.
 - Failed — No outstanding automated failure.
 - Not run — Authorized MGC reconciliation, actual feed/channel trials and empirical out-of-sample evaluation. Do not interpret fixture outcomes as evidence.
 
@@ -72,7 +73,7 @@
 
 ## Immediate Next Actions
 
-1. Commit/push verified Monte Carlo v2 and inspect its hosted run.
+1. Commit/push verified monitor export maintenance and inspect its hosted run.
 2. Inspect the next evidence-backed reliability gap without reimplementing completed features. Optional ML remains dependent on authorized historical evidence.
 3. For D04/B02/L02, wait for authorized data/configuration. Recommended provider was Databento; no purchase or access has been confirmed. Keep keys local and do not issue paid queries without authorization.
 

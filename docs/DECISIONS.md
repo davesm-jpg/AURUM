@@ -357,3 +357,12 @@
 - Decision — Monte Carlo v2 retains the seeded full-horizon strategy path and reports separate account terminal equity, drawdown, losing streak and completed-trade distributions stopped after the crossing loss. Continue consuming all returns so path RNG behavior remains unchanged. Keep trade-close-only measurement explicit.
 - Consequences — Breached accounts cannot recover in the account distribution. Breach overshoots remain visible. A version change gives new immutable report IDs; older reports retain their saved results and display missing account metrics. No actual trading or empirically achieved win rate is implied.
 - Files — `monte_carlo.py`, report summary UI, research/account/API tests and README.
+
+## ADR-039 — Release monitor export readers before consumer work
+
+- Date — 2026-11-11.
+- Context — Paused journal and alert iterators held SQLite readers, blocking concurrent monitor commits on the rollback-journal store.
+- Alternatives — Enable WAL globally, copy the whole database or capture immutable membership and page payloads.
+- Decision — Capture the maximum event sequence and page through that fixed prefix. Alerts lack an insertion sequence and timestamps may tie or be backdated, so capture their ordered IDs first and read 256 payloads at a time. Close every reader before yielding.
+- Consequences — Slow CLI consumers no longer retain database locks. Concurrent appends stay outside the export. Alert ID memory is proportional to alert count, while payload memory is bounded. No schema, rule, monitor or dataset identity changes. Application journals remain immutable; direct unauthorized edits are outside the snapshot contract.
+- Files — `monitoring.py`, monitoring export regressions and architecture documentation.

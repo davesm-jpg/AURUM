@@ -1,5 +1,12 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-11, monitor journal readers
+
+- The synthetic journal regression failed before the change with `database is locked` after five seconds. It now pauses an export, commits new notes before and after a 1,000-row page boundary and verifies exact output against the captured prefix. A fresh export sees the later appends.
+- A second regression reproduced the alert-export lock, then verified exact membership and timestamp-tie ordering across pages while new alerts commit. Captured ID metadata is proportional to alert count; payload pages are bounded to 256.
+- Full Python suite passed 313 tests after both export changes. Ruff check/format and strict mypy passed (100 files).
+- Monte Carlo v2 commit 8f2be56 passed all three hosted jobs in run 43089679113.
+
 ## Verified checkpoint — 2026-11-11, stopped Monte Carlo accounts
 
 - Full Python suite passed 311 tests, Ruff check/format and strict mypy passed (100 files). Frontend typecheck, five tests and production build passed.

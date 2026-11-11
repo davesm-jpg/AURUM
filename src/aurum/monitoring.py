@@ -947,29 +947,64 @@ def market_evidence_started_at(
 
 
 def monitor_events(store: DatasetStore, monitor_id: str) -> Iterator[dict[str, object]]:
+    """Export a fixed journal prefix without holding a reader across yields."""
     with store.connection() as db:
         row = _run(db, monitor_id)
         source = json.loads(row["definition"])["monitor_config"]["source_status"]
-        for event in db.execute(
-            "SELECT sequence, payload FROM monitor_events WHERE run_id = ? ORDER BY sequence",
+        through = db.execute(
+            "SELECT coalesce(max(sequence), 0) FROM monitor_events WHERE run_id = ?",
             (monitor_id,),
-        ):
+        ).fetchone()[0]
+    after = 0
+    while after < through:
+        with store.connection() as db:
+            batch = db.execute(
+                """SELECT sequence, payload FROM monitor_events
+                   WHERE run_id = ? AND sequence > ? AND sequence <= ?
+                   ORDER BY sequence LIMIT 1000""",
+                (monitor_id, after, through),
+            ).fetchall()
+        if not batch:
+            return
+        for event in batch:
             yield {
                 "source_status": source,
                 **json.loads(event["payload"]),
                 "monitor_id": monitor_id,
                 "event_id": f"{monitor_id}/{event['sequence']}",
             }
+        after = batch[-1]["sequence"]
 
 
 def monitor_alerts(store: DatasetStore, monitor_id: str) -> Iterator[dict[str, object]]:
+    """Freeze alert membership, then read bounded payload pages without a held lock.
+
+    Alerts have no append sequence and may share/backdate creation timestamps.
+    Retaining only their IDs avoids silently including later inserts in an export.
+    """
     with store.connection() as db:
         _run(db, monitor_id)
-        for alert in db.execute(
-            """SELECT payload, created_at FROM monitor_alerts
-               WHERE run_id = ? ORDER BY created_at, alert_id""",
-            (monitor_id,),
-        ):
+        ids = tuple(
+            row["alert_id"]
+            for row in db.execute(
+                """SELECT alert_id FROM monitor_alerts
+                   WHERE run_id = ? ORDER BY created_at, alert_id""",
+                (monitor_id,),
+            )
+        )
+    for offset in range(0, len(ids), 256):
+        page = ids[offset : offset + 256]
+        with store.connection() as db:
+            rows = db.execute(
+                f"""SELECT alert_id, payload, created_at FROM monitor_alerts
+                    WHERE run_id = ? AND alert_id IN ({",".join("?" for _ in page)})""",
+                (monitor_id, *page),
+            ).fetchall()
+        if len(rows) != len(page):
+            raise ValueError("monitor alert disappeared during immutable export")
+        by_id = {row["alert_id"]: row for row in rows}
+        for alert_id in page:
+            alert = by_id[alert_id]
             yield {**json.loads(alert["payload"]), "created_at": alert["created_at"]}
 
 

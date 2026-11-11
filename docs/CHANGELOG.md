@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-11 — Nonblocking monitor exports
+
+- Monitor event exports freeze their starting sequence. Alert exports capture ordered IDs and read bounded payload pages. Both close readers before yielding.
+- Reproduced writer timeouts are covered across page boundaries and timestamp ties. Concurrent new entries remain outside that export and appear on a fresh read.
+
 ## 2026-11-11 — Monte Carlo account breach boundary
 
 - Added version 2 account distributions stopped at the first loss-limit breach while retaining seeded unrestricted strategy paths.
