@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Offline research, forward paper simulation, monitoring and dashboard. Production data validation remains blocked.
-- Current milestone — L17 durable public economic-calendar polling is implemented and locally verified. Its hosted checkpoint is next.
+- Current milestone — L17 public polling passed hosted CI. D13 preserved monitor input verification passed local checks and is ready for hosted verification.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — 1d6d92c passed hosted run 43004980567. Handoff commit 54e2a9f was subsequently published. L17 changes passed local checks before this snapshot.
+- Last verified commit — 7448b91 passed all hosted jobs in run 43080173016. D13 changes passed 295 local tests and static checks before this snapshot.
 
 ## Current Objective
 
-- Task ID — L17.
-- Objective — Review and publish the polling slice, verify hosted checks, then continue the next unblocked data-integrity task.
-- Acceptance criteria — Preserve actual public receipt clocks, cadence and failure evidence; prevent duplicate concurrent requests; reconstruct restart and backup state; expose health without automatically adopting monitor context.
+- Task ID — D13.
+- Objective — Publish monitor input verification, check hosted gates, then continue the next unblocked slice.
+- Acceptance criteria — Reconstruct saved replay/normalized/native frames, compare exact input and applied continuity, preserve unknown clocks, reject corrupt verified backups and fault restart before research resumes.
 
 ## Completed Work
 
@@ -26,11 +26,12 @@
 ## Work In Progress
 
 - L17 uses schema v16 tables economic_pollers and economic_poll_attempts. An explicit foreground worker claims before HTTP, preserves successful receipts separately, backs off after failure and marks expired leases uncertain. Read-only CLI/API and Settings show health. Reviewed monitor adoption remains separate.
+- D13 adds monitor_audit.py and verify-monitor. It verifies input source equivalence in bounded pages, includes pending rows and preserves legacy clock limits. Native reconstruction reuses the SDK decoder without a client/key. Store and backup audits include monitors. Restart source/manifest mismatch latches an integrity fault before replaying detector state. Ten synthetic cases and 295 total tests passed. It does not reproduce detector/alert journals or prove vendor entitlements.
 - Nine synthetic polling cases passed, including concurrency, interruption after receipt, migration, failures and fail-closed verified backups. Full suite passed 285 tests. Frontend typecheck/build and browser health display passed.
 - Actual public BEA receipt 54bfea8b12144d5b197f1e1d82c2573a245bd239f63a606c70f66536fb692b5a was captured at 2026-11-11 18:36:20.778515 UTC. BLS returned HTTP 403. Ignored local data/public-economics.sqlite holds one capture, two pollers and two attempts. Source and normalized store audits passed.
 - No foreground preview or polling process remains running.
-- Roadmap currently lists 47/52 DONE (90.4 percent), with L17 IN_PROGRESS until the hosted checkpoint and three BLOCKED tasks. Once L17 is complete, use 48/52 (92.3 percent).
-- O01 optimization remains open. Existing 21,600-minute synthetic benchmarks retained identical chart digests, approximately 4.4 s batched ingestion and 0.8 s restart. Optional ML awaits historical evidence.
+- Roadmap currently lists 48/53 DONE (90.6 percent), with D13 IN_PROGRESS pending its hosted checkpoint and three BLOCKED tasks. Once D13 is complete, use 49/53 (92.5 percent).
+- O01 optimization remains open. The 21,600-minute synthetic benchmark retained all chart digests after restart source validation. Ingestion measured 4.519 s and restart 1.168 s versus the prior approximately 0.8 s. See PERFORMANCE.md. Optional ML awaits historical evidence.
 
 ## Important Decisions
 
@@ -51,10 +52,10 @@
 
 ## Test Status
 
-- Last full command — .venv/bin/python -m pytest -q — 285 passed.
-- Static — Ruff check/format, strict mypy (97 files), Git whitespace and frontend typecheck/build passed. Five frontend tests passed at the prior verified checkpoint.
+- Last full command — .venv/bin/python -m pytest -q — 295 passed.
+- Static — Ruff check/format, strict mypy (99 files), Git whitespace, pip check and actionlint passed. Frontend typecheck/build and five tests passed for the public-calendar UI checkpoint.
 - Integration — Real public BEA/BLS one-shot attempts and browser capture health verified. Source/normalized audit passed on the ignored public-data store.
-- Hosted — All jobs passed for 1d6d92c. New polling slice awaits hosted execution.
+- Hosted — All jobs passed for 7448b91. The new monitor input slice awaits hosted execution.
 - Failed — No outstanding automated failure.
 - Not run — Authorized MGC reconciliation, actual feed/channel trials and empirical out-of-sample evaluation. Do not interpret fixture outcomes as evidence.
 
@@ -67,8 +68,8 @@
 
 ## Immediate Next Actions
 
-1. Review the L17 diff and run remaining focused checks. Commit and push, inspect the exact hosted run, then mark L17 DONE and update this handoff.
-2. Continue an offline-testable integrity slice, such as reconstructing persisted monitor minutes from preserved normalized/native frames. Inspect existing monitor storage and recovery before choosing scope.
+1. Commit/push D13 and inspect the hosted run. Once all gates pass, mark D13 DONE and record its exact commit.
+2. Inspect setup lifecycle notification coverage next. Developing/invalidation transitions exist in the monitor journal, but external alert queuing currently covers confirmed setups and health warnings. Keep any new delivery opt-in and preserve existing monitor/profile IDs.
 3. For D04/B02/L02, wait for authorized data/configuration. Recommended provider was Databento; no purchase or access has been confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat

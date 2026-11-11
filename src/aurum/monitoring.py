@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from hashlib import sha256
 from threading import Lock
+from typing import Any
 
 from aurum.candles import AGGREGATION_VERSION, Timeframe
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind, EventAssessment, EventRisk
@@ -19,6 +20,11 @@ from aurum.instruments import MgcContract
 from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG
 from aurum.market_data import Candle, canonical_json
 from aurum.market_structure import STRUCTURE_VERSION, StructureConfig
+from aurum.monitor_audit import (
+    MAX_FRAME_BYTES,
+    MonitorInputIntegrityError,
+    preserved_monitor_candle,
+)
 from aurum.providers import FeedStatus
 from aurum.storage import DatasetStore
 from aurum.strategy import (
@@ -138,6 +144,7 @@ class MarketMonitor:
             }
         )
         self.monitor_id = sha256(definition.encode()).hexdigest()
+        self._manifest = json.loads(definition)
         expected = calendar.windows[0].start.isoformat() if calendar.windows else None
         with store.connection(write=True) as db:
             db.execute(
@@ -146,8 +153,18 @@ class MarketMonitor:
                    VALUES (?, ?, ?, 0, ?) ON CONFLICT (id) DO NOTHING""",
                 (self.monitor_id, definition, MonitorState.DISCONNECTED, expected),
             )
-            checkpoint = _run(db, self.monitor_id)["last_applied"]
-        self._restore(checkpoint)
+            stored = _run(db, self.monitor_id)
+            checkpoint = stored["last_applied"]
+            stored_manifest = stored["definition"]
+        try:
+            if stored_manifest != definition:
+                raise MonitorInputIntegrityError(
+                    "stored monitor manifest differs from its identity"
+                )
+            self._restore(checkpoint)
+        except MonitorInputIntegrityError:
+            self.fault(datetime.now(UTC), "checkpoint_source_integrity_failure")
+            raise
 
     def set_connection(self, connected: bool, now: datetime) -> dict[str, object]:
         _utc(now)
@@ -259,6 +276,11 @@ class MarketMonitor:
                                 row = _run(db, self.monitor_id)
                             return _status(row, pending)
                     self._restore(checkpoint)
+            except MonitorInputIntegrityError:
+                self._checkpoint = None
+                self._engine = self._new_engine()
+                self.fault(datetime.now(UTC), "checkpoint_source_integrity_failure")
+                raise
             except BaseException:
                 self._checkpoint = None
                 self._engine = self._new_engine()
@@ -424,25 +446,29 @@ class MarketMonitor:
         else:
             expected = self._next_open(datetime.fromisoformat(previous))
         if expected is None:
-            raise ValueError("monitor checkpoint is outside its reviewed schedule")
+            raise MonitorInputIntegrityError("monitor checkpoint is outside its reviewed schedule")
         span = TradingWindow(
             datetime.fromisoformat(expected), datetime.fromisoformat(checkpoint) + MINUTE
         )
         with self.store.connection() as db:
             timeline = economic_timeline(db, self.monitor_id, self._economic)
-        for batch in applied_minute_batches(self.store, self.monitor_id, span):
+        for batch in applied_minute_batches(
+            self.store, self.monitor_id, span, verify_manifest=self._manifest
+        ):
             with self.store.connection() as db:
                 contexts = [timeline.at(db, candle.available_at)[0] for candle, _ in batch]
             for (candle, _source), economic in zip(batch, contexts, strict=True):
                 opened = candle.opened_at.isoformat()
                 if opened != expected:
-                    raise ValueError("durable monitor checkpoint contains an applied gap")
+                    raise MonitorInputIntegrityError(
+                        "durable monitor checkpoint contains an applied gap"
+                    )
                 self._engine.set_economic_calendar(economic)
                 self._engine.push(candle)
                 previous = opened
                 expected = self._next_open(candle.opened_at)
         if previous != checkpoint:
-            raise ValueError("durable monitor checkpoint cannot be reconstructed")
+            raise MonitorInputIntegrityError("durable monitor checkpoint cannot be reconstructed")
         self._checkpoint = checkpoint
 
     def _new_engine(self) -> StrategyReplay:
@@ -668,22 +694,36 @@ def operational_monitor_status(status: dict[str, object], now: datetime) -> dict
 
 
 def applied_minute_batches(
-    store: DatasetStore, monitor_id: str, span: TradingWindow
+    store: DatasetStore,
+    monitor_id: str,
+    span: TradingWindow,
+    *,
+    verify_manifest: dict[str, Any] | None = None,
 ) -> Iterator[list[tuple[Candle, FeedStatus]]]:
     """Read immutable applied minutes up to a previously observed journal checkpoint."""
     start = span.start.isoformat()
     end = span.end.isoformat()
+    extra = (
+        f", received_at, CASE WHEN length(raw) <= {MAX_FRAME_BYTES} THEN raw ELSE NULL END AS raw"
+        if verify_manifest is not None
+        else ""
+    )
     while True:
         with store.connection() as db:
             rows = db.execute(
-                """SELECT opened_at, candle, source_status FROM monitor_minutes
+                f"""SELECT opened_at, candle, source_status{extra} FROM monitor_minutes
                    WHERE run_id = ? AND applied = 1 AND opened_at >= ? AND opened_at < ?
                    ORDER BY opened_at LIMIT 1000""",
                 (monitor_id, start, end),
             ).fetchall()
         if rows:
             yield [
-                (candle_from_dict(json.loads(row["candle"])), FeedStatus(row["source_status"]))
+                (
+                    preserved_monitor_candle(dict(row), verify_manifest)
+                    if verify_manifest is not None
+                    else candle_from_dict(json.loads(row["candle"])),
+                    FeedStatus(row["source_status"]),
+                )
                 for row in rows
             ]
         if len(rows) < 1000:

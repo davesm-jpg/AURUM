@@ -275,3 +275,63 @@ class DatabentoConnection:
         ).encode()
         status = FeedStatus.HISTORICAL if self.replaying else self.source.mode
         return FeedFrame(candle, status, received, raw)
+
+
+def frame_from_preserved_native(
+    payload: dict[str, Any],
+    status: FeedStatus,
+    received_at: datetime,
+) -> tuple[FeedFrame, str]:
+    """Rebuild serialized SDK records without creating a client or reading a key."""
+    try:
+        adapter = payload["adapter"]
+        source = DatabentoSource(
+            MgcContract(adapter["contract"]),
+            adapter["raw_symbol"],
+            start=datetime.fromisoformat(adapter["start"]) if adapter["start"] else None,
+            queue_capacity=adapter["queue_capacity"],
+        )
+        if adapter != source.definition() or payload.keys() != {
+            "adapter",
+            "mapping_dbn_hex",
+            "ohlcv_dbn_hex",
+            "subscription_replay_start",
+        }:
+            raise ValueError("native frame requires its original adapter definition")
+        sdk = import_module("databento")
+        dbn = import_module("databento_dbn")
+        if sdk.__version__ != SDK_VERSION:
+            raise ValueError("native audit requires its original SDK version")
+        decoder = dbn.DBNDecoder(has_metadata=False)
+        records = []
+        for key in ("mapping_dbn_hex", "ohlcv_dbn_hex"):
+            raw = bytes.fromhex(payload[key])
+            try:
+                decoder.write(raw)
+                decoded = decoder.decode()
+            except Exception:
+                raise ValueError("preserved native record bytes could not be decoded") from None
+            if len(decoded) != 1 or decoder.buffer() or bytes(decoded[0]) != raw:
+                raise ValueError("preserved native record bytes are incomplete or inconsistent")
+            records.append(decoded[0])
+        if not isinstance(records[0], sdk.SymbolMappingMsg) or not isinstance(
+            records[1], sdk.OHLCVMsg
+        ):
+            raise ValueError("preserved native records have unexpected types")
+        connection = DatabentoConnection(source, None, sdk)
+        connection.decode(records[0], received_at)
+        frame = connection.decode(records[1], received_at)
+        if frame is None:
+            raise ValueError("preserved native minute could not be reconstructed")
+        replay_start = payload["subscription_replay_start"]
+        if replay_start is not None:
+            started = datetime.fromisoformat(replay_start)
+            if started.tzinfo is not UTC or started > frame.candle.opened_at:
+                raise ValueError("native replay bounds do not contain the recorded minute")
+        return FeedFrame(
+            frame.candle, status, received_at, canonical_json(payload).encode()
+        ), source.fingerprint
+    except ModuleNotFoundError:
+        raise ValueError("native frame audit requires the pinned Databento extra") from None
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise ValueError("preserved native frame evidence is invalid or unsupported") from None

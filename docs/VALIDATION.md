@@ -297,3 +297,18 @@ was observed at 2026-11-11 18:36:20.778515 UTC in ignored local
 The store passed source checksums and normalized audit with one capture, two
 pollers and two attempts. No market data, monitor adoption or external message
 was involved. Native preview processes were stopped after browser verification.
+
+## Preserved monitor input audit
+
+The complete suite passed 295 tests. Ten synthetic audit cases cover a
+1,002-minute paged source, unchanged read-only CLI output, pending frames,
+legacy unknown clocks, normalized WebSocket and serialized native DBN input,
+changed source/normalized rows, manifest identity, invalid application/eligibility
+and rejection of corrupted verified backups. Native audit constructs no client
+and requires no key. Restart source failure latched an integrity fault before
+research resumed. Ruff and strict mypy passed for 99 files.
+
+The 21,600-minute synthetic benchmark retained every chart projection digest.
+Batched ingestion measured 4.519 seconds and restart 1.168 seconds versus the
+prior approximately 0.8-second restart. This is disclosed source-validation cost,
+not a production feed latency measurement. See PERFORMANCE.md.

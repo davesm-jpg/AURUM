@@ -330,3 +330,12 @@
 - Consequences — Concurrent workers avoid repeated requests, restart preserves due time, and read-only health remains available. Source failure does not mean no event exists. Normalized backup audit reconstructs attempt cadence. Scheduled service hosting is an operator action.
 - Sources — [BEA release schedule](https://www.bea.gov/news/schedule), [BLS calendar](https://www.bls.gov/help/hlpiCAL.htm).
 - Files — `economic_polling.py`, schema v16, CLI/API, source health UI and polling tests.
+
+## ADR-036 — Reconstruct monitor inputs before restart analysis
+
+- Date — 2026-11-11.
+- Context — Dataset audits covered imports, but monitor candle rows could differ from their retained frame evidence after storage corruption.
+- Alternatives — Trust normalized monitor rows or reconstruct them through shared frame/native decoding.
+- Decision — Add a read-only bounded input audit and include it in verified backups. During restart, validate each retained source against its candle before advancing the detector; persist an integrity fault on failure. Native reconstruction uses the production decoder without a client or credential read.
+- Consequences — Source proof and unknown legacy clock limits remain explicit. Existing monitor IDs are preserved. Restart costs slightly more; chart reads retain their existing projection path. Full detector/alert-journal reproduction is a separate validation scope.
+- Files — `monitor_audit.py`, native decoder, monitoring restart, storage verification, CLI and tests.

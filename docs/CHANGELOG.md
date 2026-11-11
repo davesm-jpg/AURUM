@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Preserved monitor input verification
+
+- Added bounded offline reconstruction of monitor candles from normalized, replay and native DBN evidence.
+- Verified backups reject inconsistent monitor input. Restart source verification faults the monitor before analysis resumes.
+- Full suite passed 295 tests. The synthetic benchmark retained all chart digests with the disclosed restart validation cost.
+
 ## 2026-11-11 — Durable public calendar polling
 
 - Added explicit foreground public capture with persisted cadence, exclusive leases, bounded retry and interruption recovery.

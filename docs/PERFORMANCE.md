@@ -48,6 +48,17 @@ Restart reconstruction still processes the applied prefix when a process has no 
 
 `.venv/bin/python benchmarks/synthetic_pipeline.py --sessions 60 --batch-size 256` processed 21,600 synthetic minutes in 4.36 s, versus 33.73 s for individual commits with the same chart indexes. Every chart digest and event count matched. The restart median was 801 ms with continuity validation and short read pages. Live ingestion still commits one frame at a time.
 
+## Source verification during monitor restart
+
+On 2026-11-11, the same 60-session/21,600-minute synthetic workload measured
+4.519 s batched ingestion and 1.168 s restart after adding retained-frame
+validation to reconstruction. The earlier restart measurement was approximately
+0.8 s. Every historical/monitor chart projection digest was unchanged. Early
+history, recent history and monitor projections measured 6.8, 9.5 and 12.6 ms.
+These are single-run workload timings with five read/restart repetitions,
+not real-market latency measurements. The extra restart work checks source
+equivalence before feeding stored candles into the strategy.
+
 ## Economic release availability
 
 Run `.venv/bin/python benchmarks/synthetic_economic_calendar.py` for 4,000

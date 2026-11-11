@@ -72,6 +72,7 @@ from aurum.market_structure import (
     PivotRule,
     StructureConfig,
 )
+from aurum.monitor_audit import verify_monitor
 from aurum.monitoring import (
     MAX_REPLAY_BATCH,
     MarketMonitor,
@@ -418,6 +419,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("monitor-status", "monitor-events", "monitor-alerts"):
         command = commands.add_parser(name)
         command.add_argument("monitor_id")
+    monitor_verify = commands.add_parser(
+        "verify-monitor", help="audit preserved monitor input frames offline"
+    )
+    monitor_verify.add_argument("monitor_id")
     economic_update = commands.add_parser(
         "monitor-economic-update", help="activate a reviewed economic snapshot for a monitor"
     )
@@ -739,6 +744,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "monitor-status":
             status = describe_monitor(store, args.monitor_id)
             print(canonical_json(operational_monitor_status(status, datetime.now(UTC))))
+        elif args.command == "verify-monitor":
+            print(canonical_json(verify_monitor(store, args.monitor_id)))
         elif args.command in ("monitor-events", "monitor-alerts"):
             reader = monitor_events if args.command == "monitor-events" else monitor_alerts
             for event in reader(store, args.monitor_id):

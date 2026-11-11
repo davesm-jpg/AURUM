@@ -148,6 +148,16 @@ In provider Settings, expand **Economic event risk** to preview archived
 captures and copy the reviewed snapshot into the profile. Profile saving is
 a separate action. `verify-store --verify-normalized` and verified backups
 also check archived receipt metadata, raw checksums and iCalendar structure.
+
+`verify-monitor MONITOR_ID` reconstructs saved monitor candles from retained
+normalized WebSocket, replay or native Databento frame evidence. It checks the
+dated contract, reviewed applied prefix, receipt and known application clocks,
+and necessary execution-eligibility conditions in bounded pages. It is read-only.
+Whole-store normalized checks and verified backups include these input audits.
+Monitor restart verifies source evidence before rebuilding analysis; a mismatch
+latches an integrity fault and suspends research alerts. The audit does not
+reproduce detector-event journals or establish vendor entitlements. Legacy
+unknown application clocks stay explicitly unknown.
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm) ·
 [BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar)
 
