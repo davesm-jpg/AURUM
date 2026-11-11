@@ -266,6 +266,19 @@ the linked report ID locally for its complete rules and execution assumptions.
 
 ## Runtime profiles
 
+Real-time provider profiles can opt into developing-setup and withdrawal
+notifications. The direct normalized/native commands accept `--lifecycle-alerts`.
+The option is off by default. Same-close transitions collapse to the final
+developing stage for each setup. Developing notices remain unconfirmed and
+require fresh data and the configured economic-risk policy. Session/score
+filters apply; an unknown developing score passes only a zero score threshold.
+Withdrawals cancel queued developing deliveries and remain informational when
+recovery discovers an invalidation. They disclose source class and observation
+time and follow severity, quiet hours, expiry and rate controls. Already accepted
+or in-flight external messages cannot be recalled. No channel starts when a
+profile is saved, and legacy profile/monitor identities remain unchanged when
+this option stays disabled.
+
 The native Databento minute worker can be launched explicitly after obtaining
 authorized GLBX.MDP3 access. Install `.[databento]` or use the packaged worker.
 Keep `DATABENTO_API_KEY` in the local environment. Confirm the dated contract,

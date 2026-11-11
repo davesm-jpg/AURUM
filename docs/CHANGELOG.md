@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-11 — Optional setup lifecycle notifications
+
+- Added opt-in developing notices and withdrawals with same-close collapse and durable cancellation of queued advisories.
+- Recovered invalidations remain informational and disclose their source class and observation time. Existing disabled-default IDs and confirmed paper behavior remain compatible.
+- Full suite passed 302 tests; browser verified saved configuration without starting a monitor or sending a message.
+
 ## 2026-11-11 — Preserved monitor input verification
 
 - Added bounded offline reconstruction of monitor candles from normalized, replay and native DBN evidence.

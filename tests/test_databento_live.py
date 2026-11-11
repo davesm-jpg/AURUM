@@ -336,6 +336,7 @@ def test_native_profile_api_preserves_only_names_and_pins_shared_resume(
         route = "/api/configuration/providers"
         saved = client.post(route, json={"profile": profile})
         assert saved.status_code == 201
+        assert "lifecycle_alerts" not in saved.json()["settings"]
         reference = saved.json()["profile_id"]
         assert client.post(route, json={"profile": profile}).json()["profile_id"] == reference
         monitor, transport, backfill = provider_runtime(fixture.store, reference)
@@ -343,6 +344,10 @@ def test_native_profile_api_preserves_only_names_and_pins_shared_resume(
         assert transport.raw_symbol == "MGCJ5" and transport.key_env == "AURUM_DATABENTO_API_KEY"
         assert transport.resume_from is not None and transport.resume_from() == START
         assert monitor.config.source_fingerprint == transport.fingerprint
+        notices = client.post(route, json={"profile": profile | {"lifecycle_alerts": True}})
+        assert notices.status_code == 201 and notices.json()["profile_id"] != reference
+        notice_monitor, _, _ = provider_runtime(fixture.store, notices.json()["profile_id"])
+        assert notice_monitor.config.lifecycle_alerts is True
         listing = client.get("/api/configuration/runtime")
         assert "synthetic-private-key" not in listing.text and "MGCJ5" in listing.text
         for changes in (

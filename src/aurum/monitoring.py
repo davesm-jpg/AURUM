@@ -83,12 +83,23 @@ class MonitorConfig:
     timeframe: Timeframe = Timeframe.FIVE_MINUTES
     source_origin: str | None = None
     source_fingerprint: str | None = None
+    lifecycle_alerts: bool = False
 
     def __post_init__(self) -> None:
         if not self.source.strip() or self.source_status is FeedStatus.UNAVAILABLE:
             raise ValueError("monitor requires a named, classified feed")
         if min(self.stale_seconds, self.pending_limit) < 1:
             raise ValueError("monitor staleness and pending limits must be positive")
+        if type(self.lifecycle_alerts) is not bool or (
+            self.lifecycle_alerts and self.source_status is not FeedStatus.REAL_TIME
+        ):
+            raise ValueError("setup lifecycle alerts require a real-time research monitor")
+
+    def as_dict(self) -> dict[str, Any]:
+        settings = asdict(self)
+        if not self.lifecycle_alerts:
+            del settings["lifecycle_alerts"]
+        return settings
 
 
 class MarketMonitor:
@@ -135,7 +146,7 @@ class MarketMonitor:
                 "strategy_version": STRATEGY_VERSION,
                 "contract": contract.code,
                 "calendar": calendar.as_dict(),
-                "monitor_config": asdict(config),
+                "monitor_config": config.as_dict(),
                 "structure_config": asdict(structure),
                 "strategy_config": asdict(strategy),
                 "evidence_config": asdict(evidence),
@@ -379,10 +390,13 @@ class MarketMonitor:
             )
             if step is not None:
                 self._record_market(db, minute, step, source_update)
+            latest_setups = (
+                {item.setup_id: item for item in step.setups} if step is not None else {}
+            )
             for event in step.setups if step is not None else ():
                 qualified = event.state is SetupState.PAPER_SIGNAL
                 observed_economic = None
-                if qualified:
+                if qualified or self.config.lifecycle_alerts:
                     observed_economic = (
                         observation_calendar.assess(
                             datetime.fromisoformat(observed),
@@ -423,6 +437,26 @@ class MarketMonitor:
                 )
                 if alert_eligible:
                     self._alert(db, event, now, observed_economic, observation_update)
+                elif self.config.lifecycle_alerts and latest_setups[event.setup_id] is event:
+                    developing = event.state in (
+                        SetupState.LIQUIDITY_EVENT,
+                        SetupState.MSS_CONFIRMED,
+                        SetupState.ZONE_IDENTIFIED,
+                        SetupState.RETEST_PENDING,
+                    )
+                    developing = developing and event.previous is not event.state
+                    withdrawal = event.state in (SetupState.INVALIDATED, SetupState.EXPIRED)
+                    if (
+                        developing and fresh_frame and expected == opened and event_gate
+                    ) or withdrawal:
+                        self._lifecycle_alert(
+                            db,
+                            event,
+                            datetime.fromisoformat(observed),
+                            observed_economic,
+                            observation_update,
+                            FeedStatus(available["source_status"]),
+                        )
             last_applied = expected
             expected = self._next_open(minute.opened_at)
         db.execute(
@@ -617,16 +651,20 @@ class MarketMonitor:
         now: datetime,
         observed_economic: EventAssessment | None,
         economic_update_id: str | None = None,
+        *,
+        kind: str = "paper_research_alert",
+        reference: str | None = None,
+        data_status: FeedStatus = FeedStatus.REAL_TIME,
     ) -> None:
-        alert_id = f"{self.monitor_id}/{event.setup_id}"
-        payload = {
+        alert_id = reference if reference is not None else f"{self.monitor_id}/{event.setup_id}"
+        payload: dict[str, object] = {
             "alert_id": alert_id,
-            "event": "paper_research_alert",
-            "severity": "research",
+            "event": kind,
+            "severity": "warning" if kind == "paper_setup_withdrawn" else "research",
             "execution_mode": "paper_research",
             "contract": self.contract.code,
             "source": self.config.source,
-            "data_status": FeedStatus.REAL_TIME,
+            "data_status": data_status,
             "feed_age_seconds": (now - event.confirmed_at).total_seconds(),
             "new_york_at": event.confirmed_at.astimezone(
                 source_timezone("America/New_York")
@@ -635,6 +673,7 @@ class MarketMonitor:
                 source_timezone("Europe/Prague")
             ).isoformat(),
             "setup": event.as_dict(),
+            **({"observed_at": now.isoformat()} if kind != "paper_research_alert" else {}),
             **({"observed_economic_update_id": economic_update_id} if economic_update_id else {}),
             **(
                 {"observed_economic": observed_economic.as_dict()}
@@ -643,6 +682,61 @@ class MarketMonitor:
             ),
         }
         self._queue_alert(db, alert_id, payload, now)
+
+    def _lifecycle_alert(
+        self,
+        db: sqlite3.Connection,
+        event: SetupEvent,
+        now: datetime,
+        observed_economic: EventAssessment | None,
+        economic_update_id: str | None,
+        data_status: FeedStatus,
+    ) -> None:
+        prefix = f"{self.monitor_id}/{event.setup_id}/developing/"
+        withdrawn = event.state in (SetupState.INVALIDATED, SetupState.EXPIRED)
+        if withdrawn:
+            prior = db.execute(
+                "SELECT alert_id FROM monitor_alerts WHERE run_id = ? "
+                "AND substr(alert_id, 1, ?) = ?",
+                (self.monitor_id, len(prefix), prefix),
+            ).fetchall()
+            if not prior:
+                return
+            for item in prior:
+                db.execute(
+                    "INSERT INTO notification_cancellations VALUES (?, ?, ?) "
+                    "ON CONFLICT DO NOTHING",
+                    (self.monitor_id, item["alert_id"], now.isoformat()),
+                )
+                db.execute(
+                    """UPDATE notification_deliveries SET state = 'canceled'
+                       WHERE monitor_id = ? AND alert_id = ? AND state IN ('pending', 'retry')""",
+                    (self.monitor_id, item["alert_id"]),
+                )
+            reference = f"{self.monitor_id}/{event.setup_id}/withdrawn"
+        else:
+            reference = f"{prefix}{event.confirmed_at.isoformat()}/{event.state}"
+        kind = "paper_setup_withdrawn" if withdrawn else "paper_setup_developing"
+        self._alert(
+            db,
+            event,
+            now,
+            observed_economic,
+            economic_update_id,
+            kind=kind,
+            reference=reference,
+            data_status=data_status,
+        )
+        self._record(
+            db,
+            {
+                "event": "setup_lifecycle_alert_requested",
+                "at": now.isoformat(),
+                "setup_id": event.setup_id,
+                "alert_id": reference,
+                "kind": kind,
+            },
+        )
 
     def _health_alert(self, db: sqlite3.Connection, state: MonitorState, now: datetime) -> None:
         alert_id = f"{self.monitor_id}/health/{state}/{now.isoformat()}"

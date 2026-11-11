@@ -133,6 +133,7 @@ export function RuntimeSettings({
             timeframe: fields.get("timeframe"),
             variant: fields.get("variant"),
             stale_seconds: int("stale_seconds"),
+            lifecycle_alerts: fields.has("lifecycle_alerts"),
             ...(transport === "databento"
               ? { databento_raw_symbol: fields.get("databento_raw_symbol") }
               : {}),
@@ -340,6 +341,10 @@ export function RuntimeSettings({
                 />
               </div>
             )}
+            {mode === "real_time" && <label className="checkbox-setting">
+              <input name="lifecycle_alerts" type="checkbox" />
+              Notify developing setups and withdrawals
+            </label>}
             <div className="form-grid">
               <label>
                 Analysis timeframe

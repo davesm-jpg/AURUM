@@ -312,3 +312,15 @@ The 21,600-minute synthetic benchmark retained every chart projection digest.
 Batched ingestion measured 4.519 seconds and restart 1.168 seconds versus the
 prior approximately 0.8-second restart. This is disclosed source-validation cost,
 not a production feed latency measurement. See PERFORMANCE.md.
+
+## Developing and withdrawal research notifications
+
+The complete Python suite passed 302 tests. Five lifecycle cases use synthetic
+price paths and fake destinations to verify opt-in behavior, same-close stage
+collapse, restart/duplicate suppression, historical invalidation withdrawal,
+queued cancellation, informational delivery while disconnected and freshness
+gates for developing notices. Email subjects and native-profile propagation
+also passed. Ruff, mypy (100 files), five frontend tests, TypeScript and the
+production build passed. Browser verified the option starts unchecked, saved
+it enabled in one synthetic temporary profile, and SQL confirmed zero monitor
+runs or minutes. Both preview services were stopped. No external message sent.

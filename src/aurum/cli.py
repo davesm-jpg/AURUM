@@ -398,6 +398,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     monitor.add_argument("--backfill-token-env")
     monitor.add_argument("--stale-seconds", type=int, default=90)
     monitor.add_argument("--max-frames", type=int)
+    monitor.add_argument("--lifecycle-alerts", action="store_true")
     _strategy_context_options(monitor)
     native_monitor = commands.add_parser(
         "monitor-databento", help="explicitly subscribe to an authorized native MGC minute feed"
@@ -410,6 +411,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     native_monitor.add_argument("--start", type=minute_timestamp)
     native_monitor.add_argument("--stale-seconds", type=int, default=90)
     native_monitor.add_argument("--max-frames", type=int)
+    native_monitor.add_argument("--lifecycle-alerts", action="store_true")
     _strategy_context_options(native_monitor)
     monitor_replay = commands.add_parser(
         "monitor-replay", help="exercise the monitor with a saved dataset"
@@ -1272,6 +1274,7 @@ def _monitor_live(store: DatasetStore, args: Namespace) -> dict[str, object]:
         timeframe=args.timeframe,
         source_origin=source.origin,
         source_fingerprint=source.fingerprint,
+        lifecycle_alerts=args.lifecycle_alerts,
     )
     instance = MarketMonitor(
         store,
@@ -1321,6 +1324,7 @@ def _monitor_databento(store: DatasetStore, args: Namespace) -> dict[str, object
             timeframe=args.timeframe,
             source_origin=source.origin,
             source_fingerprint=source.fingerprint,
+            lifecycle_alerts=args.lifecycle_alerts,
         ),
         _structure_config(args),
         replace(

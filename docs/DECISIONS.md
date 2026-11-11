@@ -339,3 +339,12 @@
 - Decision — Add a read-only bounded input audit and include it in verified backups. During restart, validate each retained source against its candle before advancing the detector; persist an integrity fault on failure. Native reconstruction uses the production decoder without a client or credential read.
 - Consequences — Source proof and unknown legacy clock limits remain explicit. Existing monitor IDs are preserved. Restart costs slightly more; chart reads retain their existing projection path. Full detector/alert-journal reproduction is a separate validation scope.
 - Files — `monitor_audit.py`, native decoder, monitoring restart, storage verification, CLI and tests.
+
+## ADR-037 — Separate developing notices from confirmed paper signals
+
+- Date — 2026-11-11.
+- Context — The strategy journals developing and terminal stages, but notification delivery previously exposed only confirmed setups and feed health.
+- Alternatives — Notify every transition or expose an optional collapsed developing/withdrawal stream.
+- Decision — Explicitly opt in on real-time monitors. Collapse same-close stages per setup, retain fresh/risk gates for developing ideas and cancel queued developing deliveries when the setup is withdrawn. Recovered invalidations may issue a source-labeled informational withdrawal without presenting a new opportunity. Existing channel attempt and preference controls remain shared.
+- Consequences — Disabled default identities remain compatible. Unknown scores require a zero threshold. Withdrawal delivery does not depend on current feed freshness. Acknowledged or in-flight provider messages cannot be recalled. No live execution or automatic channel configuration is introduced.
+- Files — Monitoring, profiles, delivery preferences, transports, CLI, Settings and lifecycle tests.

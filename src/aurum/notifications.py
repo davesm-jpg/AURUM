@@ -99,21 +99,20 @@ class DeliveryPreferences:
         severity = alert.get("severity", Severity.RESEARCH)
         if severity not in self.severities:
             return False
-        if alert.get("event") != "paper_research_alert":
+        if alert.get("event") not in ("paper_research_alert", "paper_setup_developing"):
             return True
         setup = alert["setup"]
         if not isinstance(setup, dict):
             return False
         score = setup.get("score")
         context = setup.get("context")
-        return (
-            isinstance(score, dict)
-            and score["total"] >= self.min_score
-            and (
-                not self.allowed_sessions
-                or isinstance(context, dict)
-                and context["session"] in self.allowed_sessions
-            )
+        score_ok = (isinstance(score, dict) and score["total"] >= self.min_score) or (
+            alert.get("event") == "paper_setup_developing" and self.min_score == 0 and score is None
+        )
+        return score_ok and (
+            not self.allowed_sessions
+            or isinstance(context, dict)
+            and context["session"] in self.allowed_sessions
         )
 
 
@@ -202,7 +201,7 @@ class DeliveryWorker:
         )
         for row in due:
             payload = json.loads(row["payload"])
-            if payload["event"] == "paper_research_alert" and not ready:
+            if payload["event"] in ("paper_research_alert", "paper_setup_developing") and not ready:
                 continue
             attempt = row["attempts"] + 1
             db.execute(

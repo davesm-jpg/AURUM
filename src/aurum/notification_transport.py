@@ -88,6 +88,8 @@ def render_alert(alert: dict[str, object]) -> str:
     contract = str(alert.get("contract", "MGC"))
     if alert.get("event") == "forward_paper_report":
         return _render_report(alert)
+    if alert.get("event") in ("paper_setup_developing", "paper_setup_withdrawn"):
+        return _render_lifecycle(alert)
     if alert.get("event") == "data_quality_warning":
         return (
             f"AURUM paper research • {contract}\n"
@@ -137,6 +139,37 @@ def render_alert(alert: dict[str, object]) -> str:
             f"Experimental score {score.get('total')}/100 | Comparable samples "
             f"{score.get('validated_comparable_samples')}",
             f"Feed age {alert.get('feed_age_seconds')} s | {caution_text}",
+        )
+    )
+
+
+def _render_lifecycle(alert: dict[str, object]) -> str:
+    setup = _mapping(alert.get("setup"))
+    context = _mapping(setup.get("context"))
+    source_risk = _mapping(context.get("economic")).get("risk", "unknown")
+    observed_risk = _mapping(alert.get("observed_economic")).get("risk", "unknown")
+    withdrawn = alert.get("event") == "paper_setup_withdrawn"
+    reasons = setup.get("failed") if withdrawn else setup.get("cautions")
+    detail = (
+        ", ".join(str(value).replace("_", " ") for value in reasons)
+        if isinstance(reasons, list | tuple)
+        else ""
+    )
+    return "\n".join(
+        (
+            f"AURUM PAPER RESEARCH • {'SETUP WITHDRAWN' if withdrawn else 'DEVELOPING SETUP'}",
+            f"{alert.get('contract')} • {setup.get('direction')} • {setup.get('state')}",
+            f"UTC {setup.get('confirmed_at')}",
+            f"Observed UTC {alert.get('observed_at')} | Source class {alert.get('data_status')}",
+            f"New York {alert.get('new_york_at')} | Prague {alert.get('prague_at')}",
+            f"Session {context.get('session')} | Source {alert.get('source')}",
+            f"Event risk at source {source_risk} | At observation {observed_risk}",
+            f"Setup {setup.get('setup_id')}",
+            f"Reasons {detail or 'See the recorded setup evidence'}",
+            "Earlier developing notices are withdrawn."
+            if withdrawn
+            else "This developing hypothesis is unconfirmed. No paper entry is confirmed.",
+            "Research only. No live execution instruction.",
         )
     )
 

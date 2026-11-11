@@ -84,6 +84,8 @@ class SmtpAlertChannel:
         message["Subject"] = {
             "forward_paper_report": "AURUM forward paper research report",
             "data_quality_warning": "AURUM data quality warning",
+            "paper_setup_developing": "AURUM developing research setup",
+            "paper_setup_withdrawn": "AURUM research setup withdrawn",
         }.get(str(alert.get("event")), "AURUM paper research signal")
         identity = canonical_json((alert.get("alert_id"), self.destination_key)).encode()
         message["Message-ID"] = f"<{sha256(identity).hexdigest()}@aurum.local>"

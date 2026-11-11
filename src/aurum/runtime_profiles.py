@@ -65,9 +65,14 @@ class ProviderProfile:
     require_clear_event_risk: bool = False
     calendar_snapshot: ProviderSchedule | None = None
     databento_raw_symbol: str | None = None
+    lifecycle_alerts: bool = False
 
     def __post_init__(self) -> None:
         _validate_label(self.name)
+        if type(self.lifecycle_alerts) is not bool or (
+            self.lifecycle_alerts and self.source_status is not FeedStatus.REAL_TIME
+        ):
+            raise ValueError("setup lifecycle alerts require a real-time provider profile")
         if (self.calendar_dataset_id is None) == (self.calendar_snapshot is None):
             raise ValueError("provide one calendar dataset or an explicit reviewed schedule")
         if self.calendar_dataset_id is not None:
@@ -148,6 +153,8 @@ def save_runtime_profile(store: DatasetStore, profile: RuntimeProfile) -> str:
     settings = asdict(profile)
     if isinstance(profile, ProviderProfile):
         calendar, contract = _provider_calendar(store, profile)
+        if not profile.lifecycle_alerts:
+            del settings["lifecycle_alerts"]
         if profile.databento_raw_symbol is None:
             del settings["databento_raw_symbol"]
         else:
@@ -303,6 +310,7 @@ def provider_runtime(
             timeframe=profile.timeframe,
             source_origin=source.origin,
             source_fingerprint=source.fingerprint,
+            lifecycle_alerts=profile.lifecycle_alerts,
         ),
         DEFAULT_STRUCTURE_CONFIG,
         replace(

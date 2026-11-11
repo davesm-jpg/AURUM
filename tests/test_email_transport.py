@@ -198,6 +198,8 @@ def test_email_connection_failure_is_retryable_and_redacted(
     [
         ("forward_paper_report", "AURUM forward paper research report"),
         ("data_quality_warning", "AURUM data quality warning"),
+        ("paper_setup_developing", "AURUM developing research setup"),
+        ("paper_setup_withdrawn", "AURUM research setup withdrawn"),
     ],
 )
 def test_email_subject_identifies_informational_messages(
