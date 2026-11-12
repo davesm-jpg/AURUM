@@ -3,15 +3,15 @@
 ## Project Status
 
 - Current phase — Offline research, monitoring, forward paper and dashboard implementation. Production data validation is blocked.
-- Current milestone — CI-001 and setup preparation passed all hosted jobs. Native SDK CSV roundtrip passed the 331-test full suite and static checks.
+- Current milestone — Research journal reconstruction passed 362 tests, static checks and diff review; ready to publish and verify hosted checks.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
 - Last verified commit — 1e5df19 passed all three hosted jobs in run 43173545400 and 330 local tests. The CI pin f816054 also passed all jobs in 43172077189 without the runtime annotation.
 - Total completion — 50/54 roadmap tasks DONE (92.6 percent), three BLOCKED and O01 IN_PROGRESS. This is task completion, not empirical strategy validation or production readiness.
 
 ## Current Objective
 
-- Task ID — O01 audit maintenance.
-- Objective — Publish native SDK export proof, then add deterministic reconstruction of saved research journals.
+- Task ID — D11/B01 audit extension.
+- Objective — Verify and publish deterministic reconstruction of saved research journals using the extracted shared replay factory.
 - Acceptance criteria — Use original versions, source and shared detection/execution paths; compare persisted events without changing them or exposing holdout outcomes during selection.
 
 ## Completed Work
@@ -35,6 +35,9 @@
 - O01 remains open: additional optimization needs workload evidence; optional ML requires authorized historical and out-of-sample evidence.
 - On 2026-11-12 the user confirmed no provider account yet and chose Telegram. Do not ask these preferences again. docs/SETUP.md explains account/export steps, local credentials and separate real delivery authorization. telegram-inspect reads fixed bot metadata methods, skips polling when a webhook exists and returns only bounded private chat ID candidates. It sends and acknowledges nothing. Thirteen fake cases passed; no actual credentials or Telegram request were used.
 - Native CSV compatibility is verified through an actual pinned SDK export from three constructed synthetic DBN bars and symbol metadata. Import and source audit pass, and both network client constructors are blocked in the test. Focused SDK/Telegram checks passed 26 tests.
+- Uncommitted audit slice: research_replay.py contains the shared manifest/engine constructors and strict versioned config restoration. storage.py delegates existing builders to it. research_audit.py adds bounded read-only verify_research_run, and CLI verify-run plus opt-in verify-store/backup --verify-research. The store-wide flag implies source normalization checks and never runs from selection. Comparison returns integrity/count/digest, not performance metrics. Analysis reports and monitor/forward journals are excluded.
+- Thirty-one new synthetic cases pass: exact pre-extraction run IDs and all 646 baseline events, eight version gates, nondefault nested/economic rules, corruption/deletion/append/summary changes, source mismatch, CLI purity, fail-closed private backup, ordered prints, concurrent writes/journal change, empty and multi-page journals. A duplicate-key regression showed semantic JSON comparison hiding an ambiguity; exact producer-text comparison now rejects it. Static checks pass. Full checks are being recorded.
+- Pre-extraction baseline is at /var/folders/m4/rknhph5d7v15y87fjlx_4vgc0000gn/T/aurum-synthetic-replay-baseline-2a0kpnw6/baseline.json. Test constants retain its IDs/digests. Do not recreate the factory or regress original run identities.
 
 ## Important Decisions
 
@@ -56,8 +59,8 @@
 
 ## Test Status
 
-- Last full command — .venv/bin/pytest -q: 331 passed, including actual pinned SDK export from constructed synthetic DBN records.
-- Static — Ruff check/format, strict mypy (102 files) and Git whitespace checks passed. actionlint passed for the v7.1.0 pin.
+- Last full command — .venv/bin/pytest -q: 362 passed, including research journal reconstruction.
+- Static — Ruff check/format, strict mypy (105 files) and Git whitespace checks passed. actionlint passed for the v7.1.0 pin.
 - Frontend — Latest UI change (Monte Carlo) passed typecheck, five tests, production build and browser current/legacy report verification. Later changes are backend-only.
 - Hosted — Browser verified Python, frontend and containers passed for 1e5df19 in 43173545400 and f816054 in 43172077189. No code verification is pending for those commits.
 - Failed — No outstanding automated failure. Regression failures before fixes are recorded in VALIDATION.md.
@@ -74,7 +77,7 @@
 ## Immediate Next Actions
 
 1. Read AGENTS.md, this handoff, Git status and relevant roadmap before resuming. c84eacd is the verified code checkpoint; do not repeat its completed fixes.
-2. Continue saved research-journal reconstruction: factor the existing replay factory/manifest into a pure domain module, strictly decode pinned configs/versions, replay original verified source through the same engine and compare exact event sequences. Add explicit verify-run and opt-in verify-research backup checks; do not expose holdout outcomes through selection paths. Preserve all existing run IDs. This work is planned, not implemented yet. Do not repeat completed CI verification.
+2. Publish the verified research audit slice and inspect hosted checks. The factory, audit, 31 focused cases, full 362 tests and docs are complete. Preserve all baseline IDs. API status queries time out; public GitHub browser summaries are the verified fallback. After this checkpoint, inspect the next independent requirement or reliability gap without reimplementing this work.
 3. For D04/B02/L02, obtain authorized data/configuration. Databento was recommended; access or purchase is not confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat

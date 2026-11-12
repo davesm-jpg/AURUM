@@ -111,6 +111,7 @@ from aurum.quotes import (
 )
 from aurum.reconciliation import save_reconciliation
 from aurum.report_notifications import queue_forward_report
+from aurum.research_audit import verify_research_run
 from aurum.research_reports import simulate_report, validate_runs
 from aurum.runtime_profiles import list_runtime_profiles, load_delivery_profile, provider_runtime
 from aurum.sensitivity_reports import SensitivityFactor, save_parameter_sensitivity
@@ -471,6 +472,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "telegram-inspect", help="inspect bot/private chat metadata without sending or changing it"
     )
     telegram_check.add_argument("--token-env", default="AURUM_TELEGRAM_TOKEN")
+    run_audit = commands.add_parser(
+        "verify-run", help="reconstruct a finalized full research journal from preserved input"
+    )
+    run_audit.add_argument("run_id")
 
     delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
     delivery.add_argument("monitor_id")
@@ -516,12 +521,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     backup.add_argument("output", type=Path)
     backup.add_argument("--timeout-seconds", type=float, default=120)
     backup.add_argument("--verify-normalized", action="store_true")
+    backup.add_argument("--verify-research", action="store_true")
     verify = commands.add_parser(
         "verify-store", help="verify database and preserved source integrity"
     )
     verify.add_argument("--full", action="store_true")
     verify.add_argument("--verify-sources", action="store_true")
     verify.add_argument("--verify-normalized", action="store_true")
+    verify.add_argument("--verify-research", action="store_true")
 
     args = parser.parse_args(argv)
     store = DatasetStore(args.db)
@@ -530,6 +537,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _serve(store, args)
         elif args.command == "telegram-inspect":
             print(canonical_json(inspect_telegram(args.token_env)))
+        elif args.command == "verify-run":
+            print(canonical_json(verify_research_run(store, args.run_id)))
         elif args.command == "backup":
             print(
                 canonical_json(
@@ -538,6 +547,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         args.output,
                         timeout_seconds=args.timeout_seconds,
                         verify_normalized=args.verify_normalized,
+                        verify_research=args.verify_research,
                     )
                 )
             )
@@ -549,6 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         full=args.full,
                         verify_sources=args.verify_sources,
                         verify_normalized=args.verify_normalized,
+                        verify_research=args.verify_research,
                     )
                 )
             )

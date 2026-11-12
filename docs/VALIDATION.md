@@ -1,5 +1,14 @@
 # AURUM validation
 
+## Research journal reconstruction — 2026-11-12
+
+- Thirty-one focused synthetic cases pass. Frozen pre-extraction constants from 8b8ae96 prove identical IDs and all 646 structure/evidence/strategy/backtest events after factory extraction.
+- Version gates, missing/unknown definitions, nondefault nested/economic profiles and ordered-print execution are verified. Changed events, shifted confirmation times, invented profits, missing/extra/gapped sequences, duplicate keys and changed source rows are rejected without repairing evidence.
+- A duplicate-key regression initially passed semantic JSON comparison; exact producer-text comparison now rejects the ambiguity. SQL and Python must not interpret the same journal differently.
+- CLI preserves database bytes. Store/backup research checking is explicit, implies source normalization and rejects publication of an inconsistent private snapshot. Independent writes complete during reconstruction, and concurrent journal appends require a retry. Empty and multi-page journals pass.
+- The audit returns count/digest/integrity, not expectancy or trade profits. It is never invoked by chronological candidate selection and does not establish empirical MGC performance. Analysis reports and monitor/forward outcomes remain excluded.
+- Full suite passed 362 tests; Ruff check/format and strict mypy passed across 105 files. Git whitespace checks passed. No schema, detector rule, dataset ID or existing research run ID changed.
+
 ## Verified checkpoint — 2026-11-12, Telegram onboarding
 
 - Full suite passed 330 tests. Ruff check/format and strict mypy passed across 102 files.

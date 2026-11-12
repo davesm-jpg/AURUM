@@ -376,3 +376,21 @@
 - Consequences — Alerts remain suspended while input is pending. Restart preserves the hold. Clock recovery alone does not advance the detector without another frame. Existing observations and monitor IDs stay unchanged. No synthetic future clock is substituted for an actual application.
 - Files — `monitoring.py` and real-time/delayed clock rollback tests.
 - Audit extension — Monitor audit v2 rejects known observation regressions, including across legacy unknown rows. Verified backups reject the same defect without rewriting old data. Unknown clocks cannot establish complete chronology.
+
+## ADR-041 — Keep Telegram onboarding inspection read-only
+
+- Date — 2026-11-12.
+- Context — The user selected Telegram but has no provider account or configured destination yet. Token-bearing browser URLs and message bodies are unnecessary for setup.
+- Alternatives — Ask for secrets/chat IDs in conversation, send a probe automatically or inspect bounded metadata locally.
+- Decision — Add a local credential-variable-based inspector for getMe/getWebhookInfo and a bounded pending update page only when no webhook exists. Do not pass offsets or update filters, change webhooks or send messages. Return only bot metadata and private chat ID candidates; sanitize failures and deny redirects.
+- Consequences — Setup still needs user account creation, local credentials and explicit later delivery authorization. Existing webhook integrations remain untouched. No token or actual Telegram request was used in development.
+- Files — `telegram_setup.py`, CLI, `docs/SETUP.md` and synthetic setup tests.
+
+## ADR-042 — Reconstruct finalized journals through the shared replay factory
+
+- Date — 2026-11-12.
+- Context — Preserved-source audits validated inputs, but changed detector/trade/summary journal rows could still pass an input-only backup check.
+- Alternatives — Implement an independent detector, hash stored outputs without reconstruction or replay the original versioned definition through shared production constructors.
+- Decision — Extract the existing manifest/engine factory without changing IDs or detection algorithms. Restore only exact supported definitions, verify source integrity and compare contiguous events against exact canonical producer serialization. Add explicit verify-run and opt-in full research checks for store/backup maintenance.
+- Consequences — Pre-extraction IDs and all 646 fixture events are unchanged. Duplicate JSON keys cannot hide divergent SQL/Python interpretations. Full-run audit stays outside holdout selection and returns no performance metrics. Bounded reads do not retain a reader during computation. Isolated backup verification fails closed. Separate analysis, monitoring and forward journals remain outside this scope.
+- Files — `research_replay.py`, `research_audit.py`, storage, storage administration, CLI and reconstruction tests.

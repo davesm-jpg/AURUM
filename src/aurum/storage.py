@@ -10,23 +10,20 @@ from pathlib import Path
 from tempfile import SpooledTemporaryFile
 from typing import Protocol, TypedDict
 
-from aurum.backtesting import BACKTEST_VERSION, BacktestReplay
-from aurum.candles import AGGREGATION_VERSION, CandleAggregator, Timeframe
+from aurum.candles import Timeframe
 from aurum.economic_events import EconomicCalendar, EconomicSourceKind
-from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EVIDENCE_VERSION, EvidenceConfig, EvidenceEngine
+from aurum.evidence import DEFAULT_EVIDENCE_CONFIG, EvidenceConfig
 from aurum.exchange_calendar import SessionCalendar, TradingWindow
 from aurum.execution import (
-    EXECUTION_VERSION,
-    TRADE_PRINT_ORDERING,
     ExecutionConfig,
     TradePrintLookup,
 )
 from aurum.instruments import MAX_SQLITE_INTEGER, MgcContract
-from aurum.market_context import CONTEXT_VERSION, DEFAULT_CONTEXT_CONFIG, ContextConfig
+from aurum.market_context import DEFAULT_CONTEXT_CONFIG, ContextConfig
 from aurum.market_data import Candle, DataKind, PreparedDataset, TradePrint, canonical_json
-from aurum.market_structure import STRUCTURE_VERSION, StructureConfig, StructureEngine
-from aurum.performance import PERFORMANCE_VERSION
-from aurum.strategy import STRATEGY_VERSION, StrategyConfig, StrategyReplay
+from aurum.market_structure import StructureConfig
+from aurum.research_replay import ResearchReplay
+from aurum.strategy import StrategyConfig
 from aurum.timestamps import TradeTimestamp, trade_timestamp
 
 APPLICATION_ID = 0x4155524D
@@ -554,30 +551,8 @@ class DatasetStore:
         *,
         evidence: EvidenceConfig | None = None,
     ) -> str:
-        manifest: dict[str, object] = {
-            "dataset_id": dataset_id,
-            "timeframe": timeframe,
-            "aggregation_version": AGGREGATION_VERSION,
-            "structure_version": STRUCTURE_VERSION,
-            "config": asdict(config),
-        }
-        if evidence is not None:
-            manifest.update(evidence_version=EVIDENCE_VERSION, evidence_config=asdict(evidence))
-
-        def run(
-            calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
-        ) -> Iterator[_RecordedEvent]:
-            if evidence is not None:
-                yield from EvidenceEngine(calendar, contract, timeframe, config, evidence).consume(
-                    minutes
-                )
-                return
-            aggregator = CandleAggregator(calendar, contract, (timeframe,))
-            engine = StructureEngine(contract, timeframe, config)
-            for bar in aggregator.consume(minutes):
-                yield from engine.push(bar)
-
-        return self._persist_replay(dataset_id, manifest, run)
+        replay = ResearchReplay(dataset_id, timeframe, config, evidence=evidence)
+        return self._persist_replay(dataset_id, replay.manifest(), replay.events)
 
     def build_strategy_run(
         self,
@@ -598,56 +573,25 @@ class DatasetStore:
             and self.describe(dataset_id)["provenance"]["data_kind"] != DataKind.SYNTHETIC
         ):
             raise ValueError("synthetic economic snapshots require a synthetic dataset")
-        manifest: dict[str, object] = {
-            "dataset_id": dataset_id,
-            "timeframe": timeframe,
-            "aggregation_version": AGGREGATION_VERSION,
-            "structure_version": STRUCTURE_VERSION,
-            "config": asdict(structure),
-            "evidence_version": EVIDENCE_VERSION,
-            "evidence_config": asdict(evidence),
-            "context_version": CONTEXT_VERSION,
-            "context_config": asdict(context),
-            "strategy_version": STRATEGY_VERSION,
-            "strategy_config": asdict(strategy),
-            "economic_calendar": economic.as_dict() if economic else None,
-            "execution_mode": "paper_research",
-        }
-        if execution is not None:
-            manifest.update(
-                backtest_version=BACKTEST_VERSION,
-                execution_version=EXECUTION_VERSION,
-                performance_version=PERFORMANCE_VERSION,
-                execution_config=asdict(execution),
-            )
-        lookup = None
-        if resolve_with_trade_prints:
-            if execution is None:
-                raise ValueError("trade print ordering requires a paper backtest")
-            lookup = self.trade_print_lookup(dataset_id)
-            manifest["intrabar_ordering"] = TRADE_PRINT_ORDERING
+        replay = ResearchReplay(
+            dataset_id,
+            timeframe,
+            structure,
+            evidence,
+            context,
+            strategy,
+            economic,
+            execution,
+            resolve_with_trade_prints,
+        )
+        lookup = self.trade_print_lookup(dataset_id) if resolve_with_trade_prints else None
 
         def run(
             calendar: SessionCalendar, contract: MgcContract, minutes: Iterator[Candle]
         ) -> Iterator[_RecordedEvent]:
-            if execution is not None:
-                return BacktestReplay(
-                    calendar,
-                    contract,
-                    timeframe,
-                    structure,
-                    strategy,
-                    execution,
-                    evidence,
-                    context,
-                    economic,
-                    trade_prints=lookup,
-                ).consume(minutes)
-            return StrategyReplay(
-                calendar, contract, timeframe, structure, strategy, evidence, context, economic
-            ).consume(minutes)
+            return replay.events(calendar, contract, minutes, trade_prints=lookup)
 
-        return self._persist_replay(dataset_id, manifest, run)
+        return self._persist_replay(dataset_id, replay.manifest(), run)
 
     def _persist_replay(
         self,

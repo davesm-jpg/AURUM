@@ -11,6 +11,7 @@ from aurum.economic_archive import verify_economic_capture
 from aurum.economic_polling import verify_economic_poller
 from aurum.monitor_audit import verify_monitor
 from aurum.quotes import verify_quote_series
+from aurum.research_audit import verify_research_run
 from aurum.storage import DatasetStore
 
 
@@ -20,8 +21,11 @@ def verify_store(
     full: bool = False,
     verify_sources: bool = False,
     verify_normalized: bool = False,
+    verify_research: bool = False,
 ) -> dict[str, object]:
     """Validate SQLite and optionally audit source bytes or their normalized rows."""
+    if verify_research:
+        verify_normalized = True
     with store.connection() as db:
         db.execute("BEGIN")
         check = "integrity_check" if full else "quick_check"
@@ -70,6 +74,11 @@ def verify_store(
             if schema >= 4
             else ()
         )
+        research_runs = (
+            tuple(row[0] for row in db.execute("SELECT id FROM structure_runs ORDER BY id"))
+            if verify_research and schema >= 2
+            else ()
+        )
 
     blocked = 0
     for dataset_id in datasets:
@@ -100,10 +109,25 @@ def verify_store(
             monitor_minutes += int(str(verify_monitor(store, monitor_id)["minutes_verified"]))
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"monitor {monitor_id} failed input audit: {exc}") from exc
+    research_events = 0
+    for run_id in research_runs:
+        try:
+            audit = verify_research_run(store, run_id, verify_source=False)
+            research_events += int(str(audit["event_count"]))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"research run {run_id} failed journal audit: {exc}") from exc
     summary["normalized"] = {
         "datasets_verified": len(datasets),
         "quote_series_verified": len(quote_series),
         "datasets_blocked_for_replay": blocked,
+        **(
+            {
+                "research_runs_verified": len(research_runs),
+                "research_events_verified": research_events,
+            }
+            if verify_research
+            else {}
+        ),
         **(
             {"monitors_verified": len(monitors), "monitor_minutes_verified": monitor_minutes}
             if monitors
@@ -128,6 +152,7 @@ def backup_store(
     *,
     timeout_seconds: float = 120,
     verify_normalized: bool = False,
+    verify_research: bool = False,
 ) -> dict[str, object]:
     """Publish a validated private snapshot without replacing an existing file."""
     if not 0 < timeout_seconds <= 3600:
@@ -147,7 +172,11 @@ def backup_store(
             source.backup(target, pages=256, sleep=0.025, progress=check_time)
             if target.execute("PRAGMA journal_mode = DELETE").fetchone()[0] != "delete":
                 raise ValueError("backup could not be made self-contained")
-        verified = verify_store(DatasetStore(staging), verify_normalized=verify_normalized)
+        verified = verify_store(
+            DatasetStore(staging),
+            verify_normalized=verify_normalized,
+            verify_research=verify_research,
+        )
         with staging.open("rb") as snapshot:
             os.fsync(snapshot.fileno())
             size = os.fstat(snapshot.fileno()).st_size

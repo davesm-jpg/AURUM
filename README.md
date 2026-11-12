@@ -9,6 +9,15 @@ inputs needed from you, a small historical export and read-only bot inspection.
 
 For the local container service workflow, see [operations](docs/OPERATIONS.md).
 
+For full finalized research integrity, run `aurum --db data/aurum.sqlite verify-run RUN_ID`.
+It reconstructs the original structure, evidence, strategy or paper backtest
+through the shared engine and compares every saved event, trade and summary.
+Use `verify-store --verify-research` or `backup OUTPUT --verify-research` for
+the same opt-in journal checks alongside source normalization. These are
+full-run integrity operations, separate from held-out configuration selection.
+They do not establish a strategy advantage or reconstruct separate analysis,
+monitor or forward-paper journals. Unsupported original versions stop the audit.
+
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'

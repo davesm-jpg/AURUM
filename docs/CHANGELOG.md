@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-12 — Finalized research journal audit
+
+- Extracted shared replay construction while preserving original run IDs and event output.
+- Added read-only full-run reconstruction and explicit optional journal verification before backup publication.
+- Reject changed trades/summaries, source mismatches, unknown versions, missing/extra sequences and duplicate-key ambiguity. Selection and ordinary input-only verification keep their existing scope.
+
 ## 2026-11-12 — Databento and Telegram setup preparation
 
 - Added an actionable historical-first setup guide and the selected Telegram preference without configuring a vendor account or buying data.
