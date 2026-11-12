@@ -2,6 +2,9 @@
 
 AURUM is a paper-only research project for COMEX Micro Gold futures. This checkpoint supports local, calendar-validated import and chronological replay of historical 1-minute OHLCV for one dated contract per dataset.
 
+Start with the [Databento and Telegram setup guide](docs/SETUP.md) for the exact
+inputs needed from you, a small historical export and read-only bot inspection.
+
 ## Install
 
 For the local container service workflow, see [operations](docs/OPERATIONS.md).

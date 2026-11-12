@@ -120,6 +120,7 @@ from aurum.storage import DatasetStore, is_transient_lock
 from aurum.storage_admin import backup_store, verify_store
 from aurum.strategy import DEFAULT_STRATEGY_CONFIG, Variant
 from aurum.streaming import FrameSource, HttpsGapBackfill, WebSocketSource, run_stream
+from aurum.telegram_setup import inspect_telegram
 from aurum.timestamps import event_timestamp, minute_timestamp, trade_timestamp
 
 
@@ -466,6 +467,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     notify_report = commands.add_parser("notify-report", help="queue a saved forward report once")
     notify_report.add_argument("report_id")
 
+    telegram_check = commands.add_parser(
+        "telegram-inspect", help="inspect bot/private chat metadata without sending or changing it"
+    )
+    telegram_check.add_argument("--token-env", default="AURUM_TELEGRAM_TOKEN")
+
     delivery = commands.add_parser("deliver", help="deliver paper alerts to an authorized channel")
     delivery.add_argument("monitor_id")
     delivery.add_argument("--channel", type=Channel, choices=Channel, required=True)
@@ -522,6 +528,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "serve":
             _serve(store, args)
+        elif args.command == "telegram-inspect":
+            print(canonical_json(inspect_telegram(args.token_env)))
         elif args.command == "backup":
             print(
                 canonical_json(

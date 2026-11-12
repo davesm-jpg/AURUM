@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-12 — Databento and Telegram setup preparation
+
+- Added an actionable historical-first setup guide and the selected Telegram preference without configuring a vendor account or buying data.
+- Added read-only Telegram bot/private chat inspection with bounded responses, redacted errors and no sends, update acknowledgement or webhook changes.
+- Full suite passed 330 tests. No real credentials or external Telegram calls were used.
+
 ## 2026-11-12 — Hosted action runtime
 
 - Updated the pinned setup-node action to verified v7.1.0, whose internal runtime is Node.js 24. Frontend Node version and explicit cache settings are unchanged.

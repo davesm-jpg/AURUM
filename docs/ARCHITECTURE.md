@@ -42,6 +42,7 @@ token boundary on 2026-11-11. See `OPERATIONS.md` for remaining host limits.
 | `forward.py` | Registration-bound paper execution over observed monitor minutes, durable cursor and independent ledger |
 | `notifications.py`, `notification_transport.py` | Optional Telegram/Discord dispatch, channel preferences, durable claims and attempt audit |
 | `email_transport.py` | Authenticated STARTTLS or implicit TLS email with acknowledgement-aware retry classification |
+| `telegram_setup.py` | Explicit read-only bot inspection with redacted errors, bounded responses and private chat ID candidates; never sends, acknowledges or modifies a webhook |
 | `report_notifications.py` | Opt-in immutable forward report summaries in the existing durable alert and delivery path |
 | `api.py`, `frontend/` | Typed loopback REST, monitor status SSE, server-side proxy and interactive research views |
 | `cli.py` | Import, inspection, replay, aggregation and persisted research runs |

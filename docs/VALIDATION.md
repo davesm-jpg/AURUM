@@ -1,5 +1,13 @@
 # AURUM validation
 
+## Verified checkpoint — 2026-11-12, Telegram onboarding
+
+- Full suite passed 330 tests. Ruff check/format and strict mypy passed across 102 files.
+- Thirteen fake-HTTP cases verified bot identity, private chat deduplication, bounded response/page handling, invalid metadata, absent local credentials and redacted HTTP/transport/provider errors. All requests used fixed Telegram API methods through the no-redirect opener.
+- getUpdates receives limit/timeout only: no offset, filter changes, sends or webhook mutations. An existing webhook skips polling and its URL is not returned. CLI inspection creates no database. No actual token or Telegram API connection was used.
+- User selected Telegram and confirmed no data provider account on 2026-11-12. SETUP.md records the historical-first handoff, original export requirements, local credential handling and separate live/delivery validation. Account creation, licensing and cost approval remain user actions.
+- Sources — [Telegram API](https://core.telegram.org/bots/api), [bot creation](https://core.telegram.org/bots/features#botfather).
+
 ## Checkpoint — 2026-11-12, hosted action runtime
 
 - Recovered clean checkpoint 59a895a and re-ran 31 monitor/source-audit tests; Ruff and strict mypy passed (100 files).
