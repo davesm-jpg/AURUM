@@ -3,16 +3,16 @@
 ## Project Status
 
 - Current phase — Offline research, monitoring, forward paper and dashboard implementation. Production data validation is blocked.
-- Current milestone — Reliability and audit fixes passed local and hosted checks. Final continuation checkpoint saved; production validation remains blocked.
+- Current milestone — Clean checkpoint restored. CI-001 setup-node pin updated to verified v7.1.0; hosted compatibility verification is pending.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
 - Last verified commit — c84eacd passed all three hosted jobs in run 43091664364 and 317 local tests. This handoff checkpoint changes documentation only.
 - Total completion — 50/54 roadmap tasks DONE (92.6 percent), three BLOCKED and O01 IN_PROGRESS. This is task completion, not empirical strategy validation or production readiness.
 
 ## Current Objective
 
-- Task ID — O01 reliability maintenance, CLOCK-002.
-- Objective — Resume from the verified audit checkpoint; next independent work is CI-001's observed action-runtime annotation.
-- Acceptance criteria — Reject decreasing known observation times, including across unknown legacy rows; fail closed on verified backups; preserve recorded evidence and legacy unknown clocks.
+- Task ID — O01 maintenance, CI-001.
+- Objective — Verify the official setup-node v7.1.0 pinned upgrade and remove the observed forced-runtime annotation.
+- Acceptance criteria — Workflow validation and hosted jobs pass, the action uses its declared Node.js 24 runtime and frontend Node.js 22.22.2 remains pinned.
 
 ## Completed Work
 

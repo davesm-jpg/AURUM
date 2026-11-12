@@ -1,5 +1,10 @@
 # AURUM changelog
 
+## 2026-11-12 — Hosted action runtime
+
+- Updated the pinned setup-node action to verified v7.1.0, whose internal runtime is Node.js 24. Frontend Node version and explicit cache settings are unchanged.
+- Hosted compatibility and annotation verification are pending.
+
 ## 2026-11-11 — Audit known observation chronology
 
 - Monitor audit v2 and verified backups reject decreasing known application times, including across unknown legacy rows.

@@ -1,5 +1,12 @@
 # AURUM validation
 
+## Checkpoint — 2026-11-12, hosted action runtime
+
+- Recovered clean checkpoint 59a895a and re-ran 31 monitor/source-audit tests; Ruff and strict mypy passed (100 files).
+- Verified setup-node v7.1.0 resolves to commit 949feb2413d6458794dcd2491c4babbbce0c15c1 in the official repository. Its pinned action metadata explicitly selects node24. Reviewed the v7 migration notes; AURUM does not configure registry-url or rely on the removed dummy authentication token.
+- Updated the action pin while retaining Node.js 22.22.2 for the frontend and the explicit npm lockfile cache. Hosted verification will determine compatibility and annotation removal.
+- Sources — [official release](https://github.com/actions/setup-node/releases/tag/v7.1.0), [pinned metadata](https://github.com/actions/setup-node/blob/949feb2413d6458794dcd2491c4babbbce0c15c1/action.yml), [migration notes](https://github.com/actions/setup-node/blob/949feb2413d6458794dcd2491c4babbbce0c15c1/README.md).
+
 ## Verified checkpoint — 2026-11-11, known observation chronology
 
 - Two synthetic regressions showed the old audit accepting decreasing known application observations, both adjacent and separated by an unknown legacy row.
