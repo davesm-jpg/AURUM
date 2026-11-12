@@ -7,13 +7,22 @@
 - getUpdates receives limit/timeout only: no offset, filter changes, sends or webhook mutations. An existing webhook skips polling and its URL is not returned. CLI inspection creates no database. No actual token or Telegram API connection was used.
 - User selected Telegram and confirmed no data provider account on 2026-11-12. SETUP.md records the historical-first handoff, original export requirements, local credential handling and separate live/delivery validation. Account creation, licensing and cost approval remain user actions.
 - Sources — [Telegram API](https://core.telegram.org/bots/api), [bot creation](https://core.telegram.org/bots/features#botfather).
+- Hosted run [43173545400](https://github.com/davesm-jpg/AURUM/actions/runs/43173545400) passed Python, frontend and containers on 1e5df19. GitHub CLI/API status queries timed out; the public browser run summary showed the exact commit and all three successful jobs without a new login.
 
 ## Checkpoint — 2026-11-12, hosted action runtime
 
 - Recovered clean checkpoint 59a895a and re-ran 31 monitor/source-audit tests; Ruff and strict mypy passed (100 files).
 - Verified setup-node v7.1.0 resolves to commit 949feb2413d6458794dcd2491c4babbbce0c15c1 in the official repository. Its pinned action metadata explicitly selects node24. Reviewed the v7 migration notes; AURUM does not configure registry-url or rely on the removed dummy authentication token.
-- Updated the action pin while retaining Node.js 22.22.2 for the frontend and the explicit npm lockfile cache. Hosted verification will determine compatibility and annotation removal.
+- Updated the action pin while retaining Node.js 22.22.2 for the frontend and the explicit npm lockfile cache. Hosted verification below confirmed compatibility and annotation removal.
+- Hosted run [43172077189](https://github.com/davesm-jpg/AURUM/actions/runs/43172077189) passed all three jobs on f816054. Public browser summary verified success and an empty annotations section on 2026-11-12, resolving CI-001.
 - Sources — [official release](https://github.com/actions/setup-node/releases/tag/v7.1.0), [pinned metadata](https://github.com/actions/setup-node/blob/949feb2413d6458794dcd2491c4babbbce0c15c1/action.yml), [migration notes](https://github.com/actions/setup-node/blob/949feb2413d6458794dcd2491c4babbbce0c15c1/README.md).
+
+## Native export compatibility — 2026-11-12
+
+- Constructed synthetic DBN metadata, a dated symbol mapping and three OHLCV records, then exported through pinned Databento SDK 0.90.0 using the exact documented CSV options. Import, normalized values, preserved bytes and source reconstruction passed.
+- The test replaces both Historical and Live client constructors with failures; the export path uses neither. No market data, key, entitlement or vendor connection was used.
+- Focused native CSV and Telegram setup checks passed 26 tests; Ruff and strict mypy passed (102 files).
+- Full suite subsequently passed 331 tests with the SDK roundtrip included; Ruff check/format and strict mypy passed across 102 files.
 
 ## Verified checkpoint — 2026-11-11, known observation chronology
 

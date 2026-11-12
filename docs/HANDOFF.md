@@ -3,16 +3,16 @@
 ## Project Status
 
 - Current phase — Offline research, monitoring, forward paper and dashboard implementation. Production data validation is blocked.
-- Current milestone — CI-001 pin is published as f816054; hosted status queries are timing out. Databento/Telegram setup preparation passed 330 local tests.
+- Current milestone — CI-001 and setup preparation passed all hosted jobs. Native SDK CSV roundtrip passed the 331-test full suite and static checks.
 - Current branch — codex/verified-research-platform, tracking origin at https://github.com/davesm-jpg/AURUM.git.
-- Last verified commit — c84eacd passed all three hosted jobs in run 43091664364 and 317 local tests. This handoff checkpoint changes documentation only.
+- Last verified commit — 1e5df19 passed all three hosted jobs in run 43173545400 and 330 local tests. The CI pin f816054 also passed all jobs in 43172077189 without the runtime annotation.
 - Total completion — 50/54 roadmap tasks DONE (92.6 percent), three BLOCKED and O01 IN_PROGRESS. This is task completion, not empirical strategy validation or production readiness.
 
 ## Current Objective
 
-- Task ID — O01 maintenance, CI-001.
-- Objective — Publish setup preparation, verify native SDK CSV export compatibility offline and continue deterministic research-journal audit work.
-- Acceptance criteria — Workflow validation and hosted jobs pass, the action uses its declared Node.js 24 runtime and frontend Node.js 22.22.2 remains pinned.
+- Task ID — O01 audit maintenance.
+- Objective — Publish native SDK export proof, then add deterministic reconstruction of saved research journals.
+- Acceptance criteria — Use original versions, source and shared detection/execution paths; compare persisted events without changing them or exposing holdout outcomes during selection.
 
 ## Completed Work
 
@@ -34,6 +34,7 @@
 - No schema, dataset identity or monitor identity changed. Existing recorded observation times are not rewritten.
 - O01 remains open: additional optimization needs workload evidence; optional ML requires authorized historical and out-of-sample evidence.
 - On 2026-11-12 the user confirmed no provider account yet and chose Telegram. Do not ask these preferences again. docs/SETUP.md explains account/export steps, local credentials and separate real delivery authorization. telegram-inspect reads fixed bot metadata methods, skips polling when a webhook exists and returns only bounded private chat ID candidates. It sends and acknowledges nothing. Thirteen fake cases passed; no actual credentials or Telegram request were used.
+- Native CSV compatibility is verified through an actual pinned SDK export from three constructed synthetic DBN bars and symbol metadata. Import and source audit pass, and both network client constructors are blocked in the test. Focused SDK/Telegram checks passed 26 tests.
 
 ## Important Decisions
 
@@ -51,14 +52,14 @@
 - ACCOUNT-001 — Provider unrealized-breach/DLL ambiguities remain disclosed paper assumptions.
 - SQLite bulk writes serialize. Alert export retains O(alert count) ID metadata, with at most 256 payloads per page.
 - Local macOS container daemon is unavailable after a prior Colima VM download timeout. Hosted Linux container verification passed.
-- CI-001 — Hosted setup-node emits a Node.js 20/forced Node.js 24 annotation. Frontend still passed. Inspect the official action release before a pinned upgrade.
+- CI-001 is resolved. GitHub API/CLI status requests timed out from this host; public browser run summaries worked without authentication. Prefer that fallback over repeated API retries if the same connectivity fault recurs.
 
 ## Test Status
 
-- Last full command — .venv/bin/pytest -q: 330 passed.
+- Last full command — .venv/bin/pytest -q: 331 passed, including actual pinned SDK export from constructed synthetic DBN records.
 - Static — Ruff check/format, strict mypy (102 files) and Git whitespace checks passed. actionlint passed for the v7.1.0 pin.
 - Frontend — Latest UI change (Monte Carlo) passed typecheck, five tests, production build and browser current/legacy report verification. Later changes are backend-only.
-- Hosted — Python, frontend and containers passed for c84eacd in run 43091664364. f816054's run status is unverified: GitHub API/CLI requests time out from this environment. The pin and setup preparation need hosted results.
+- Hosted — Browser verified Python, frontend and containers passed for 1e5df19 in 43173545400 and f816054 in 43172077189. No code verification is pending for those commits.
 - Failed — No outstanding automated failure. Regression failures before fixes are recorded in VALIDATION.md.
 - Not run — Authorized historical reconciliation/backtesting, production feed/channel trials and empirical out-of-sample evaluation.
 
@@ -73,7 +74,7 @@
 ## Immediate Next Actions
 
 1. Read AGENTS.md, this handoff, Git status and relevant roadmap before resuming. c84eacd is the verified code checkpoint; do not repeat its completed fixes.
-2. Verify hosted checks for f816054 and the setup slice when GitHub status access recovers. The official pin/runtime and actionlint are already verified. Do not repeat package downloads to diagnose status-query connectivity.
+2. Continue saved research-journal reconstruction: factor the existing replay factory/manifest into a pure domain module, strictly decode pinned configs/versions, replay original verified source through the same engine and compare exact event sequences. Add explicit verify-run and opt-in verify-research backup checks; do not expose holdout outcomes through selection paths. Preserve all existing run IDs. This work is planned, not implemented yet. Do not repeat completed CI verification.
 3. For D04/B02/L02, obtain authorized data/configuration. Databento was recommended; access or purchase is not confirmed. Keep keys local and do not issue paid queries without authorization.
 
 ## Do Not Repeat

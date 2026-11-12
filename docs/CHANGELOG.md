@@ -9,7 +9,12 @@
 ## 2026-11-12 — Hosted action runtime
 
 - Updated the pinned setup-node action to verified v7.1.0, whose internal runtime is Node.js 24. Frontend Node version and explicit cache settings are unchanged.
-- Hosted compatibility and annotation verification are pending.
+- Hosted run 43172077189 passed all jobs with no forced-runtime annotation. Setup preparation also passed all jobs in run 43173545400.
+
+## 2026-11-12 — Native CSV export compatibility
+
+- Verified a real SDK CSV export from constructed synthetic DBN records through import, raw-byte preservation and normalized source audit.
+- The test rejects any attempt to create a historical/live client. Focused checks passed 26 tests.
 
 ## 2026-11-11 — Audit known observation chronology
 

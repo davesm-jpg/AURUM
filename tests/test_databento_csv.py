@@ -1,9 +1,10 @@
 import json
 import subprocess
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from sys import executable
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +29,71 @@ CALENDAR = SessionCalendar(
 CONFIG = ImportConfig(
     "synthetic Databento export", CONTRACT, "UTC", TimestampLabel.OPEN, DataKind.SYNTHETIC
 )
+
+
+def test_constructed_synthetic_dbn_exports_through_pinned_sdk_without_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk = pytest.importorskip("databento")
+    dbn = pytest.importorskip("databento_dbn")
+
+    def no_client(*_: object, **__: object) -> None:
+        raise AssertionError("synthetic export must not create a network client")
+
+    monkeypatch.setattr(sdk, "Historical", no_client)
+    monkeypatch.setattr(sdk, "Live", no_client)
+
+    def nanos(stamp: datetime) -> int:
+        return (stamp - datetime(1970, 1, 1, tzinfo=UTC)) // timedelta(microseconds=1) * 1000
+
+    mapping = SimpleNamespace(
+        raw_symbol="MGCJ5",
+        intervals=[
+            SimpleNamespace(start_date=date(2025, 3, 10), end_date=date(2025, 3, 11), symbol="1234")
+        ],
+    )
+    metadata = dbn.Metadata(
+        dataset="GLBX.MDP3",
+        start=nanos(SPAN.start),
+        end=nanos(SPAN.end),
+        stype_in=dbn.SType.RAW_SYMBOL,
+        stype_out=dbn.SType.INSTRUMENT_ID,
+        schema=dbn.Schema.OHLCV_1M,
+        symbols=["MGCJ5"],
+        mappings=[mapping],
+    )
+    records = [
+        dbn.OHLCVMsg(
+            rtype=dbn.RType.OHLCV_1M,
+            publisher_id=1,
+            instrument_id=1234,
+            ts_event=nanos(START + minute * MINUTE),
+            open=2_900_000_000_000,
+            high=2_900_200_000_000,
+            low=2_899_900_000_000,
+            close=2_900_100_000_000,
+            volume=5,
+        )
+        for minute in range(3)
+    ]
+    export = tmp_path / "constructed-synthetic-sdk-export.csv"
+    sdk.DBNStore.from_bytes(bytes(metadata) + b"".join(bytes(record) for record in records)).to_csv(
+        export, pretty_ts=True, pretty_px=True, map_symbols=True
+    )
+    assert export.read_text().splitlines()[0] == ",".join(DATABENTO_OHLCV_COLUMNS)
+    prepared = prepare_history(
+        FileHistorySource(export, SourceFormat.DATABENTO_OHLCV_CSV), CONFIG, CALENDAR
+    )
+    store = DatasetStore(tmp_path / "synthetic-sdk-roundtrip.sqlite")
+    dataset = store.save(prepared)
+    candles = list(store.replay(dataset))
+    assert len(candles) == 3 and sum(candle.volume for candle in candles) == 15
+    assert candles[0].open_ticks == 29000 and candles[-1].close_ticks == 29001
+    assert [candle.opened_at for candle in candles] == [
+        START + minute * MINUTE for minute in range(3)
+    ]
+    assert store.source_bytes(dataset) == export.read_bytes()
+    assert verify_dataset(store, dataset)["verified"] is True
 
 
 def write_export(path: Path, rows: list[list[str]]) -> Path:
