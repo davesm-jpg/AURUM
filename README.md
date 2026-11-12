@@ -148,7 +148,8 @@ require source review. Keep the original files with their capture records.
 [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html)
 
 Fetch a public publication explicitly with
-`aurum capture-economic-ics bea` or `aurum capture-economic-ics bls`. The
+`aurum capture-economic-calendar bea`, `bls` or `fed`. The original
+`capture-economic-ics` name remains an alias. The
 selected local store archives the exact bytes, official endpoint, checksum
 and completed receipt time. Use `aurum economic-captures` to list receipts
 and `aurum economic-capture-raw CAPTURE_ID` to review the original bytes.
@@ -159,7 +160,23 @@ The commands establish partial evidence and retain the actual receipt clocks.
 In provider Settings, expand **Economic event risk** to preview archived
 captures and copy the reviewed snapshot into the profile. Profile saving is
 a separate action. `verify-store --verify-normalized` and verified backups
-also check archived receipt metadata, raw checksums and iCalendar structure.
+also check archived receipt metadata, raw checksums and source structure.
+
+The Fed adapter captures the current **America/New_York calendar month** from
+the official monthly HTML page. It uses only explicit release dates and times
+in the FOMC section, including minutes, meetings and press conferences. Meeting
+description date ranges do not become release timestamps. Monthly HTML omits
+the timezone: the versioned New York interpretation is an inference checked
+against official EST/EDT statement headers. Unknown times or changed layouts
+fail closed. Review one Fed receipt at a time, keep `--start`/`--end` inside
+its source month and use `--title-prefix FOMC`. It is partial scheduled-event
+evidence, with availability beginning at actual receipt, not historical
+publication dates. It does not establish actual release times, cancellations
+or complete news coverage. Separate Fed captures cannot be merged as revisions
+because the source has no stable event UID.
+[Official Fed calendar](https://www.federalreserve.gov/newsevents/calendar.htm) ·
+[Winter release header](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm) ·
+[Summer release header](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm)
 
 `verify-monitor MONITOR_ID` reconstructs saved monitor candles from retained
 normalized WebSocket, replay or native Databento frame evidence. It checks the
@@ -173,7 +190,7 @@ unknown application clocks stay explicitly unknown.
 [BLS iCalendar documentation](https://www.bls.gov/help/hlpiCAL.htm) ·
 [BEA calendar subscription](https://www.bea.gov/news/schedule/icalendar)
 
-`poll-economic-calendar bea` captures only when its durable cadence is due.
+`poll-economic-calendar bea` (or `bls`/`fed`) captures only when its durable cadence is due.
 Add `--watch` for an explicitly running foreground worker. The default interval
 is one hour; `--interval-seconds`, `--retry-seconds` and `--max-retry-seconds`
 configure bounded cadence and exponential failure recovery. Restart retains the

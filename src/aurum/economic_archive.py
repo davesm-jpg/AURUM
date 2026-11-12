@@ -1,4 +1,4 @@
-"""Archive explicitly fetched official iCalendar publications and replay their receipt clocks."""
+"""Archive official calendar publications and preserve their actual receipt clocks."""
 
 import sqlite3
 from collections.abc import Callable
@@ -21,6 +21,14 @@ from aurum.economic_ics import (
     parse_economic_ics,
 )
 from aurum.exchange_calendar import TradingWindow
+from aurum.fed_calendar import (
+    FED_CALENDAR_ROOT,
+    MAX_FED_HTML_BYTES,
+    fed_month_url,
+    fed_source_month,
+    normalize_fed_monthly,
+    parse_fed_monthly,
+)
 from aurum.market_data import canonical_json
 from aurum.providers import NoRedirect
 from aurum.storage import DatasetStore
@@ -32,6 +40,7 @@ _MAX_ARCHIVE_PAGE = 500
 class EconomicPublisher(StrEnum):
     BEA = "bea"
     BLS = "bls"
+    FED = "fed"
 
     @property
     def url(self) -> str:
@@ -40,6 +49,17 @@ class EconomicPublisher(StrEnum):
     @property
     def source(self) -> str:
         return _PUBLICATIONS[self][1]
+
+    def accepts_source_url(self, url: object) -> bool:
+        if not isinstance(url, str):
+            return False
+        if self is not EconomicPublisher.FED:
+            return url == self.url
+        try:
+            fed_source_month(url)
+            return True
+        except ValueError:
+            return False
 
 
 _PUBLICATIONS = {
@@ -51,6 +71,7 @@ _PUBLICATIONS = {
         "https://www.bls.gov/schedule/news_release/bls.ics",
         "U.S. Bureau of Labor Statistics",
     ),
+    EconomicPublisher.FED: (FED_CALENDAR_ROOT, "Federal Reserve Board monthly calendar"),
 }
 
 
@@ -70,6 +91,8 @@ class EconomicReceipt:
             raise ValueError("invalid economic archive size")
         if self.archive_version != ARCHIVE_VERSION:
             raise ValueError("unsupported economic capture archive version")
+        if self.publisher is EconomicPublisher.FED:
+            fed_source_month(self.source_url)
 
     @property
     def capture_id(self) -> str:
@@ -86,27 +109,41 @@ class EconomicReceipt:
         }
 
     def as_dict(self) -> dict[str, object]:
-        return {"capture_id": self.capture_id, **self._definition()}
+        return {
+            "capture_id": self.capture_id,
+            **self._definition(),
+            **(
+                {"source_format": "fed_monthly_html"}
+                if self.publisher is EconomicPublisher.FED
+                else {}
+            ),
+        }
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def capture_official_ics(
+def capture_official_calendar(
     store: DatasetStore,
     publisher: EconomicPublisher,
     *,
     clock: Callable[[], datetime] = _now,
 ) -> EconomicReceipt:
+    request_at = clock() if publisher is EconomicPublisher.FED else None
+    url = fed_month_url(request_at) if request_at is not None else publisher.url
+    limit = MAX_FED_HTML_BYTES if publisher is EconomicPublisher.FED else MAX_ECONOMIC_ICS_BYTES
+    headers = {"Accept": "text/calendar,text/plain;q=0.9", "Accept-Encoding": "identity"}
+    if publisher is EconomicPublisher.FED:
+        headers.update({"Accept": "text/html", "User-Agent": "AURUM/0.1"})
     request = Request(
-        publisher.url,
-        headers={"Accept": "text/calendar,text/plain;q=0.9", "Accept-Encoding": "identity"},
+        url,
+        headers=headers,
     )
     try:
         with build_opener(NoRedirect).open(request, timeout=20) as response:
             length = response.headers.get("Content-Length")
-            raw: bytes = response.read(MAX_ECONOMIC_ICS_BYTES + 1)
+            raw: bytes = response.read(limit + 1)
     except HTTPError as exc:
         raise ValueError(
             f"official {publisher.value.upper()} calendar returned HTTP {exc.code}"
@@ -114,11 +151,16 @@ def capture_official_ics(
     except (OSError, HTTPException):
         raise ValueError(f"official {publisher.value.upper()} calendar is unavailable") from None
     observed = clock()
+    if request_at is not None and observed < request_at:
+        raise ValueError("Fed calendar receipt clock precedes its request")
     if length is not None and (not length.isdecimal() or int(length) != len(raw)):
         raise ValueError("official economic calendar response size did not match Content-Length")
-    parse_economic_ics(raw)
+    if publisher is EconomicPublisher.FED:
+        parse_fed_monthly(raw, source_url=url)
+    else:
+        parse_economic_ics(raw)
 
-    receipt = EconomicReceipt(publisher, publisher.url, observed, sha256(raw).hexdigest(), len(raw))
+    receipt = EconomicReceipt(publisher, url, observed, sha256(raw).hexdigest(), len(raw))
     with store.connection(write=True) as db:
         prior = db.execute(
             "SELECT id FROM economic_captures WHERE publisher = ? AND observed_at = ?",
@@ -145,6 +187,10 @@ def capture_official_ics(
             ),
         )
     return receipt
+
+
+# Retain the original import name for existing BEA/BLS callers.
+capture_official_ics = capture_official_calendar
 
 
 def economic_receipts(store: DatasetStore, limit: int = 100) -> list[EconomicReceipt]:
@@ -199,11 +245,15 @@ def economic_capture_bytes(store: DatasetStore, receipt: EconomicReceipt) -> byt
 
 def verify_economic_capture(store: DatasetStore, capture_id: str) -> EconomicReceipt:
     receipt = economic_receipt(store, capture_id)
-    parse_economic_ics(economic_capture_bytes(store, receipt))
+    raw = economic_capture_bytes(store, receipt)
+    if receipt.publisher is EconomicPublisher.FED:
+        parse_fed_monthly(raw, source_url=receipt.source_url)
+    else:
+        parse_economic_ics(raw)
     return receipt
 
 
-def normalize_archived_ics(
+def normalize_archived_calendar(
     store: DatasetStore,
     capture_ids: tuple[str, ...],
     *,
@@ -216,6 +266,21 @@ def normalize_archived_ics(
     publisher = receipts[0].publisher
     if any(receipt.publisher is not publisher for receipt in receipts):
         raise ValueError("archived captures must come from one official publisher")
+    if publisher is EconomicPublisher.FED:
+        if len(receipts) != 1:
+            raise ValueError(
+                "Fed monthly captures require individual review; no stable source UID exists"
+            )
+        receipt = receipts[0]
+        return normalize_fed_monthly(
+            economic_capture_bytes(store, receipt),
+            source_url=receipt.source_url,
+            capture_id=receipt.capture_id,
+            observed_at=receipt.observed_at,
+            coverage=coverage,
+            title_prefixes=title_prefixes,
+            data_kind=EconomicSourceKind.OBSERVED_PUBLICATION,
+        )
     captures = tuple(
         EconomicIcsInput(
             receipt.observed_at,
@@ -239,3 +304,6 @@ def normalize_archived_ics(
         data_kind=EconomicSourceKind.OBSERVED_PUBLICATION,
         title_prefixes=title_prefixes,
     )
+
+
+normalize_archived_ics = normalize_archived_calendar

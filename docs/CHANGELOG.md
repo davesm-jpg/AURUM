@@ -1,5 +1,11 @@
 # AURUM changelog
 
+## 2026-11-12 — Official Fed calendar source
+
+- Added bounded timed-FOMC parsing, preserved public receipts and durable current-month polling through the existing archive.
+- Keep release availability at actual receipt, explicitly version New York timezone interpretation, and require separate review of each partial source snapshot.
+- Retained BEA/BLS IDs and the existing capture command alias. Settings explains the single-capture and source-month requirements.
+
 ## 2026-11-12 — Finalized research journal audit
 
 - Extracted shared replay construction while preserving original run IDs and event output.

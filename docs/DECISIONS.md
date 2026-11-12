@@ -394,3 +394,13 @@
 - Decision — Extract the existing manifest/engine factory without changing IDs or detection algorithms. Restore only exact supported definitions, verify source integrity and compare contiguous events against exact canonical producer serialization. Add explicit verify-run and opt-in full research checks for store/backup maintenance.
 - Consequences — Pre-extraction IDs and all 646 fixture events are unchanged. Duplicate JSON keys cannot hide divergent SQL/Python interpretations. Full-run audit stays outside holdout selection and returns no performance metrics. Bounded reads do not retain a reader during computation. Isolated backup verification fails closed. Separate analysis, monitoring and forward journals remain outside this scope.
 - Files — `research_replay.py`, `research_audit.py`, storage, storage administration, CLI and reconstruction tests.
+
+## ADR-043 — Archive explicit Fed monthly release rows
+
+- Date — 2026-11-12.
+- Context — The official rolling calendar is a JavaScript landing page; official monthly HTML exposes release times and dates. It omits timezone labels and stable event UIDs.
+- Alternatives — Infer release times from meeting dates, execute the rolling site's JavaScript, add a third-party calendar or parse bounded official release rows.
+- Decision — Capture the current New York month on explicit request or durable poll. Require the named source month and one recognized FOMC section; parse only timed release-date columns. Use a versioned America/New_York convention, explicitly an inference cross-checked against official winter EST and summer EDT release headers. Retain original HTML, endpoint, checksum and actual receipt. Normalize one reviewed receipt at a time with partial coverage.
+- Consequences — Description date ranges, TBA times, changed layouts and ambiguous DST times cannot produce fabricated releases. Receipts are not historical publication proof. No cancellation or revision is inferred without a stable source UID. Coverage and monitor adoption remain reviewed; other economic risk remains unknown. Existing ICS aliases, IDs and schema remain compatible.
+- Sources — [Monthly calendar example](https://www.federalreserve.gov/newsevents/2026-december.htm), [EST header](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm), [EDT header](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm).
+- Files — `fed_calendar.py`, economic archive/polling, CLI, capture picker and synthetic tests.

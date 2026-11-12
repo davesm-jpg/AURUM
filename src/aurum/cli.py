@@ -22,7 +22,7 @@ from aurum.databento_live import DatabentoSource, bind_native_resume
 from aurum.dataset_audit import verify_dataset
 from aurum.economic_archive import (
     EconomicPublisher,
-    capture_official_ics,
+    capture_official_calendar,
     economic_capture_bytes,
     economic_receipt,
     economic_receipts,
@@ -224,7 +224,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     economic_bundle.add_argument("snapshots", type=Path, nargs="+")
     economic_bundle.add_argument("--source", required=True)
     fetch_calendar = commands.add_parser(
-        "capture-economic-ics", help="archive an official economic iCalendar publication"
+        "capture-economic-calendar",
+        aliases=("capture-economic-ics",),
+        help="archive an official economic calendar publication",
     )
     fetch_calendar.add_argument("publisher", type=EconomicPublisher, choices=EconomicPublisher)
     calendar_poll = commands.add_parser(
@@ -246,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     receipt.add_argument("capture_id", nargs="?")
     receipt.add_argument("--limit", type=int, default=100)
     raw_calendar = commands.add_parser(
-        "economic-capture-raw", help="export preserved iCalendar bytes"
+        "economic-capture-raw", help="export preserved publication bytes"
     )
     raw_calendar.add_argument("capture_id")
     archived_calendar = commands.add_parser(
@@ -628,8 +630,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 canonical_json(compose_economic_calendars(snapshots, source=args.source).as_dict())
             )
-        elif args.command == "capture-economic-ics":
-            print(canonical_json(capture_official_ics(store, args.publisher).as_dict()))
+        elif args.command in ("capture-economic-calendar", "capture-economic-ics"):
+            print(canonical_json(capture_official_calendar(store, args.publisher).as_dict()))
         elif args.command == "poll-economic-calendar":
             print(canonical_json(_poll_calendar(store, args)))
         elif args.command == "economic-pollers":

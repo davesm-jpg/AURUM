@@ -1,5 +1,13 @@
 # AURUM validation
 
+## Official Fed monthly calendar — 2026-11-12
+
+- Full Python suite: 403 passed. Ruff check/format and mypy (107 files) passed. Forty-one new synthetic cases cover release columns versus description dates, New York month selection, midnight/noon, US/European DST divergence, malformed layouts/times, resource bounds, immutable receipts, preview/backup audit, durable month rotation, failed requests and backward clocks. A request spanning the local month boundary retains its requested source month.
+- Frontend typecheck, five tests and production build passed. Browser verified actual Fed polling recovery, BLS HTTP 403, a one-release partial preview and disabled multi-Fed selection. No profile or monitor was saved, no message was sent, and both newly started preview processes were stopped. A pre-existing Python listener on port 8765 was preserved; the temporary API used 8785.
+- First actual Fed poll failed without creating a receipt. An explicit capture succeeded at 08:07:46.999971 UTC, retaining 106,307 bytes in ignored data/public-economics.sqlite. Receipt cf8bdbdd7a8d4b76845afe69e16db74cbe31aa6cb9a432fa42f6b7611cf6830a has checksum 30758fdc89944d124f5b4f242496be32a862456fcc32ba371c4696a17b690bb7. A due poll recovered at 08:15:36.036587 UTC with receipt 90bf896716916d64c76ad7bd255a30ebdcf4f3f7f150a6f961595c89eda053fc. No watch worker remains running.
+- Normalization found scheduled FOMC Minutes at 2026-11-18 19:00 UTC, with availability beginning at receipt and actual release unknown. It remains partial. Whole-store raw and normalized verification passed for three public receipts, three pollers and four attempts. These are public economic-source checks, not MGC observations or strategy results.
+- The monthly HTML omits timezone. The versioned America/New_York interpretation is an inference cross-checked against official [EST](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm) and [EDT](https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm) release headers. [December monthly markup](https://www.federalreserve.gov/newsevents/2026-december.htm) separates meeting descriptions from explicit release columns. No meeting-start date, historical publication clock, cancellation or actual release was inferred.
+
 ## Research journal reconstruction — 2026-11-12
 
 - Thirty-one focused synthetic cases pass. Frozen pre-extraction constants from 8b8ae96 prove identical IDs and all 646 structure/evidence/strategy/backtest events after factory extraction.
@@ -8,6 +16,7 @@
 - CLI preserves database bytes. Store/backup research checking is explicit, implies source normalization and rejects publication of an inconsistent private snapshot. Independent writes complete during reconstruction, and concurrent journal appends require a retry. Empty and multi-page journals pass.
 - The audit returns count/digest/integrity, not expectancy or trade profits. It is never invoked by chronological candidate selection and does not establish empirical MGC performance. Analysis reports and monitor/forward outcomes remain excluded.
 - Full suite passed 362 tests; Ruff check/format and strict mypy passed across 105 files. Git whitespace checks passed. No schema, detector rule, dataset ID or existing research run ID changed.
+- Hosted run [43176440170](https://github.com/davesm-jpg/AURUM/actions/runs/43176440170) passed Python, frontend and containers on 88cfc38. Browser verified the exact commit and all three job summaries. The preceding SDK proof 8b8ae96 also passed in run 43174313758.
 
 ## Verified checkpoint — 2026-11-12, Telegram onboarding
 

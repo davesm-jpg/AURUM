@@ -9,7 +9,8 @@ from hashlib import sha256
 from re import fullmatch
 from typing import Any
 
-from aurum.economic_archive import EconomicPublisher, EconomicReceipt, capture_official_ics
+from aurum.economic_archive import EconomicPublisher, EconomicReceipt, capture_official_calendar
+from aurum.fed_calendar import FED_MONTH_POLICY_VERSION, fed_month_url
 from aurum.market_data import canonical_json
 from aurum.storage import DatasetStore
 
@@ -50,6 +51,11 @@ class EconomicPollConfig:
             "polling_version": POLLING_VERSION,
             "source_url": self.publisher.url,
             **asdict(self),
+            **(
+                {"fed_month_policy_version": FED_MONTH_POLICY_VERSION}
+                if self.publisher is EconomicPublisher.FED
+                else {}
+            ),
         }
 
     @property
@@ -144,9 +150,9 @@ def poll_economic_calendar(
     receipt = None
     error = None
     try:
-        receipt = capture_official_ics(store, config.publisher, clock=clock)
+        receipt = capture_official_calendar(store, config.publisher, clock=clock)
     except (ValueError, OSError) as exc:
-        match = fullmatch(r"official (?:BEA|BLS) calendar returned HTTP ([0-9]{3})", str(exc))
+        match = fullmatch(r"official (?:BEA|BLS|FED) calendar returned HTTP ([0-9]{3})", str(exc))
         error = f"http_{match[1]}" if match else "capture_failed"
     finished = clock()
     _utc(finished)
@@ -337,15 +343,21 @@ def verify_economic_poller(store: DatasetStore, poller_id: str) -> int:
                 raise ValueError("economic poll completion and lease disagree")
             observed = None
             if item["capture_id"] is not None:
-                if (
-                    item["receipt_publisher"] != config.publisher
-                    or item["receipt_source"] != config.publisher.url
+                if item[
+                    "receipt_publisher"
+                ] != config.publisher or not config.publisher.accepts_source_url(
+                    item["receipt_source"]
                 ):
                     raise ValueError("economic poll receipt disagrees with its official publisher")
                 observed = datetime.fromisoformat(item["receipt_observed"])
                 _utc(observed)
                 if not claimed <= observed <= completed:
                     raise ValueError("economic poll receipt lies outside its observation interval")
+                if config.publisher is EconomicPublisher.FED and item["receipt_source"] not in {
+                    fed_month_url(claimed),
+                    fed_month_url(observed),
+                }:
+                    raise ValueError("Fed poll receipt disagrees with its current-month policy")
             if outcome == "captured":
                 if observed is None or item["error_code"] is not None:
                     raise ValueError("successful economic poll has inconsistent receipt metadata")

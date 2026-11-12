@@ -46,6 +46,8 @@ export function EconomicCapturePicker({
     .map((item) => item.trim())
     .filter(Boolean);
   const samePublisher = new Set(chosen.map((item) => item.publisher)).size <= 1;
+  const fedSelected = chosen.some((item) => item.publisher === "fed");
+  const tooManyFed = fedSelected && chosen.length > 1;
 
   async function prepare() {
     setBusy(true);
@@ -110,6 +112,12 @@ export function EconomicCapturePicker({
           {!samePublisher && (
             <p className="muted">Choose captures from one publication.</p>
           )}
+          {fedSelected && (
+            <p className="muted">
+              Choose one Fed capture. Coverage must stay within its published
+              month in America/New_York. Use FOMC as a release title prefix.
+            </p>
+          )}
           <div className="fields">
             <label>
               Snapshot starts UTC
@@ -152,6 +160,7 @@ export function EconomicCapturePicker({
               !chosen.length ||
               chosen.length > 64 ||
               !samePublisher ||
+              tooManyFed ||
               !start ||
               !end ||
               !titlePrefixes.length

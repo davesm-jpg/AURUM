@@ -157,7 +157,7 @@ def test_concurrent_poller_claims_do_not_duplicate_public_requests(
         assert release.wait(5)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(economic_polling, "capture_official_ics", hold)
+    monkeypatch.setattr(economic_polling, "capture_official_calendar", hold)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(poll_economic_calendar, store, reference, clock=clock)
         assert entered.wait(5)
@@ -186,7 +186,7 @@ def test_restart_after_receipt_before_ack_preserves_capture_and_marks_lease_unce
         raise KeyboardInterrupt
 
     with monkeypatch.context() as patch:
-        patch.setattr(economic_polling, "capture_official_ics", crash)
+        patch.setattr(economic_polling, "capture_official_calendar", crash)
         with pytest.raises(KeyboardInterrupt):
             poll_economic_calendar(store, reference, clock=clock)
     assert len(economic_receipts(store)) == 1
